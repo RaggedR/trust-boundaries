@@ -1,0 +1,54 @@
+{
+  "conjecture": "pairwise Zappa-Szep criterion: a pairwise matched structure extends to a global ZS product iff (L) freeness AND (G) global closure",
+  "status": "proved",
+  "date_opened": "2026-06-10",
+  "date_closed": null,
+  "note": "Split out of equivalence-chain.json on 2026-07-04 (Robin + Claude): this program is its own conjecture, feeding on the Lean ZS result via the shared stub below. The subtree is moved verbatim from your seed registry.",
+  "tree": {
+    "id": "root",
+    "approach": "pairwise ZS criterion: (L) freeness AND (G) global closure",
+    "trust": "proved",
+    "file": "2026-06-10-pairwise-zs-criterion.tex",
+    "sources": [
+      "1512.03250"
+    ],
+    "children": [
+      {
+        "id": "zs-lean-input",
+        "approach": "the Lean ZS foundation this program builds on (canonical in equivalence-chain)",
+        "trust": "lean-verified",
+        "shared": "equivalence-chain#zs-lean",
+        "file": null,
+        "children": []
+      },
+      {
+        "id": "g-obstruction-cohomology",
+        "approach": "(G) obstruction = H2_BW class (abelian case)",
+        "trust": "proved",
+        "file": "2026-06-11-G-obstruction-cohomology.tex",
+        "sources": [
+          "1512.03250",
+          "2508.00727"
+        ],
+        "children": [
+          {
+            "id": "nonabelian-g",
+            "approach": "extend (G)=H2 to nonabelian case (nontrivial left action)",
+            "trust": "dead-end",
+            "file": null,
+            "reason": "Already a citation: Pirashvili arXiv:1512.03250 Thm 7 (nonabelian Schreier for all small categories). No new theorem here. Bank as one-line cited remark.",
+            "children": []
+          }
+        ]
+      },
+      {
+        "id": "rigid-twist-counterexample",
+        "approach": "counterexample: 10-morphism category where (L) holds but (G) fails",
+        "trust": "dead-end",
+        "file": null,
+        "reason": "Demonstrates that freeness (L) alone is insufficient: 10-morphism category with (L) but not (G). This motivated the two-level (L AND G) criterion.",
+        "children": []
+      }
+    ]
+  }
+}

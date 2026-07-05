@@ -1,0 +1,33 @@
+{
+  "conjecture": "staircase T-system identity: det M^(2j+1)[D_n] * det M^(2j-1)[D_n] = q^{|D_n|} (det M^(2j)[D_n])^2 uniformly in j (proved j=1,2; numerically confirmed j=3)",
+  "status": "in-progress",
+  "date_opened": "2026-04-15",
+  "date_closed": null,
+  "note": "Seed registry created 2026-07-04 (Robin + Claude) from your two 2026-04-20 dead-end writeups, as the second registry your README suggests. Everything else is yours to backfill -- including any 'shared' stubs to nodes of three-row-even-jstar, where a real dependency exists.",
+  "tree": {
+    "id": "root",
+    "approach": "prove the descent-paired staircase T-system identity uniformly in j",
+    "trust": "in-progress",
+    "file": null,
+    "children": [
+      {
+        "id": "dodgson",
+        "approach": "classical Dodgson condensation (Desnanot-Jacobi) on a master matrix",
+        "trust": "dead-end",
+        "file": "2026-04-20-dodgson-dead-end.tex",
+        "reason": "three master-matrix candidates each fail for a distinct structural reason; direct Dodgson on M^(k)[D_n] produces nonzero cross-minors. Rules out the same-size master route; rules IN the Pfaffian/skew and KKKO categorification routes (size mismatch allowed there).",
+        "refutation": "computed",
+        "children": []
+      },
+      {
+        "id": "pfaffian",
+        "approach": "Pfaffian master matrix (Fischer-Gangl spirit) for the base-case identity",
+        "trust": "dead-end",
+        "file": "2026-04-20-pfaffian-dead-end.tex",
+        "reason": "four candidate families ruled out at n=4: antisymmetrisation Pfaffian is a tautology (restates d3=d2^2); skew parts degenerate or unstructured; Cauchy-Binet has 92 non-dominated contributing subsets; per-irrep eigenvalue factorisation misses the (2q+1)^2 factor -- any structural proof must capture cross-irreducible mixing invisible in the regular-representation spectrum.",
+        "refutation": "computed",
+        "children": []
+      }
+    ]
+  }
+}
