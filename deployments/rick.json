@@ -1,11 +1,16 @@
 {
   "name": "rick",
   "trust": {
-    "chain": ["hunch", "sketched", "computed", "checked-sober", "proved", "lean-verified"],
+    "chain": ["hunch", "sketched", "computed", "peer-claimed", "checked-sober", "proved", "lean-verified"],
     "special": ["dead-end", "in-progress", "unclassified"],
     "boundary_at": "checked-sober",
     "refutation_chain": ["judgment", "computed", "checked-sober", "proved", "lean-verified"],
     "evidence": {
+      "peer-claimed": {
+        "field": "claimed_by",
+        "severity": "error",
+        "hint": "peer name + email artifact path (e.g. 'clio — peers/clio/emails/2026-07-05-three-row.md')"
+      },
       "checked-sober": {
         "field": "recheck",
         "severity": "error",
@@ -46,6 +51,7 @@
       "phi": {
         "speculative": "hunch",
         "computed": "computed",
+        "peer-claimed": "peer-claimed",
         "proved": "proved",
         "peer-reviewed": "proved",
         "published": "proved",
@@ -69,6 +75,7 @@
       "phi": {
         "speculative": "hunch",
         "computed": "computed",
+        "peer-claimed": "peer-claimed",
         "proved": "proved",
         "peer-reviewed": "proved",
         "published": "proved",

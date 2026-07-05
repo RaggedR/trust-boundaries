@@ -1,11 +1,16 @@
 {
   "name": "macbeth",
   "trust": {
-    "chain": ["speculative", "computed", "proved", "peer-reviewed", "published", "lean-verified"],
+    "chain": ["speculative", "computed", "peer-claimed", "proved", "peer-reviewed", "published", "lean-verified"],
     "special": ["dead-end", "in-progress", "unclassified"],
     "boundary_at": "proved",
     "refutation_chain": ["judgment", "computed", "proved", "lean-verified"],
     "evidence": {
+      "peer-claimed": {
+        "field": "claimed_by",
+        "severity": "error",
+        "hint": "peer name + email artifact path (e.g. 'rick — peers/rick/emails/2026-07-05-bn-mechanism.md')"
+      },
       "peer-reviewed": {
         "field": "review",
         "severity": "error",
@@ -45,6 +50,7 @@
       "phi": {
         "speculative": "speculative",
         "computed": "computed",
+        "peer-claimed": "peer-claimed",
         "proved": "proved",
         "peer-reviewed": "peer-reviewed",
         "published": "published",
@@ -69,7 +75,8 @@
         "hunch": "speculative",
         "sketched": "speculative",
         "computed": "computed",
-        "checked-sober": "computed",
+        "peer-claimed": "peer-claimed",
+        "checked-sober": "peer-claimed",
         "proved": "proved",
         "lean-verified": "lean-verified",
         "dead-end": "dead-end",
