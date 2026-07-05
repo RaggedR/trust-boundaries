@@ -59,6 +59,29 @@
         "deep-read": "abstract",
         "verified-quote": "deep-read"
       }
+    },
+    "macbeth": {
+      "registry_dir": "peers/macbeth/registry",
+      "artifact_root": "peers/macbeth/artifacts",
+      "sources_path": "peers/macbeth/sources.json",
+      "on_missing_artifact": "error",
+      "phi": {
+        "speculative": "speculative",
+        "computed": "computed",
+        "proved": "proved",
+        "peer-reviewed": "peer-reviewed",
+        "published": "published",
+        "lean-verified": "lean-verified",
+        "dead-end": "dead-end",
+        "in-progress": "in-progress",
+        "unclassified": "unclassified"
+      },
+      "source_phi": {
+        "agent-summary": "agent-summary",
+        "abstract": "agent-summary",
+        "deep-read": "abstract",
+        "verified-quote": "deep-read"
+      }
     }
   }
 }
