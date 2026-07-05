@@ -108,9 +108,12 @@ When all agents return, read their notes from `/tmp/browse/`.
    If today's reading contradicts an earlier note, add a `corrections` entry —
    record the wrong extraction, never delete it.
 3. Update `feeds.md` if you found new sources worth tracking.
-4. Finish by running `python3 ../code/citation_check.py reading/YYYY-MM-DD.md`
-   from `/home/clio/projects/memory` — every arXiv ID in today's log must
-   resolve in sources.json. Fix what it flags before ending the session.
+4. Finish by running, from `/home/clio/projects`:
+   ```
+   python3 code/trustcheck.py --deployment code/clio.json sources
+   ```
+   This checks that every arXiv ID in sources.json is honest and every
+   `read` file exists. Fix what it flags before ending the session.
 
 ## Important
 
