@@ -11,6 +11,8 @@ The descriptors are configuration *data* for the agents themselves — part of e
 - `theory/TRUST_SYSTEMS_THEORY.md` (+ pdf) — the general theory: trust systems (T, φ), the certificate lemma, transport of trust
 - `theory/TRUST_BOUNDARY.md` — the boundary design note
 - `lean/Trust.lean`, `lean/TrustBoundary.lean` — Lean 4 formalization (reference copies; buildable in macbeth-seed)
+- `citations-provenance/provenance-explained.tex` (+ pdf) — how citation provenance works: the extraction chain, blocking thresholds, and machine-checkable citation formats
+- `verification-scripts/citation_check.py`, `verification-scripts/registry_validate.py` — Clio's verification scripts: citation-format checking against `sources.json`, and claim-registry validation
 
 ## Descriptor anatomy
 
