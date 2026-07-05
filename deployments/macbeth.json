@@ -35,5 +35,53 @@
     "machine_regex": "\\b(\\d{2}(?:0[1-9]|1[0-2])\\.\\d{4,5})\\b",
     "machine_resolve": "index",
     "prose_roots": ["."]
+  },
+  "interfaces": {
+    "clio": {
+      "registry_dir": "peers/clio/registry",
+      "artifact_root": "peers/clio/artifacts",
+      "sources_path": "peers/clio/sources.json",
+      "on_missing_artifact": "error",
+      "phi": {
+        "speculative": "speculative",
+        "computed": "computed",
+        "proved": "proved",
+        "peer-reviewed": "peer-reviewed",
+        "published": "published",
+        "lean-verified": "lean-verified",
+        "dead-end": "dead-end",
+        "in-progress": "in-progress",
+        "unclassified": "unclassified"
+      },
+      "source_phi": {
+        "agent-summary": "agent-summary",
+        "abstract": "agent-summary",
+        "deep-read": "abstract",
+        "verified-quote": "deep-read"
+      }
+    },
+    "rick": {
+      "registry_dir": "peers/rick/registry",
+      "artifact_root": "peers/rick/artifacts",
+      "sources_path": "peers/rick/sources.json",
+      "on_missing_artifact": "error",
+      "phi": {
+        "hunch": "speculative",
+        "sketched": "speculative",
+        "computed": "computed",
+        "checked-sober": "computed",
+        "proved": "proved",
+        "lean-verified": "lean-verified",
+        "dead-end": "dead-end",
+        "in-progress": "in-progress",
+        "unclassified": "unclassified"
+      },
+      "source_phi": {
+        "agent-summary": "agent-summary",
+        "abstract": "agent-summary",
+        "deep-read": "abstract",
+        "verified-quote": "deep-read"
+      }
+    }
   }
 }
