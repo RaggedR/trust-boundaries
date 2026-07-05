@@ -53,22 +53,55 @@ Write your solution to `/home/agent/projects/proofs/YYYY-MM-DD-<problem-name>.md
 If you succeed: update SUMMARY.md and write a note in `/home/agent/projects/memory/for-collaborator/`.
 If you fail: write down exactly where and why. This is valuable. Save it for the dream cycle.
 
-### Registry
+### Registry — where's the functor?
 
 If `proofs/registry/<name>.json` exists for your theorem's program, update it:
 add nodes for today's attempts, mark dead ends with a `reason`, adjust trust
-levels. If you cite a pre-registry result, add it as `trust: "unclassified"`
-with its `file` — promote it only after re-checking (see the README). Then run
-`python3 code/registry_validate.py proofs/registry/<name>.json`
-from `/home/agent/projects` and fix real violations — it is advisory, not a gate.
-If no registry exists and the theorem is part of a multi-session program,
-create one from the template in `proofs/registry/README.md`.
+levels. The registry is a directed container — shapes are search trees,
+positions are paths — and the trust levels are its grading:
 
-External facts cite arXiv ID + locator at the point of use, and go in the
-registry node's `"sources"` field. Check the extraction level in
-`memory/reading/sources.json`: an `agent-summary` source is not load-bearing —
-deep-read the paper first (and upgrade its entry), or mark that step as a gap.
-The validator flags `proved` claims resting only on agent summaries.
+    speculative < computed < proved < peer-reviewed < published < lean-verified
+
+The **boundary is `proved`**: build on `proved` and above. Below that you
+explore, cite, conjecture — but a claim standing on `speculative` evidence
+is speculative, and the validator will say so. That is not a rule bolted on;
+it is the certificate lemma (Lemma 2.2) doing its job — the meet in the
+provenance semiring caps every derivation through a weak link.
+
+Evidence duties kick in above the boundary: `peer-reviewed` requires a
+`review` field (who endorsed it and where the review artifact lives),
+`published` requires a `publication` field (venue + DOI), `lean-verified`
+warns without `lean` (the sorry-free declaration name).
+
+If you cite a pre-registry result, add it as `trust: "unclassified"` with
+its `file` — it ranks below the boundary, so the boundary rule does the
+rest. Promote only after re-checking.
+
+Then run, from `/home/agent/projects`:
+
+    python3 code/trustcheck.py --deployment code/macbeth.json validate proofs/registry/<name>.json --files-dir proofs
+
+and fix real violations — it is advisory, not a gate. If no registry exists
+and the theorem spans multiple sessions, create one from the template in
+`proofs/registry/README.md`.
+
+### Peer citations
+
+If your proof uses a result from Clio's or Rick's registry, cite it as a
+shared stub: `"shared": "clio/<registry>#<node-id>"` or
+`"shared": "rick/<registry>#<node-id>"`. The validator resolves the stub
+through a snapshot under `peers/<agent>/registry/`, translates the trust
+through φ, and enforces the trust cap — you cannot grade the stub higher
+than the canonical node's translated trust. Clio's `proved` stays
+`proved` in your system (same chain); Rick's `checked-sober` arrives as
+`computed` (below your boundary — citable but not build-worthy until he
+upgrades it to `proved`).
+
+External facts cite arXiv ID + locator at the point of use, in the node's
+`"sources"` field. Check the extraction level in
+`memory/reading/sources.json`: a `proved` claim cannot rest on a paper you
+know only from an agent-summary. Deep-read the paper first (and upgrade
+its entry), or mark the step as a gap. The validator enforces this.
 
 ## Context management
 

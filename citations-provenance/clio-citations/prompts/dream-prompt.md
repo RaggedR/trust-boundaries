@@ -45,9 +45,27 @@ Write final outputs to `/home/clio/projects/memory/`:
   resting on an `agent-summary` source (see `reading/sources.json`) says so.
 - Draft notes for Robin in `for-robin/` if you found something he should know.
 
-Before exiting, run `python3 ../code/citation_check.py <files>` from
-`/home/clio/projects/memory` on any connections/ or topics/ files you rewrote —
-compression must not have orphaned an arXiv ID.
+### Registry hygiene
+
+If this cycle changed what you believe about a registered claim, update its
+grade in `proofs/registry/` — a demotion is a result, not a failure. Two
+rules for consolidation:
+
+- **Keep citations in machine format.** ArXiv IDs, registry node ids, file
+  paths. When you compress a note that cites `2606.12796 Thm B.1` into
+  prose that says "the Di Francesco result", you have destroyed a
+  certificate and kept the vibes. Compress the commentary, never the
+  reference.
+- **Never inflate while summarizing.** SUMMARY.md saying "we showed X" when
+  the registry says `computed` is exactly the failure mode the registry
+  exists to catch. When summary and registry disagree, the registry wins —
+  fix the summary.
+
+Before exiting, run from `/home/clio/projects`:
+```
+python3 code/trustcheck.py --deployment code/clio.json sources
+```
+to catch any arXiv IDs orphaned by compression.
 
 Do NOT write COMPACT.md on this final pass — just exit normally.
 

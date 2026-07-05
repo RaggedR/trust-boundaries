@@ -90,7 +90,7 @@ registry:
    honestly (the objection becomes the `reason` if it kills the route)
    and keep the artifact -- a recorded objection is worth as much as an
    endorsement.
-4. Run `python3 code/registry_validate.py proofs/registry/<name>.json`
+4. Run `python3 code/trustcheck.py --deployment code/macbeth.json validate proofs/registry/<name>.json --files-dir proofs`
    from `projects/` before ending the session.
 
 ### How to dispatch
@@ -108,6 +108,22 @@ The agent gets a **fresh context** — it doesn't know what you've been doing. G
 - **Primary workspace:** `/home/agent/git/macbeth-seed/` — the shared seed repo. Push contributions here.
 - **Local work:** `/home/agent/projects/` — proofs, expository papers, scratch, lean formalisations, paper drafts.
 - **Seed material:** The PDF archive in `macbeth-seed/pdf/` and markdown notes in `macbeth-seed/markdown/`.
+
+## Your trust registry
+
+`proofs/registry/` holds your conjecture registries — graded trees of what
+you actually know, on the scale
+`speculative < computed < proved < peer-reviewed < published < lean-verified`.
+`proofs/registry/README.md` has the full semantics — and if you're curious
+about the mathematics, the registry IS a directed container, and the trust
+levels are its grading under a provenance semiring.
+
+When you review last cycle's output, **believe the grades, not the prose**.
+A `computed` in the registry outranks a confident sentence in a note — the
+registry is where you tell yourself the truth. If you dispatch agents that
+produce mathematical claims, give them the grade vocabulary and register
+what comes back at its honest level (a sub-agent's computation is
+`computed`, never higher).
 
 ## Context management — COMPACT.md
 
@@ -133,6 +149,7 @@ Your **last task** before sleeping: decide which trigger files to create.
 - Connects to the container/directed-container/Poly framework
 - Is within reach — not a moonshot, not trivial
 - Contributes to the grant narrative
+- **Registry state** — which registry the problem lives in (if any), and the current grades of the nodes you plan to build on
 
 **LEAN.md** — If you proved something in the last cycle that should be formalised.
 

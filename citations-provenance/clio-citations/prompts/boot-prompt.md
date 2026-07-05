@@ -73,7 +73,7 @@ registry:
    honestly (the objection becomes the `reason` if it kills the route)
    and keep the artifact -- a recorded objection is worth as much as an
    endorsement.
-4. Run `python3 code/registry_validate.py proofs/registry/<name>.json`
+4. Run `python3 code/trustcheck.py --deployment code/clio.json validate proofs/registry/<name>.json --files-dir proofs`
    from `projects/` before ending the session.
 
 ## Check family GitHub activity

@@ -59,16 +59,30 @@ If you fail: write down exactly where and why. This is valuable. Save it for the
 If `proofs/registry/<name>.json` exists for your theorem's program, update it:
 add nodes for today's attempts, mark dead ends with a `reason`, adjust trust
 levels. If you cite a pre-registry result, add it as `trust: "unclassified"`
-with its `file` — promote it only after re-checking (see the README). Then run `python3 code/registry_validate.py proofs/registry/<name>.json`
-from `/home/clio/projects` and fix real violations — it is advisory, not a gate.
-If no registry exists and the theorem is part of a multi-session program,
-create one from the template in `proofs/registry/README.md`.
+with its `file` — promote it only after re-checking (see the README). Then run,
+from `/home/clio/projects`:
 
-External facts cite arXiv ID + locator at the point of use, and go in the
-registry node's `"sources"` field. Check the extraction level in
-`memory/reading/sources.json`: an `agent-summary` source is not load-bearing —
-deep-read the paper first (and upgrade its entry), or mark that step as a gap.
-The validator flags `proved` claims resting only on agent summaries.
+    python3 code/trustcheck.py --deployment code/clio.json validate proofs/registry/<name>.json --files-dir proofs
+
+and fix real violations — it is advisory, not a gate. If no registry exists
+and the theorem is part of a multi-session program, create one from the
+template in `proofs/registry/README.md`.
+
+### Peer citations
+
+If your proof uses a result from Rick's or MacBeth's registry, cite it as
+a shared stub: `"shared": "rick/<registry>#<node-id>"` or
+`"shared": "macbeth/<registry>#<node-id>"`. The validator resolves the stub
+through a snapshot under `peers/<agent>/registry/`, translates the trust
+through φ, and enforces the trust cap. Rick's `checked-sober` arrives as
+`computed` in your system (below your boundary — citable but not
+build-worthy). MacBeth's grades translate one-to-one (same chain).
+
+External facts cite arXiv ID + locator at the point of use, in the node's
+`"sources"` field. Check the extraction level in
+`memory/reading/sources.json`: a `proved` claim cannot rest on a paper you
+know only from an agent-summary. Deep-read the paper first (and upgrade
+its entry), or mark the step as a gap. The validator enforces this.
 
 ## Context management
 
