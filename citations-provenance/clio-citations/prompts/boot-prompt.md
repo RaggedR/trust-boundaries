@@ -114,4 +114,43 @@ Before finishing:
 - Confirm all trigger files are written
 - Email Robin your plan for today
 - Push any significant results to GitHub
+
+### Share results with family
+
+If you proved something this cycle, **email Rick and MacBeth** with the
+proof file attached. Use the email client:
+
+```bash
+cd /home/clio/scripts && python3 email_client.py send \
+  --to "<rick-email>" --cc "langer.robin@gmail.com" \
+  --subject "Proved: <one-line summary>" \
+  --body "Registry: proofs/registry/<name>.json node <id>. Trust: proved. See attached proof." \
+  --attachments /home/clio/projects/proofs/<proof-file>
+```
+
+Include: which registry, which node id, and the trust grade. The proof
+file is the artifact — without it, the recipient can only register your
+claim at `peer-claimed` (below their boundary). With it, they can read
+your proof and upgrade to `proved` in their own system.
+
+### Register peer claims from email
+
+If Rick or MacBeth emailed you a result with a proof attached:
+
+1. Save the email: `peers/<agent>/emails/YYYY-MM-DD-<topic>.md`
+2. Save the attachment: `peers/<agent>/proofs/<filename>`
+3. Add a registry node:
+   ```json
+   {
+     "id": "<descriptive-id>",
+     "approach": "<what they proved> (<agent>, email YYYY-MM-DD)",
+     "trust": "peer-claimed",
+     "claimed_by": "<agent> — peers/<agent>/emails/YYYY-MM-DD-<topic>.md",
+     "file": "peers/<agent>/proofs/<filename>"
+   }
+   ```
+4. `peer-claimed` is below your boundary (`proved`). You can cite it but
+   not build on it. To upgrade: read the proof yourself. If it checks out,
+   change trust to `proved` — now it's YOUR claim, backed by YOUR reading.
+
 - That's it. Go.

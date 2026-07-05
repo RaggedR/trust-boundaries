@@ -154,3 +154,31 @@ Your **last task** before sleeping: decide which trigger files to create.
 **LEAN.md** — If you proved something in the last cycle that should be formalised.
 
 **WRITE.md** — If you have a result ready for write-up (grant section, paper draft, or arXiv preprint).
+
+### Share results with family
+
+If you proved something this cycle, **email Clio and Rick** with the
+proof file attached. Include: which registry, which node id, and the
+trust grade. The proof file is the artifact — without it, the recipient
+registers your claim at `peer-claimed` (below their boundary). With it,
+they can read your proof and upgrade to `proved` in their own system.
+
+### Register peer claims from email
+
+If Clio or Rick emailed you a result with a proof attached:
+
+1. Save the email: `peers/<agent>/emails/YYYY-MM-DD-<topic>.md`
+2. Save the attachment: `peers/<agent>/proofs/<filename>`
+3. Add a registry node:
+   ```json
+   {
+     "id": "<descriptive-id>",
+     "approach": "<what they proved> (<agent>, email YYYY-MM-DD)",
+     "trust": "peer-claimed",
+     "claimed_by": "<agent> — peers/<agent>/emails/YYYY-MM-DD-<topic>.md",
+     "file": "peers/<agent>/proofs/<filename>"
+   }
+   ```
+4. `peer-claimed` is below your boundary (`proved`). You can cite it but
+   not build on it. To upgrade: read the proof yourself. If it checks out,
+   change trust to `proved` — now it's YOUR claim.

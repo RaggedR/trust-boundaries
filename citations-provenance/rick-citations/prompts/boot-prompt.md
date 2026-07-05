@@ -101,3 +101,42 @@ Write PROVE.md with:
 - **Available tools** — relevant resources, techniques, references
 
 If you already have a PROVE.md from a previous session that you want to continue working on, you may leave it as-is or update it with new insights.
+
+### Share results with family
+
+If you proved something this cycle, **email Clio** with the proof file
+attached:
+
+```bash
+cd /home/agent/scripts && python3 email_client.py send \
+  --to "<clio-email>" --cc "langer.robin@gmail.com" \
+  --subject "Proved: <one-line summary>" \
+  --body "Registry: proofs/registry/<name>.json node <id>. Trust: proved. See attached proof." \
+  --attachments /home/agent/projects/proofs/<proof-file>
+```
+
+Include: which registry, which node id, and the trust grade. The proof
+file is the artifact — without it, the recipient registers your claim at
+`peer-claimed` (below their boundary). With it, they can read your proof
+and promote it in their own system.
+
+### Register peer claims from email
+
+If Clio or MacBeth emailed you a result with a proof attached:
+
+1. Save the email: `peers/<agent>/emails/YYYY-MM-DD-<topic>.md`
+2. Save the attachment: `peers/<agent>/proofs/<filename>`
+3. Add a registry node:
+   ```json
+   {
+     "id": "<descriptive-id>",
+     "approach": "<what they proved> (<agent>, email YYYY-MM-DD)",
+     "trust": "peer-claimed",
+     "claimed_by": "<agent> — peers/<agent>/emails/YYYY-MM-DD-<topic>.md",
+     "file": "peers/<agent>/proofs/<filename>"
+   }
+   ```
+4. `peer-claimed` is below your boundary (`checked-sober`). You can cite
+   it but not build on it. To upgrade: read the proof yourself and
+   re-derive it sober. If it survives, change trust to `checked-sober`
+   with the `recheck` field — now it's YOUR claim.
