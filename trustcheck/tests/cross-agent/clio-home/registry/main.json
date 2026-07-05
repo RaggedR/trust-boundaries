@@ -1,0 +1,67 @@
+{
+  "conjecture": "test: cross-agent composition clio <- rick",
+  "status": "in-progress",
+  "tree": {
+    "id": "top",
+    "approach": "compose with rick's q-Hecke claims",
+    "trust": "in-progress",
+    "children": [
+      {
+        "id": "good-import",
+        "approach": "build on rick's proved q-Hecke lemma (artifact synced)",
+        "trust": "proved",
+        "children": [
+          {
+            "id": "rick-lemma",
+            "approach": "stub for rick's main lemma",
+            "trust": "proved",
+            "shared": "rick/hecke#q-hecke-main",
+            "children": []
+          }
+        ]
+      },
+      {
+        "id": "bad-cap",
+        "approach": "stub claiming more than phi transports",
+        "trust": "proved",
+        "shared": "rick/hecke#sober-only",
+        "children": []
+      },
+      {
+        "id": "bad-boundary",
+        "approach": "builds proved on rick's checked-sober (phi -> computed)",
+        "trust": "proved",
+        "children": [
+          {
+            "id": "sober-stub",
+            "approach": "stub for rick's rechecked identity",
+            "trust": "computed",
+            "shared": "rick/hecke#sober-only",
+            "children": []
+          }
+        ]
+      },
+      {
+        "id": "bad-artifact",
+        "approach": "imports a proved claim whose proof lives only in rick's container",
+        "trust": "computed",
+        "shared": "rick/hecke#proved-no-artifact",
+        "children": []
+      },
+      {
+        "id": "shallow-src",
+        "approach": "claims proved leaning only on rick's abstract-level reading (demotes to agent-summary)",
+        "trust": "proved",
+        "sources": ["rick:qpaper"],
+        "children": []
+      },
+      {
+        "id": "ok-src",
+        "approach": "claims proved on rick's verified-quote reading (demotes to deep-read, still clears abstract)",
+        "trust": "proved",
+        "sources": ["rick:goodpaper"],
+        "children": []
+      }
+    ]
+  }
+}

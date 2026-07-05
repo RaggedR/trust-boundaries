@@ -104,9 +104,68 @@ Overrides: `--root`, `--sources`, `--chunks-dir`, `--files-dir`,
     "machine_resolve": "corpus-file | index",
     "machine_suffix": ".tex",                   // corpus-file only
     "prose_roots": [".", "../literature"]       // certificate-gap search
+  },
+  "interfaces": {                               // cross-agent morphisms, Cor 3.5
+    "<peer-name>": {
+      "registry_dir": "peers/<peer>/registry",  // synced snapshot of peer registries
+      "artifact_root": "peers/<peer>/artifacts",// synced evidence files
+      "sources_path": "peers/<peer>/sources.json", // peer's sources index (snapshot)
+      "on_missing_artifact": "error | warning",
+      "phi": {"<peer-level>": "<own-level>"},   // monotone, strict at bottom, total
+      "source_phi": {"<peer-extraction>": "<own-extraction>"}
+    }
   }
 }
 ```
+
+Cross-agent reference formats: a stub's `shared` names a peer registry as
+`"<peer>/<registry>#<node-id>"`; a node's `sources` entry names a peer's
+source as `"<peer>:<slug>"` (resolved in the peer's index at
+`sources_path`, extraction demoted through `source_phi`).
+
+## Cross-agent interfaces (draft, 2026-07-05)
+
+The `interfaces` section serializes a morphism of trust systems
+(Definition 3.1): for each peer, a monotone map φ : T_peer → T_own on the
+trust chains and a monotone map source_φ on the extraction chains. A
+`shared` stub `"<peer>#<node-id>"` whose registry name matches an interface
+key resolves against `registry_dir` (a *synced snapshot* — agents live in
+separate containers, so citing a peer's registry means carrying a copy),
+and the canonical trust is read **through φ** before any local check runs.
+
+Validation semantics (implemented 2026-07-05; exercised by the fixture in
+`tests/cross-agent/` — six positive/negative cases including a cross-agent
+citation cycle, plus a descriptor-level negative test of a broken phi):
+
+1. **φ is checked, not trusted.** The validator verifies φ is total on the
+   peer's chain, monotone with respect to both chain orders, and strict at
+   bottom (peer ⊥ ↦ own ⊥; specials map to specials). A non-monotone φ is
+   a descriptor error, not a registry error.
+2. **Effective trust of a cross-agent stub** = φ(canonical trust). The
+   stub-cap rule (Cor 3.5) and the boundary rule (†) both operate on the
+   transported value, in the consumer's chain. Lemma 3.2 says this is the
+   best safe grade; the validator never grades an import higher.
+3. **Trust transport requires artifact transport.** If φ(canonical trust)
+   ≥ the consumer's `boundary_at`, the canonical node's evidence file must
+   resolve under `artifact_root` — evidence that lives only in the peer's
+   container is one OOM away from unchecked (registry lesson, 2026-07-04).
+   Severity per `on_missing_artifact`.
+4. **Extraction does not survive delegation at full strength.** A source
+   cited *via* a peer's index enters at source_φ(peer extraction level) —
+   the drafted maps demote one level (the consumer holds the peer's
+   extraction record, not the extraction itself; a deep-read by proxy is
+   an abstract-level check). Re-extracting locally restores the level:
+   laxness in Definition 3.1 permits the re-check, forbids the free ride.
+
+First deployed pair: rick ↔ clio (`~/git/trust-boundaries/deployments/`).
+The two chains are deliberately non-isomorphic — Rick's
+`hunch < sketched < computed < checked-sober < proved < lean-verified`
+with `boundary_at: checked-sober` against Clio's standard chain with
+`boundary_at: proved` — so that φ is a nontrivial monotone map and the
+composed system exercises Lemma 3.2 rather than φ = id. Note the
+asymmetry: Rick's `checked-sober` (his boundary) lands at Clio's
+`computed` (below hers), so Rick can build on claims Clio may cite but
+not build on. The interface is where the two standards actually meet.
 
 ## Regression status (2026-07-04)
 

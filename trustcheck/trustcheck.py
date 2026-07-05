@@ -71,6 +71,22 @@ class Deployment:
         self.machine_suffix = c.get("machine_suffix", "")
         self.prose_roots = [self._resolve(p) for p in c.get("prose_roots", [])]
 
+        # cross-agent interfaces (Def 3.1 / Cor 3.5): per peer, a monotone
+        # phi on the trust chains and a source_phi on the extraction chains
+        self.interfaces = {}
+        for peer, spec in (data.get("interfaces") or {}).items():
+            self.interfaces[peer] = {
+                "registry_dir": self._resolve(spec["registry_dir"]),
+                "artifact_root": (self._resolve(spec["artifact_root"])
+                                  if spec.get("artifact_root") else None),
+                "on_missing_artifact": spec.get("on_missing_artifact",
+                                                "error"),
+                "phi": spec.get("phi") or {},
+                "source_phi": spec.get("source_phi") or {},
+                "sources_path": (self._resolve(spec["sources_path"])
+                                 if spec.get("sources_path") else None),
+            }
+
     def _resolve(self, p):
         p = Path(os.path.expanduser(p))
         return p if p.is_absolute() else self.root / p
@@ -97,6 +113,72 @@ def load_deployment(path, root):
         return Deployment(json.load(fh), root)
 
 
+def lint_interfaces(dep, descriptor_path):
+    """Check each declared phi is a morphism of trust systems (Def 3.1).
+
+    Side conditions, checked mechanically: total on the peer's chain,
+    monotone with respect to both chain orders, strict at bottom (peer's
+    unchecked maps to our unchecked), specials to specials; same for
+    source_phi on the extraction chains. A phi violating these is a
+    DESCRIPTOR error, not a registry error — Lemma 3.2 does not hold for
+    it, so nothing it transports is safe. The peer's side of the order is
+    read from '<peer>.json' next to our own descriptor; when that file is
+    absent the side conditions are unchecked (warning), but images are
+    still verified to be levels of this deployment.
+
+    Returns (errors, warnings).
+    """
+    errors, warns = [], []
+    for peer, iface in dep.interfaces.items():
+        phi, sphi = iface["phi"], iface["source_phi"]
+        where = f"interfaces[{peer}]"
+        for lv in set(phi.values()):
+            if lv not in dep.valid_trust:
+                errors.append(f"{where}: phi image '{lv}' is not a trust "
+                              f"level of this deployment")
+        for lv in set(sphi.values()):
+            if lv not in dep.extraction_rank:
+                errors.append(f"{where}: source_phi image '{lv}' is not an "
+                              f"extraction level of this deployment")
+        peer_path = Path(descriptor_path).parent / (peer + ".json")
+        try:
+            pdata = json.loads(peer_path.read_text())
+        except (OSError, json.JSONDecodeError):
+            warns.append(f"{where}: peer descriptor '{peer_path}' not "
+                         f"readable — phi side conditions unchecked")
+            continue
+        pchain = pdata.get("trust", {}).get("chain", [])
+        pspecial = pdata.get("trust", {}).get("special", [])
+        missing = [lv for lv in pchain if lv not in phi]
+        if missing:
+            errors.append(f"{where}: phi not total on {peer}'s chain "
+                          f"(missing: {', '.join(missing)})")
+        images = [dep.trank(phi[lv]) for lv in pchain if lv in phi]
+        if any(a > b for a, b in zip(images, images[1:])):
+            errors.append(f"{where}: phi is not monotone along {peer}'s "
+                          f"chain")
+        if pchain and phi.get(pchain[0]) is not None \
+                and phi[pchain[0]] != dep.trust_chain[0]:
+            errors.append(f"{where}: phi not strict at bottom "
+                          f"('{pchain[0]}' must map to "
+                          f"'{dep.trust_chain[0]}', the unchecked level)")
+        for lv in pspecial:
+            if lv in phi and phi[lv] not in dep.special:
+                errors.append(f"{where}: peer special '{lv}' maps to "
+                              f"non-special '{phi[lv]}'")
+        pext = pdata.get("sources", {}).get("extraction_chain", [])
+        pmissing = [lv for lv in pext if lv not in sphi]
+        if pmissing:
+            errors.append(f"{where}: source_phi not total on {peer}'s "
+                          f"extraction chain (missing: "
+                          f"{', '.join(pmissing)})")
+        simages = [dep.erank(sphi[lv]) for lv in pext if lv in sphi]
+        if any(a > b for a, b in zip(simages, simages[1:])):
+            errors.append(f"{where}: source_phi is not monotone along "
+                          f"{peer}'s extraction chain")
+    return errors, warns
+
+
 # ---------------------------------------------------------------------------
 # Registry loading and traversal
 # ---------------------------------------------------------------------------
@@ -120,24 +202,65 @@ def parse_shared(value):
     return reg, nid
 
 
-def load_sibling(registry_dir, name, cache):
-    """Load <registry_dir>/<name>.json, memoized. Returns (tree, error)."""
-    if name in cache:
-        return cache[name]
-    path = os.path.join(registry_dir, name + ".json")
+def _load_registry_file(path, label):
     try:
         with open(path) as fh:
             data = json.load(fh)
         tree = data.get("tree")
         if not isinstance(tree, dict):
-            result = (None, f"registry '{name}' has no tree")
-        else:
-            result = (tree, None)
+            return None, f"registry '{label}' has no tree"
+        return tree, None
     except OSError:
-        result = (None, f"registry '{name}.json' not found under {registry_dir}")
+        return None, f"registry '{label}' not found at {path}"
     except json.JSONDecodeError as exc:
-        result = (None, f"registry '{name}.json' is not valid JSON ({exc})")
-    cache[name] = result
+        return None, f"registry '{label}' is not valid JSON ({exc})"
+
+
+def reg_key(dep, context_key, ref):
+    """Canonical key for a registry name as seen from a context registry.
+
+    Key namespace: 'name' = sibling in the local registry dir;
+    '<peer>/name' = a registry in that peer's synced snapshot
+    (interfaces[peer].registry_dir). Inside a peer's tree an unqualified
+    name is the peer's own sibling, and a name qualified with OUR agent
+    name points back at a local registry (both sides address the same
+    canonical registries; snapshots are copies of them). A reference to a
+    peer of a peer is unresolvable from here: returns None.
+    """
+    context_peer = context_key.split("/", 1)[0] if "/" in context_key else None
+    if "/" not in ref:
+        return f"{context_peer}/{ref}" if context_peer else ref
+    head, rest = ref.split("/", 1)
+    if "/" in rest:
+        return None
+    if head == dep.name:
+        return rest
+    if context_peer is None and head in dep.interfaces:
+        return ref
+    return None
+
+
+def load_by_key(dep, registry_dir, key, cache):
+    """Load the registry named by a canonical key, memoized.
+
+    Returns (tree, error). Peer keys resolve under the interface's
+    registry_dir — a synced snapshot, since agents live in separate
+    containers (citing a peer's registry means carrying a copy).
+    """
+    if key in cache:
+        return cache[key]
+    if "/" in key:
+        peer, name = key.split("/", 1)
+        iface = dep.interfaces.get(peer)
+        if iface is None:
+            result = (None, f"no interface declared for peer '{peer}'")
+        else:
+            result = _load_registry_file(
+                Path(iface["registry_dir"]) / (name + ".json"), key)
+    else:
+        result = _load_registry_file(
+            Path(registry_dir) / (key + ".json"), key)
+    cache[key] = result
     return result
 
 
@@ -148,57 +271,70 @@ def find_node(tree, nid):
     return None
 
 
-def resolve_shared(node, registry_dir, cache):
+def resolve_shared(dep, node, registry_dir, cache):
     """Resolve a node's 'shared' ref to its canonical node.
 
     One-hop rule: the canonical node must not itself be shared, so
-    resolution is a single lookup.
+    resolution is a single lookup. Returns (target, iface, error);
+    iface is the cross-agent interface when the canonical node lives in
+    a peer's trust system — its trust is then only meaningful through
+    phi (Lemma 3.2), never raw.
     """
     parsed = parse_shared(node.get("shared"))
     if parsed is None:
-        return None, ("'shared' must be '<registry>#<node-id>' "
-                      f"(got {node.get('shared')!r})")
+        return None, None, ("'shared' must be '<registry>#<node-id>' "
+                            f"(got {node.get('shared')!r})")
     reg, nid = parsed
-    tree, err = load_sibling(registry_dir, reg, cache)
+    key = reg_key(dep, "", reg)
+    if key is None:
+        return None, None, (f"registry '{reg}' is not resolvable from here "
+                            f"(unknown peer, or a peer of a peer)")
+    iface = dep.interfaces.get(key.split("/", 1)[0]) if "/" in key else None
+    tree, err = load_by_key(dep, registry_dir, key, cache)
     if err:
-        return None, err
+        return None, iface, err
     target = find_node(tree, nid)
     if target is None:
-        return None, f"shared target '{reg}#{nid}' not found"
+        return None, iface, f"shared target '{reg}#{nid}' not found"
     if target.get("shared") is not None:
-        return None, (f"shared target '{reg}#{nid}' is itself shared "
-                      f"(one-hop rule: point at the canonical node)")
-    return target, None
+        return None, iface, (f"shared target '{reg}#{nid}' is itself shared "
+                             f"(one-hop rule: point at the canonical node)")
+    return target, iface, None
 
 
 # ---------------------------------------------------------------------------
 # Acyclicity (Remark 2.3): the premise digraph over (registry, node-id)
 # ---------------------------------------------------------------------------
 
-def check_acyclic(own_name, tree, registry_dir, cache):
+def check_acyclic(dep, own_name, tree, registry_dir, cache):
     """Explicit well-foundedness check on the cross-registry premise digraph.
 
-    Nodes are (registry, node-id); edges are parent -> child within a tree
-    and stub -> canonical across registries. A single JSON tree is acyclic
-    by format; 'shared' links break tree-ness, and the one-hop rule alone
-    does NOT exclude cycles (a stub in A can point into B whose descendant
-    stub points back above the first stub in A). Circular citation is trust
-    inflation that passes every node-local check (Lean `cyc`), so the cycle
-    check is load-bearing, not hygiene.
+    Nodes are (registry-key, node-id); edges are parent -> child within a
+    tree and stub -> canonical across registries — including across AGENTS:
+    peer snapshots are walked, and a peer stub qualified with our own agent
+    name closes the loop back into local registries. A single JSON tree is
+    acyclic by format; 'shared' links break tree-ness, and the one-hop rule
+    alone does NOT exclude cycles (a stub in A can point into B whose
+    descendant stub points back above the first stub in A — with or without
+    a container boundary in between). Circular citation is trust inflation
+    that passes every node-local check (Lean `cyc`), so the cycle check is
+    load-bearing, not hygiene. Cross-agent it is also where Lemma 3.2 would
+    otherwise be abused: two agents each grading the other's claim as their
+    premise is tau = bottom on both sides.
     """
     errors = []
     trees = {own_name: tree}
 
-    def get_tree(reg):
-        if reg in trees:
-            return trees[reg]
-        t, _ = load_sibling(registry_dir, reg, cache)
-        trees[reg] = t
+    def get_tree(key):
+        if key in trees:
+            return trees[key]
+        t, _ = load_by_key(dep, registry_dir, key, cache)
+        trees[key] = t
         return t
 
-    # child edges by (reg, id); stub edges resolved lazily
-    def edges(reg, nid):
-        t = get_tree(reg)
+    # child edges by (key, id); stub edges resolved lazily
+    def edges(key, nid):
+        t = get_tree(key)
         if t is None:
             return
         n = find_node(t, nid)
@@ -206,10 +342,12 @@ def check_acyclic(own_name, tree, registry_dir, cache):
             return
         parsed = parse_shared(n["shared"]) if n.get("shared") else None
         if parsed:
-            yield parsed
+            tgt = reg_key(dep, key, parsed[0])
+            if tgt is not None:
+                yield (tgt, parsed[1])
         for child in n.get("children") or []:
             if isinstance(child, dict) and child.get("id"):
-                yield (reg, child["id"])
+                yield (key, child["id"])
 
     WHITE, GREY, BLACK = 0, 1, 2
     colour = {}
@@ -320,14 +458,60 @@ def validate_registry(dep, registry, own_name, files_dir, registry_dir,
                       source_index, warnings):
     errors = []
     reg_cache = {}
+    peer_sources_cache = {}
     b_at = dep.boundary_at
 
+    def transported(canon, iface):
+        """Canonical trust as this system sees it: through phi if the
+        canonical node lives in a peer's system (Lemma 3.2 — phi(tau) is
+        the best safe grade; an unmapped peer level transports as nothing,
+        i.e. unchecked)."""
+        ct = canon.get("trust")
+        return iface["phi"].get(ct) if iface is not None else ct
+
     def effective_trust(n):
-        """Trust for boundary purposes: canonical if shared (Cor 3.5)."""
+        """Trust for boundary purposes: canonical if shared (Cor 3.5),
+        transported along phi if the canonical node is a peer's."""
         if n.get("shared") is None or registry_dir is None:
             return n.get("trust")
-        canon, _ = resolve_shared(n, registry_dir, reg_cache)
-        return canon.get("trust") if canon is not None else n.get("trust")
+        canon, iface, _ = resolve_shared(dep, n, registry_dir, reg_cache)
+        return transported(canon, iface) if canon is not None \
+            else n.get("trust")
+
+    def peer_source_entry(sid, loc):
+        """Resolve '<peer>:<slug>' in the peer's sources index, with its
+        extraction level demoted through source_phi: extraction does not
+        survive delegation at full strength (we hold the peer's record of
+        the check, not the check)."""
+        peer, slug = sid.split(":", 1)
+        iface = dep.interfaces.get(peer)
+        if iface is None:
+            warnings.append(f"{loc}: source '{sid}' names unknown peer "
+                            f"'{peer}' (no interface declared)")
+            return None
+        if peer not in peer_sources_cache:
+            idx = None
+            p = iface["sources_path"]
+            if p is None:
+                warnings.append(f"{loc}: interface '{peer}' has no "
+                                f"sources_path; cannot resolve '{sid}'")
+            else:
+                try:
+                    idx = json.loads(Path(p).read_text()).get("sources", {})
+                except (OSError, json.JSONDecodeError) as exc:
+                    warnings.append(f"{loc}: {peer}'s sources index at "
+                                    f"'{p}' unreadable ({exc})")
+            peer_sources_cache[peer] = idx
+        idx = peer_sources_cache[peer]
+        if idx is None:
+            return None
+        entry = idx.get(slug)
+        if entry is None:
+            warnings.append(f"{loc}: source '{sid}' not in {peer}'s "
+                            f"sources index")
+            return None
+        level = iface["source_phi"].get(entry.get("extraction"))
+        return {**entry, "extraction": level}
 
     for key in ("conjecture", "status", "tree"):
         if key not in registry:
@@ -369,21 +553,52 @@ def validate_registry(dep, registry, own_name, files_dir, registry_dir,
                 errors.append(f"{loc}: shared node must be a stub "
                               f"(children live at the canonical node)")
             if registry_dir is not None:
-                canon, err = resolve_shared(node, registry_dir, reg_cache)
+                canon, iface, err = resolve_shared(dep, node, registry_dir,
+                                                   reg_cache)
                 if err:
                     errors.append(f"{loc}: {err}")
                 else:
-                    ct = canon.get("trust")
-                    if ct == "dead-end":
+                    ct = transported(canon, iface)
+                    raw = canon.get("trust")
+                    via = (f" (canonical '{raw}' via phi)"
+                           if iface is not None else "")
+                    if iface is not None and ct is None:
+                        errors.append(
+                            f"{loc}: canonical '{shared}' has trust "
+                            f"'{raw}' with no phi image — transports as "
+                            f"unchecked; extend the interface map or do "
+                            f"not cite it")
+                    elif ct == "dead-end":
                         if trust != "dead-end":
                             errors.append(
-                                f"{loc}: canonical '{shared}' is dead-end "
-                                f"but stub claims '{trust}'")
+                                f"{loc}: canonical '{shared}' is "
+                                f"dead-end{via} but stub claims '{trust}'")
                     elif dep.cap_rank(trust) > dep.cap_rank(ct):
                         errors.append(
                             f"{loc}: stub trust '{trust}' exceeds canonical "
-                            f"'{shared}' trust '{ct}' (trust lives at the "
-                            f"canonical node)")
+                            f"'{shared}' trust '{ct}'{via} (trust lives at "
+                            f"the canonical node)")
+                    # trust transport requires artifact transport: an
+                    # import at/above our boundary is load-bearing, so
+                    # its evidence must exist on OUR side of the
+                    # container boundary
+                    if (iface is not None and ct is not None
+                            and dep.trank(ct) >= dep.trank(b_at)):
+                        f_ = canon.get("file")
+                        root_ = iface["artifact_root"]
+                        present = bool(f_) and root_ is not None \
+                            and (root_ / f_).is_file()
+                        if not present:
+                            detail = (f"evidence '{f_}' not under {root_}"
+                                      if f_ else "canonical node has no "
+                                                 "'file'")
+                            msg = (f"{loc}: imports '{shared}' at '{ct}' "
+                                   f"but {detail} — trust transport "
+                                   f"requires artifact transport")
+                            if iface["on_missing_artifact"] == "warning":
+                                warnings.append(msg)
+                            else:
+                                errors.append(msg)
 
         # dead ends: reasons + refutation sub-poset (section 5)
         if trust == "dead-end":
@@ -437,16 +652,21 @@ def validate_registry(dep, registry, own_name, files_dir, registry_dir,
                     and all(isinstance(s, str) for s in srcs)):
                 errors.append(f"{loc}: 'sources' must be a list of source-id "
                               f"strings")
-            elif source_index is not None:
+            else:
                 known = []
                 for sid in srcs:
-                    entry = source_index.get(sid)
-                    if entry is None:
-                        warnings.append(
-                            f"{loc}: source '{sid}' not in the sources index "
-                            f"(add it, or check the id)")
-                    else:
-                        known.append(entry)
+                    if ":" in sid:      # '<peer>:<slug>' — via an interface
+                        entry = peer_source_entry(sid, loc)
+                        if entry is not None:
+                            known.append(entry)
+                    elif source_index is not None:
+                        entry = source_index.get(sid)
+                        if entry is None:
+                            warnings.append(
+                                f"{loc}: source '{sid}' not in the sources "
+                                f"index (add it, or check the id)")
+                        else:
+                            known.append(entry)
                 for rule in dep.blocking:
                     if (known
                             and dep.trank(trust) >= dep.trank(rule["blocks_trust"])
@@ -472,7 +692,8 @@ def validate_registry(dep, registry, own_name, files_dir, registry_dir,
 
     # well-foundedness, explicitly (Remark 2.3)
     if registry_dir is not None:
-        errors.extend(check_acyclic(own_name, tree, registry_dir, reg_cache))
+        errors.extend(check_acyclic(dep, own_name, tree, registry_dir,
+                                    reg_cache))
 
     return errors
 
@@ -591,8 +812,14 @@ def report_cross_refs(dep, tree, own_name, registry_dir):
         if node.get("shared") is None:
             continue
         found = True
-        canon, err = resolve_shared(node, registry_dir, cache)
-        detail = f"[{canon.get('trust')}]" if canon else f"[UNRESOLVED: {err}]"
+        canon, iface, err = resolve_shared(dep, node, registry_dir, cache)
+        if canon is None:
+            detail = f"[UNRESOLVED: {err}]"
+        elif iface is not None:
+            raw = canon.get("trust")
+            detail = f"[{raw} -> {iface['phi'].get(raw)} via phi]"
+        else:
+            detail = f"[{canon.get('trust')}]"
         lines.append(f"  {'/'.join(path)} -> {node['shared']} {detail}")
     if not found:
         lines.append("  (none)")
@@ -608,7 +835,7 @@ def report_cross_refs(dep, tree, own_name, registry_dir):
         name = fname[:-len(".json")]
         if name == own_name:
             continue
-        sib_tree, _ = load_sibling(registry_dir, name, cache)
+        sib_tree, _ = load_by_key(dep, registry_dir, name, cache)
         if sib_tree is None:
             continue
         for node, path in walk(sib_tree):
@@ -617,6 +844,26 @@ def report_cross_refs(dep, tree, own_name, registry_dir):
             if parsed and parsed[0] == own_name:
                 found = True
                 lines.append(f"  {name}: {'/'.join(path)} -> #{parsed[1]}")
+    # incoming from peer snapshots: refs qualified with OUR agent name
+    for peer, iface in sorted(dep.interfaces.items()):
+        try:
+            fnames = sorted(f for f in os.listdir(iface["registry_dir"])
+                            if f.endswith(".json"))
+        except OSError:
+            continue
+        for fname in fnames:
+            key = f"{peer}/{fname[:-len('.json')]}"
+            sib_tree, _ = load_by_key(dep, registry_dir, key, cache)
+            if sib_tree is None:
+                continue
+            for node, path in walk(sib_tree):
+                parsed = parse_shared(node.get("shared")) \
+                    if node.get("shared") is not None else None
+                if parsed and parsed[0].startswith(dep.name + "/"):
+                    found = True
+                    target = parsed[0].split("/", 1)[1]
+                    lines.append(f"  {key}: {'/'.join(path)} -> "
+                                 f"{target}#{parsed[1]}")
     if not found:
         lines.append("  (none)")
     return lines
@@ -887,15 +1134,18 @@ def main():
     else:
         chunks_dir = None
 
+    # descriptor-level lint of the cross-agent interfaces (Def 3.1)
+    iface_errors, iface_warnings = lint_interfaces(dep, args.deployment)
+
     src_data, src_warning = load_sources(dep, args.sources)
-    warnings = [src_warning] if src_warning else []
+    warnings = iface_warnings + ([src_warning] if src_warning else [])
     sources, src_problems = (None, [])
     if src_data is not None:
         sources, src_problems = validate_sources(dep, src_data, chunks_dir)
 
     if args.cmd == "sources":
-        problems = src_problems + check_files(dep, args.files, sources,
-                                              chunks_dir)
+        problems = iface_errors + src_problems + check_files(
+            dep, args.files, sources, chunks_dir)
         for p in problems:
             print(p)
         if problems:
@@ -950,7 +1200,7 @@ def main():
     registry_dir = None if args.registry_dir == "skip" else (
         args.registry_dir or str(args.registry.resolve().parent))
 
-    errors = src_problems + validate_registry(
+    errors = iface_errors + src_problems + validate_registry(
         dep, registry, args.registry.stem, files_dir, registry_dir,
         sources, warnings)
 
