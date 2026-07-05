@@ -1,0 +1,39 @@
+{
+  "name": "clio",
+  "trust": {
+    "chain": ["speculative", "computed", "proved", "peer-reviewed", "published", "lean-verified"],
+    "special": ["dead-end", "in-progress", "unclassified"],
+    "boundary_at": "proved",
+    "refutation_chain": ["judgment", "computed", "proved", "lean-verified"],
+    "evidence": {
+      "peer-reviewed": {
+        "field": "review",
+        "severity": "error",
+        "hint": "reviewer + where the review lives"
+      },
+      "published": {
+        "field": "publication",
+        "severity": "error",
+        "hint": "venue + DOI/arXiv reference"
+      },
+      "lean-verified": {
+        "field": "lean",
+        "severity": "warning",
+        "hint": "naming the sorry-free declaration"
+      }
+    }
+  },
+  "sources": {
+    "format": "clio-sources-v1",
+    "default_path": "memory/reading/sources.json",
+    "extraction_chain": ["agent-summary", "abstract", "deep-read", "verified-quote"],
+    "blocking": [
+      {"below_extraction": "abstract", "blocks_trust": "proved"}
+    ]
+  },
+  "citation": {
+    "machine_regex": "\\b(\\d{2}(?:0[1-9]|1[0-2])\\.\\d{4,5})\\b",
+    "machine_resolve": "index",
+    "prose_roots": ["."]
+  }
+}
