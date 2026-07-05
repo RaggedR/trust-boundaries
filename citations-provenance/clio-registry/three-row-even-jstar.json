@@ -1,0 +1,146 @@
+{
+  "conjecture": "three-row (a,b,c): |J*| is even on every tie (d=4 program)",
+  "status": "in-progress",
+  "date_opened": "2026-06-13",
+  "date_closed": null,
+  "tree": {
+    "id": "root",
+    "approach": "case split on c, then a uniform general-c route",
+    "trust": "in-progress",
+    "file": null,
+    "children": [
+      {
+        "id": "c1",
+        "approach": "c=1: |J*| even, boundary formalized in Lean",
+        "trust": "lean-verified",
+        "file": "2026-06-13-threerow-c1-Jstar-even.md",
+        "lean": "threerow_c1_boundary",
+        "children": []
+      },
+      {
+        "id": "c2",
+        "approach": "c=2: |J*| even, boundary formalized in Lean",
+        "trust": "lean-verified",
+        "file": "2026-06-13-threerow-c2-Jstar-even.md",
+        "lean": "threerow_c2_boundary",
+        "children": []
+      },
+      {
+        "id": "c3",
+        "approach": "c=3: interior + boundary",
+        "trust": "proved",
+        "file": "2026-06-14-threerow-c3-Jstar-even.md",
+        "children": [
+          {
+            "id": "c3-boundary",
+            "approach": "c=3 boundary, complete, formalized in Lean",
+            "trust": "lean-verified",
+            "file": "2026-06-16-c3-boundary-complete.md",
+            "lean": "threerow_c3_boundary",
+            "children": []
+          }
+        ]
+      },
+      {
+        "id": "c4",
+        "approach": "c=4: interior via Number Lemma, boundary in Lean",
+        "trust": "proved",
+        "file": null,
+        "children": [
+          {
+            "id": "c4-interior",
+            "approach": "c=4 interior: |J*| even via Number Lemma",
+            "trust": "proved",
+            "file": "2026-06-18-c4-interior-Jstar-even.md",
+            "children": [
+              {
+                "id": "c4-number-lemma",
+                "approach": "Number Lemma: 16 | H, constant floor v2(H) >= 4",
+                "trust": "proved",
+                "file": "2026-06-19-c4-interior-number-lemma.md",
+                "children": []
+              },
+              {
+                "id": "c4-linear-phi",
+                "approach": "CODE.md's linear-phi hypothesis for v2(H)",
+                "trust": "dead-end",
+                "file": null,
+                "reason": "refuted: v2(H) has a constant floor (>= 4), not linear growth in phi",
+                "children": [
+                  {
+                    "id": "c4-linear-phi-refutation",
+                    "approach": "jobA computational validation of the refutation",
+                    "trust": "computed",
+                    "file": null,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "c4-boundary",
+            "approach": "c=4 boundary, complete, formalized in Lean",
+            "trust": "lean-verified",
+            "file": "2026-06-16-c4-boundary-complete.md",
+            "lean": "threerow_c4_boundary",
+            "children": []
+          }
+        ]
+      },
+      {
+        "id": "c5",
+        "approach": "c=5: interior + boundary, closed by hand",
+        "trust": "proved",
+        "file": null,
+        "children": [
+          {
+            "id": "c5-interior",
+            "approach": "c=5 interior: |J*| even",
+            "trust": "proved",
+            "file": "2026-06-19-c5-interior-Jstar-even.md",
+            "children": []
+          },
+          {
+            "id": "c5-boundary",
+            "approach": "c=5 boundary via general-c boundary master formula",
+            "trust": "proved",
+            "file": "2026-06-17-generalc-boundary-master-and-c5.md",
+            "children": []
+          }
+        ]
+      },
+      {
+        "id": "general-c",
+        "approach": "uniform Content Lemma: v2 floor of N_i^(c) for all c",
+        "trust": "in-progress",
+        "file": "2026-06-17-generalc-boundary-master-and-c5.md",
+        "children": [
+          {
+            "id": "content-floor",
+            "approach": "g0 content floor: master valuation formula (proved c<=5, verified c<=8)",
+            "trust": "computed",
+            "file": "2026-06-17-generalc-g0-content-floor.md",
+            "children": []
+          },
+          {
+            "id": "dimension-hook",
+            "approach": "dimension-hook q-lift of the content formula",
+            "trust": "dead-end",
+            "file": null,
+            "reason": "killed by jobB route-1 with a structural reason (recorded in SUMMARY.md and the 2026-07-08 dream; no proofs/ file yet)",
+            "children": []
+          },
+          {
+            "id": "lgv-det",
+            "approach": "LGV Gaussian-binomial determinant of the closed form (same determinant as the Di Francesco-Vu order-law Cauchy det)",
+            "trust": "speculative",
+            "file": null,
+            "sources": ["2606.12796"],
+            "children": []
+          }
+        ]
+      }
+    ]
+  }
+}

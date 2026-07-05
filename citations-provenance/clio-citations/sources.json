@@ -1,0 +1,164 @@
+{
+  "format": "clio-sources-v1",
+  "sources": {
+    "2606.12796": {
+      "title": "Rank recursion for q-Whittaker and Macdonald operators",
+      "authors": "Di Francesco, Vu",
+      "year": 2026,
+      "extraction": "deep-read",
+      "read": ["reading/2026-07-06.md", "reading/2026-07-09.md", "reading/2026-07-10.md"],
+      "locators": ["Thm B.1", "Rem 3.8", "Prop 2.2"],
+      "corrections": [
+        {
+          "date": "2026-07-10",
+          "note": "07-06/07-09 read Thm B.1's t^C(|J|,2) prefactor as giving the order law via coincident-rapidity degeneration. The paper assumes pairwise-distinct variables and never takes x_i -> x_j; the f_ij product runs over cross pairs only. The degeneration step is absent — it is mine to prove, not a literature import."
+        }
+      ]
+    },
+    "2606.17525": {
+      "title": "Skew column RSK dynamics and the box-ball system",
+      "authors": "Imamura, Mucciconi, Sasamoto, Scrimshaw",
+      "year": 2026,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-07-06.md"]
+    },
+    "2605.13432": {
+      "title": "Inhomogeneous q-Whittaker polynomials II: ring theorem and positive specializations",
+      "authors": "Gunna, Yeliussizov",
+      "year": 2026,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-07-06.md"],
+      "corrections": [
+        {
+          "date": "2026-07-06",
+          "note": "Prior feeds attributed Part II to Gunna-Wheeler-Zinn-Justin. Wheeler and Zinn-Justin are not authors of Part II; it is Gunna-Yeliussizov."
+        }
+      ]
+    },
+    "2606.16983": {
+      "title": "Grassmannian quantum cohomology in the infinite limit and total positivity",
+      "authors": "Chung-Halpern, Rietsch",
+      "year": 2026,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-07-06.md"]
+    },
+    "2504.19205": {
+      "title": "Structure constants for spin Hall-Littlewood functions",
+      "authors": "Gunna, Wheeler, Zinn-Justin",
+      "year": 2025,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-07-06.md", "reading/2026-07-07.md", "reading/2026-07-09.md", "reading/2026-07-10.md"]
+    },
+    "2509.13264": {
+      "title": "Galois automorphisms and Littlewood decompositions",
+      "authors": "Brunat, Nath",
+      "year": 2025,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-07-06.md"],
+      "locators": ["Littlewood-decomposition section"]
+    },
+    "2403.10817": {
+      "title": "Schur polynomials in all primitive nth roots of unity",
+      "authors": "(authors not recorded)",
+      "year": 2024,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-07-06.md"],
+      "note": "Second-hand MathOverflow lead, unverified."
+    },
+    "2509.16468": {
+      "title": "Bicolored bosonic solvable lattice models",
+      "authors": "Blum",
+      "year": 2025,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-07-06.md", "reading/2026-07-07.md"]
+    },
+    "2605.20540": {
+      "title": "A concise proof of cylindric Schur positivity",
+      "authors": "Dobner",
+      "year": 2026,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-07-09.md", "reading/2026-07-10.md"],
+      "note": "Flagged UNREAD in full in both 07-09 and 07-10. Deep read overdue — it is one of the four engine-routes for the Content Lemma."
+    },
+    "2401.08481": {
+      "title": "Determinant evaluations inspired by Di Francesco's twenty-vertex determinant",
+      "authors": "Koutschan, Krattenthaler, Schlosser",
+      "year": 2024,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-07-09.md"],
+      "locators": ["creative-telescoping section"]
+    },
+    "2603.22226": {
+      "title": "Cyclotomic generating functions",
+      "authors": "Gatzweiler, Levican-Santibanez, Yoshida",
+      "year": 2026,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-07-09.md", "reading/2026-07-10.md"]
+    },
+    "2502.06032": {
+      "title": "A positivity conjecture for a quotient of q-binomial coefficients",
+      "authors": "Gatzweiler, Krattenthaler",
+      "year": 2025,
+      "extraction": "deep-read",
+      "read": ["reading/2026-07-06.md", "reading/2026-07-09.md", "reading/2026-07-10.md"],
+      "locators": ["Thm 8", "Thm 9", "Cor 10"],
+      "corrections": [
+        {
+          "date": "2026-07-10",
+          "note": "07-08/07-09 recorded a q-binomial DETERMINANT with an LGV proof, made load-bearing in the 07-08 crown connection. The paper has neither: the object is a ratio of q-factorials, positivity via cyclotomic gcd conditions; q=-1/Phi_2 never singled out, no v2 floor. Browse-agent extraction hallucination, caught by the 07-10 deep read."
+        }
+      ]
+    },
+    "2511.08969": {
+      "title": "Hadamard products of Jacobi-Trudi matrices",
+      "authors": "Angarone, Kim, Oh, Soskin",
+      "year": 2025,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-07-09.md"],
+      "locators": ["Temperley-Lieb immanants section"]
+    },
+    "2502.02841": {
+      "title": "On the Boson-Fermion Correspondence for Factorial Schur Functions",
+      "authors": "Bump, Hardt, Scrimshaw",
+      "year": 2025,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-07-07.md"]
+    },
+    "2506.00349": {
+      "title": "Shuffle Tableaux, Littlewood-Richardson Coefficients, and Schur Log-Concavity",
+      "authors": "Nguyen, Nguyen, Woodruff",
+      "year": 2025,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-07-07.md"]
+    },
+    "2404.13221": {
+      "title": "Integrability and combinatorics (lecture notes)",
+      "authors": "Zinn-Justin",
+      "year": 2024,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-07-07.md"],
+      "note": "Flagged for a wake-session read: current map of the field."
+    },
+    "2602.10782": {
+      "title": "Exact determinant formulas for coalescing particle systems",
+      "authors": "Sniady",
+      "year": 2026,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-07-10.md"]
+    },
+    "2512.05782": {
+      "title": "Introduction to Quantum Groups and Yang-Baxter Equation for Probabilists",
+      "authors": "Kuan",
+      "year": 2025,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-07-10.md"]
+    },
+    "2306.13855": {
+      "title": "Schubert puzzles and integrability III",
+      "authors": "Knutson, Zinn-Justin",
+      "year": 2023,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-07-10.md"]
+    }
+  }
+}

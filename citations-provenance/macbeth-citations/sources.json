@@ -1,0 +1,252 @@
+{
+  "format": "clio-sources-v1",
+  "sources": {
+    "1604.01187": {
+      "title": "When Is a Container a Comonad?",
+      "authors": "Ahman, Uustalu",
+      "year": 2016,
+      "extraction": "deep-read",
+      "read": ["reading/2026-06-10.md", "reading/2026-06-11.md"],
+      "locators": ["Sec 3.2", "Sec 3.3", "Def 3.1 (relative split pre-opcleavage)"],
+      "note": "Foundation for DCont morphisms = cofunctors identification. AU use 'relative split pre-opcleavages' for what are cofunctors."
+    },
+    "2312.00990": {
+      "title": "Polynomial Functors: A Mathematical Theory of Interaction",
+      "authors": "Niu, Spivak",
+      "year": 2023,
+      "extraction": "deep-read",
+      "read": ["reading/2026-06-12.md"],
+      "locators": ["Thm 5.31", "Sec 4.5", "Sec 5.3"],
+      "note": "Resolved (Poly,x) cartesian closed question. Three closed structures coexist."
+    },
+    "2407.01849": {
+      "title": "(Poly, otimes, lhd) is a Normal Duoidal LDC",
+      "authors": "Spivak, Srinivasan",
+      "year": 2024,
+      "extraction": "deep-read",
+      "read": ["reading/2026-06-12.md", "reading/2026-06-13.md"],
+      "locators": ["lhd co-closure", "duoidal structure"],
+      "note": "DCont morphisms live in the lhd co-closure. Key frame for monoidal coherence session."
+    },
+    "2209.01144": {
+      "title": "An Introduction to Enriched Cofunctors",
+      "authors": "Clarke, Di Meglio",
+      "year": 2022,
+      "extraction": "deep-read",
+      "read": ["reading/2026-06-12.md"],
+      "locators": ["Def enriched cofunctor", "V-Cof double category"],
+      "note": "Enriched DCont = Cof is explicitly OPEN. V must be distributive monoidal."
+    },
+    "1512.03250": {
+      "title": "Schreier Theory of Track Categories",
+      "authors": "Pirashvili",
+      "year": 2015,
+      "extraction": "deep-read",
+      "read": ["reading/2026-06-12.md"],
+      "locators": ["Thm 7"],
+      "note": "Nonabelian Schreier for all small categories. Confirms (G) obstruction = known theory."
+    },
+    "2602.17917": {
+      "title": "OrgTr: Interactions that Reshape Interfaces",
+      "authors": "Spivak",
+      "year": 2026,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-06-11.md"],
+      "locators": ["Prop 6.10", "Prop 3.2", "Thm 8.21"],
+      "note": "DCont embeds as full sub-bicategory of OrgTr on constant trees."
+    },
+    "2503.17191": {
+      "title": "Distributive Laws of Monadic Containers",
+      "authors": "Purdy, Damato",
+      "year": 2025,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-06-11.md"],
+      "locators": ["Ex 4.9"],
+      "note": "Monad-side mirror of ZS; their Ex 4.9 cites Brin ZS. Collaboration target."
+    },
+    "2604.01303": {
+      "title": "Compositional Program Verification with Polynomial Functors",
+      "authors": "Aberle",
+      "year": 2026,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-06-11.md"],
+      "locators": ["Thm 0.6"]
+    },
+    "2601.22968": {
+      "title": "Polynomial Functors over Infinity-Groupoids",
+      "authors": "Chen",
+      "year": 2026,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-06-11.md"],
+      "locators": ["Conj 7.2"],
+      "note": "Conjecture 7.2 (poly-comonads/S = CSS) is open; infinity-DCont=Cat proof target."
+    },
+    "2603.25710": {
+      "title": "Stone Duality for Monads and Retrofunctors in Locales",
+      "authors": "Garner, Renata Lucatelli Nunes, Wu",
+      "year": 2026,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-06-11.md"]
+    },
+    "2502.21288": {
+      "title": "Grothendieck Construction for Delta Lenses",
+      "authors": "Clarke",
+      "year": 2025,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-06-11-browse2.md"],
+      "note": "Delta lenses = lax double functors. Combined with DCont=Cof gives: DCont morphisms = lax double functors."
+    },
+    "2508.00727": {
+      "title": "BW Cohomology for Small Categories",
+      "authors": "(authors not recorded)",
+      "year": 2025,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-06-11-browse2.md"],
+      "note": "Confirmed: H2(Sk_C;D) IS BW H2 with source-constant natural system."
+    },
+    "1912.13477": {
+      "title": "Interaction Laws of Monads and Comonads",
+      "authors": "Katsumata, Rivas, Uustalu",
+      "year": 2019,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-06-11-browse2.md"],
+      "note": "Stateful runners = cofunctors (special case of monad-comonad interaction law)."
+    },
+    "2509.25879": {
+      "title": "Monoid Structures on Indexed Containers",
+      "authors": "De Pascalis, Uustalu, Veltri",
+      "year": 2025,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-06-13.md"],
+      "note": "Monoid in (I-Cont,lhd,y) = monad on Set^I. Comonoid/cofree side absent = MacBeth original."
+    },
+    "2409.17664": {
+      "title": "Comodule Representations of Second-Order Functionals",
+      "authors": "Ahman, Bauer",
+      "year": 2024,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-06-13.md"]
+    },
+    "2311.09600": {
+      "title": "Homology of Zappa-Szep Products",
+      "authors": "Mundey, Sims",
+      "year": 2023,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-06-13.md"],
+      "note": "Spectral sequence for ZS homology; cohomological dual not done."
+    },
+    "2511.07314": {
+      "title": "Free Bifibration on a Functor",
+      "authors": "Clarke, Scherer, Zeilberger",
+      "year": 2025,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-06-13.md"]
+    },
+    "2409.02603": {
+      "title": "Formalising (Co)inductive Containers",
+      "authors": "Damato, Altenkirch, Ljungstrom",
+      "year": 2024,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-06-13.md"],
+      "note": "ITP 2025. UIP-free W/M-types for containers in Cubical Agda."
+    },
+    "2601.15420": {
+      "title": "Problems with Fixpoints of Polynomials of Polynomials",
+      "authors": "Pradic, Price",
+      "year": 2026,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-06-13.md"],
+      "note": "LICS 2026. Weihrauch degrees = fixpoints of container endofunctors."
+    },
+    "2501.17250": {
+      "title": "Weihrauch Problems as Containers",
+      "authors": "Pradic, Price",
+      "year": 2025,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-06-12-browse2.md"],
+      "note": "Weihrauch problems as containers over projective represented spaces. No DCont structure."
+    },
+    "2509.05462": {
+      "title": "Compact Double Categories for Control Flow",
+      "authors": "Kondyrev, Spivak",
+      "year": 2025,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-06-12-browse2.md"],
+      "note": "DISAMBIGUATION: Poly* = pointed SETS, not polynomial functors. Architecturally separate from DCont."
+    },
+    "2401.17250": {
+      "title": "Lifting Twisted Coreflections Against Delta Lenses",
+      "authors": "Clarke",
+      "year": 2024,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-06-12-browse2.md"],
+      "locators": ["AWFS for delta lenses"],
+      "note": "Cofunctors acquire a universal property via AWFS."
+    },
+    "2405.13157": {
+      "title": "Nerves for Higher Categories (Cat# double category)",
+      "authors": "Shapiro, Spivak",
+      "year": 2024,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-06-10.md"],
+      "note": "Recalls Cat# = Comod(Poly) from Shapiro-Spivak 2305.00167 Cor 5.12."
+    },
+    "2404.16321": {
+      "title": "Pattern Runs on Matter",
+      "authors": "Libkind, Spivak",
+      "year": 2024,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-06-10.md"],
+      "note": "EPTCS 2025. Replaces withdrawn 2410.08373."
+    },
+    "2503.21974": {
+      "title": "Categories by Kan Extension",
+      "authors": "Spivak",
+      "year": 2025,
+      "extraction": "agent-summary",
+      "read": ["reading/2026-06-10.md"]
+    },
+    "2512.17484": {
+      "title": "Derivatives for Containers in Univalent Foundations",
+      "authors": "Joram, Veltri",
+      "year": 2024,
+      "extraction": "agent-summary",
+      "read": ["reading/feeds.md"],
+      "note": "Chain rule holds classically, non-invertible in UF. MacBeth's result is set-level instance."
+    },
+    "2410.08373": {
+      "title": "(WITHDRAWN) Libkind-Spivak pre-monoidal Kleisli",
+      "authors": "Libkind, Spivak",
+      "year": 2024,
+      "extraction": "agent-summary",
+      "read": ["reading/feeds.md"],
+      "corrections": [
+        {
+          "date": "2026-06-09",
+          "note": "Paper WITHDRAWN Nov 2024 (Kleisli pre-monoidal only). Do NOT cite. Use 2404.16321 instead."
+        }
+      ]
+    },
+    "2503.02477": {
+      "title": "(WRONG PAPER) probability/Markov, not cofunctors",
+      "authors": "Stein (but NOT the Stein+cofunctor paper)",
+      "year": 2025,
+      "extraction": "agent-summary",
+      "read": ["reading/feeds.md"],
+      "corrections": [
+        {
+          "date": "2026-06-09",
+          "note": "This arXiv ID is the WRONG paper: probability/Markov, no cofunctors. Browse agent returned it under a cofunctor search. The correct Stein cofunctor paper (LICS 2025) has an unknown arXiv ID; search proceedings directly."
+        }
+      ]
+    },
+    "2502.10811": {
+      "title": "Unified Initial Semantics",
+      "authors": "Lamiaux, Ahrens",
+      "year": 2025,
+      "extraction": "agent-summary",
+      "read": ["reading/feeds.md"],
+      "note": "Unifies Matthes-Uustalu heterogeneous substitution. Medium priority unread."
+    }
+  }
+}

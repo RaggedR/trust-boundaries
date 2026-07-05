@@ -1,0 +1,37 @@
+{
+  "name": "loop-experiment",
+  "trust": {
+    "chain": ["speculative", "computed", "proved", "verified", "lean-verified"],
+    "special": ["dead-end", "in-progress", "unclassified"],
+    "boundary_at": "proved",
+    "refutation_chain": ["judgment", "computed", "proved", "lean-verified"],
+    "evidence": {
+      "verified": {
+        "field": "review",
+        "severity": "error",
+        "hint": "verifier + path to the verify report"
+      },
+      "lean-verified": {
+        "field": "lean",
+        "severity": "warning",
+        "hint": "naming the sorry-free declaration"
+      }
+    }
+  },
+  "sources": {
+    "format": "loop-sources-v1",
+    "default_path": "sources.json",
+    "extraction_chain": ["recalled", "rag-summary", "chunk-read", "context-read", "paper-read"],
+    "blocking": [
+      {"below_extraction": "context-read", "blocks_trust": "proved"}
+    ],
+    "corpus_dir": "../literature/chunks",
+    "corpus_exempt": ["recalled"]
+  },
+  "citation": {
+    "machine_regex": "\\b([a-z0-9][a-z0-9_\\-]*/chunk_\\d{3})\\b",
+    "machine_resolve": "corpus-file",
+    "machine_suffix": ".tex",
+    "prose_roots": [".", "../literature", "../literature/corteel-citations/tex"]
+  }
+}

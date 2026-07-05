@@ -1,0 +1,127 @@
+{
+  "conjecture": "Directed Containers = Polynomial Comonads = Small Categories (equivalence chain, Lean milestones M1-M6)",
+  "status": "in-progress",
+  "date_opened": "2026-06-09",
+  "date_closed": null,
+  "tree": {
+    "id": "root",
+    "approach": "verify the three-way equivalence DCont = PolyComon = SmallCat at objects and morphisms, with Lean formalization",
+    "trust": "in-progress",
+    "file": null,
+    "children": [
+      {
+        "id": "m1-representation",
+        "approach": "M1: container representation theorem (full and faithful)",
+        "trust": "lean-verified",
+        "file": null,
+        "lean": "Container.repr_full_faithful",
+        "children": []
+      },
+      {
+        "id": "m2-comonad-laws",
+        "approach": "M2: comonad laws from D1-D5 (forward direction)",
+        "trust": "lean-verified",
+        "file": null,
+        "lean": "DirectedContainer.comonad_laws",
+        "sources": [
+          "1604.01187"
+        ],
+        "children": []
+      },
+      {
+        "id": "m2b-converse",
+        "approach": "M2b: comonad implies directed container (converse, both round-trips by rfl)",
+        "trust": "lean-verified",
+        "file": null,
+        "lean": "ComonadConverse.recover_forward_eq_id",
+        "sources": [
+          "1604.01187"
+        ],
+        "children": []
+      },
+      {
+        "id": "m4-dcont-cof",
+        "approach": "M4: DCont = Cof (morphism-level iso of categories)",
+        "trust": "lean-verified",
+        "file": null,
+        "lean": "Containers.DContMorphism.toCofunctor",
+        "note": "PROVENANCE REPAIR 2026-07-04 (Robin + Claude): your original artifact Cofunctor.lean (decl DCont_iso_Cof) was LOST -- never pushed, absent from macbeth-backup. The result was rebuilt sorry-free from your collaborator note 2026-06-10-lean-m4-cofunctor.md as DContCat.lean in RaggedR/macbeth-seed (lean/Containers/Containers/DContCat.lean): induced category from D1-D5, inverse construction, DContMorphism <-> Cofunctor with both round trips rfl (toCofunctor_id, toCofunctor_comp). Trust stays lean-verified because the surviving artifact builds clean; the lean field now names it. Lesson: a lean-verified claim whose .lean file only exists in your container is one OOM away from unchecked.",
+        "sources": [
+          "1604.01187"
+        ],
+        "children": [
+          {
+            "id": "morphisms-are-functors",
+            "approach": "naive reading: DCont morphisms = functors between the induced categories",
+            "trust": "dead-end",
+            "file": null,
+            "reason": "WRONG: the position map f_s: P'(fs)->P(s) is CONTRAVARIANT, so a DCont-map is ill-typed as a functor. Correct: DCont = Cof (cofunctors). Verified: #functors != #cofunctors in 17 of 36 test pairs.",
+            "children": []
+          }
+        ]
+      },
+      {
+        "id": "zs-lean",
+        "approach": "Lean ZS: matched pair associativity iff ZS1-ZS4",
+        "trust": "lean-verified",
+        "file": null,
+        "lean": "MatchedPair.zs_iff_assoc",
+        "children": []
+      },
+      {
+        "id": "pairwise-zs",
+        "approach": "pairwise ZS criterion: (L) freeness AND (G) global closure (split into its own registry 2026-07-04; subtree lives at the canonical node)",
+        "trust": "proved",
+        "shared": "pairwise-zs#root",
+        "file": null,
+        "children": []
+      },
+      {
+        "id": "free-cofree",
+        "approach": "free monad and cofree comonad of a container, as containers",
+        "trust": "proved",
+        "file": "2026-06-11-cofree-free-containers.md",
+        "children": []
+      },
+      {
+        "id": "chain-rule",
+        "approach": "chain rule for container derivative under composition: d(G lhd F) = (dG lhd F) x dF",
+        "trust": "proved",
+        "file": "2026-06-12-container-chain-rule.tex",
+        "children": []
+      },
+      {
+        "id": "monoidal-coherence",
+        "approach": "monoidal coherence of four structures on Cont (pentagon+triangle for lhd and otimes)",
+        "trust": "proved",
+        "file": "2026-06-13-monoidal-coherence-four-structures.tex",
+        "sources": [
+          "2312.00990",
+          "2407.01849"
+        ],
+        "children": []
+      },
+      {
+        "id": "m5-enriched-dcont-cof",
+        "approach": "M5: enriched DCont = Cof",
+        "trust": "unclassified",
+        "file": null,
+        "sources": [
+          "2209.01144"
+        ],
+        "note": "Clarke-Di Meglio 2022 state this is open. No sequel since.",
+        "children": []
+      },
+      {
+        "id": "m6-infinity-dcont",
+        "approach": "M6: infinity-DCont = Cat (Kan Chen's Conj 7.2)",
+        "trust": "speculative",
+        "file": null,
+        "sources": [
+          "2601.22968"
+        ],
+        "children": []
+      }
+    ]
+  }
+}
