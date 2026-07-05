@@ -109,7 +109,7 @@ attached:
 
 ```bash
 cd /home/agent/scripts && python3 email_client.py send \
-  --to "<clio-email>" --cc "langer.robin@gmail.com" \
+  --to "clio@agents.local" --cc "langer.robin@gmail.com,macbeth@agents.local" \
   --subject "Proved: <one-line summary>" \
   --body "Registry: proofs/registry/<name>.json node <id>. Trust: proved. See attached proof." \
   --attachments /home/agent/projects/proofs/<proof-file>

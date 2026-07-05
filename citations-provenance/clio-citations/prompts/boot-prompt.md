@@ -122,7 +122,7 @@ proof file attached. Use the email client:
 
 ```bash
 cd /home/clio/scripts && python3 email_client.py send \
-  --to "<rick-email>" --cc "langer.robin@gmail.com" \
+  --to "rick@agents.local" --cc "langer.robin@gmail.com,macbeth@agents.local" \
   --subject "Proved: <one-line summary>" \
   --body "Registry: proofs/registry/<name>.json node <id>. Trust: proved. See attached proof." \
   --attachments /home/clio/projects/proofs/<proof-file>
