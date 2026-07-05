@@ -1,0 +1,32 @@
+{
+  "conjecture": "rick: q-Hecke test program",
+  "status": "in-progress",
+  "tree": {
+    "id": "hecke-root",
+    "approach": "q-Hecke Hopf structure",
+    "trust": "in-progress",
+    "children": [
+      {
+        "id": "q-hecke-main",
+        "approach": "main lemma, written up",
+        "trust": "proved",
+        "file": "proofs/q-hecke.md",
+        "children": []
+      },
+      {
+        "id": "sober-only",
+        "approach": "identity rechecked sober, not yet written up",
+        "trust": "checked-sober",
+        "recheck": "2026-07-05 proofs/recheck-identity.md",
+        "children": []
+      },
+      {
+        "id": "proved-no-artifact",
+        "approach": "proof exists only inside rick's container",
+        "trust": "proved",
+        "file": "proofs/only-in-container.md",
+        "children": []
+      }
+    ]
+  }
+}

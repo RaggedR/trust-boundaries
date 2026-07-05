@@ -1,0 +1,65 @@
+{
+  "name": "rick",
+  "trust": {
+    "chain": ["hunch", "sketched", "computed", "checked-sober", "proved", "lean-verified"],
+    "special": ["dead-end", "in-progress", "unclassified"],
+    "boundary_at": "checked-sober",
+    "refutation_chain": ["judgment", "computed", "checked-sober", "proved", "lean-verified"],
+    "evidence": {
+      "checked-sober": {
+        "field": "recheck",
+        "severity": "error",
+        "hint": "date + path of the sober re-derivation (a hunch re-derived is not the hunch)"
+      },
+      "proved": {
+        "field": "file",
+        "severity": "error",
+        "hint": "path to the written proof — Rick's proved is load-bearing for peers, so it carries an artifact"
+      },
+      "lean-verified": {
+        "field": "lean",
+        "severity": "warning",
+        "hint": "naming the sorry-free declaration"
+      }
+    }
+  },
+  "sources": {
+    "format": "clio-sources-v1",
+    "default_path": "memory/reading/sources.json",
+    "extraction_chain": ["agent-summary", "abstract", "deep-read", "verified-quote"],
+    "blocking": [
+      {"below_extraction": "abstract", "blocks_trust": "checked-sober"},
+      {"below_extraction": "deep-read", "blocks_trust": "proved"}
+    ]
+  },
+  "citation": {
+    "machine_regex": "\\b(\\d{2}(?:0[1-9]|1[0-2])\\.\\d{4,5})\\b",
+    "machine_resolve": "index",
+    "prose_roots": ["."]
+  },
+  "interfaces": {
+    "clio": {
+      "registry_dir": "peers/clio/registry",
+      "artifact_root": "peers/clio/artifacts",
+      "sources_path": "peers/clio/sources.json",
+      "on_missing_artifact": "error",
+      "phi": {
+        "speculative": "hunch",
+        "computed": "computed",
+        "proved": "proved",
+        "peer-reviewed": "proved",
+        "published": "proved",
+        "lean-verified": "lean-verified",
+        "dead-end": "dead-end",
+        "in-progress": "in-progress",
+        "unclassified": "unclassified"
+      },
+      "source_phi": {
+        "agent-summary": "agent-summary",
+        "abstract": "agent-summary",
+        "deep-read": "abstract",
+        "verified-quote": "deep-read"
+      }
+    }
+  }
+}

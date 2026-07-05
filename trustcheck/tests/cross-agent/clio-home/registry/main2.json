@@ -1,0 +1,18 @@
+{
+  "conjecture": "test: cross-agent citation cycle",
+  "status": "in-progress",
+  "tree": {
+    "id": "top",
+    "approach": "claim resting on rick, who rests on this claim",
+    "trust": "in-progress",
+    "children": [
+      {
+        "id": "to-rick",
+        "approach": "stub into rick's cyclic registry",
+        "trust": "computed",
+        "shared": "rick/cyclic#a",
+        "children": []
+      }
+    ]
+  }
+}

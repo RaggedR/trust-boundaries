@@ -1,0 +1,15 @@
+{
+  "format": "clio-sources-v1",
+  "sources": {
+    "qpaper": {
+      "title": "A q-analogue test paper",
+      "extraction": "abstract",
+      "read": []
+    },
+    "goodpaper": {
+      "title": "A thoroughly read test paper",
+      "extraction": "verified-quote",
+      "read": []
+    }
+  }
+}

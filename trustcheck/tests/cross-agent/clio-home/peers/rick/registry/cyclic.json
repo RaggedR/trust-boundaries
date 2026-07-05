@@ -1,0 +1,18 @@
+{
+  "conjecture": "rick: cyclic test registry",
+  "status": "in-progress",
+  "tree": {
+    "id": "cyc-root",
+    "approach": "root",
+    "trust": "in-progress",
+    "children": [
+      {
+        "id": "a",
+        "approach": "stub pointing back into clio",
+        "trust": "computed",
+        "shared": "clio/main2#top",
+        "children": []
+      }
+    ]
+  }
+}
