@@ -1,0 +1,232 @@
+{
+  "conjecture": "Warnaar's positivity conjecture: all coefficients of Q_{n,c}(q) are non-negative (problem-description/conjecture.tex)",
+  "status": "in-progress",
+  "date_opened": "2026-07-03",
+  "date_closed": null,
+  "tree": {
+    "id": "root",
+    "approach": "multi-seed loop search: fermionic chains, y-systems, crystal/Tingley, N2/Harnack, beta-map, Lean glue",
+    "trust": "in-progress",
+    "file": null,
+    "children": [
+      {
+        "id": "d10-433-theorem",
+        "role": "attempt",
+        "approach": "d=10 orbit (4,3,3), k=4, mod 13: G = FERM+_3 via 3-link chain (Warnaar Prop_finiteform a=+1 -> coefficientwise limit -> Pochhammer split onto Uncu thm:m13); first proved case at k >= 3",
+        "trust": "verified",
+        "review": "verifier SOLID + independent adversary reconfirmation to n=15: 2026-07-04/scratch/verify-seed1-layer4.md",
+        "file": "2026-07-04/proofs/prove-seed1-layer4.tex",
+        "sources": ["warnaar_a2_andrews_gordon_cylindric_partitions", "uncu_proofs_modulo11_13_cylindric_kanade_russell"],
+        "children": []
+      },
+      {
+        "id": "d8-program",
+        "role": "attempt",
+        "approach": "d=8 core via two-term fermionic representations",
+        "trust": "in-progress",
+        "file": null,
+        "children": [
+          {
+            "id": "d8-two-term-fermionic",
+            "role": "premise",
+            "approach": "G_c = Ferm_{c2+1,c3+1} - q Ferm_{c2,c3} for all seven cyclic d=8 representatives (Warnaar Prop_finiteform2 limits = Uncu S11 verbatim); scope: seven listed representatives ONLY (erratum E1/BA39)",
+            "trust": "verified",
+            "review": "verifier SOLID-WITH-ERRATA (errata applied) + adversary transcription to n=32: 2026-07-04/scratch/verify-seed2-layer4.md",
+            "file": "2026-07-04/proofs/prove-seed2-layer4.tex",
+            "sources": ["warnaar_a2_andrews_gordon_cylindric_partitions", "uncu_proofs_modulo11_13_cylindric_kanade_russell"],
+            "children": []
+          },
+          {
+            "id": "d8-positivity-of-differences",
+            "role": "premise",
+            "approach": "show the six two-term differences are coefficientwise non-negative (would close Warnaar positivity at d=8)",
+            "trust": "in-progress",
+            "file": null,
+            "children": [
+              {
+                "id": "d8-diff-positivity-direct",
+                "role": "attempt",
+                "approach": "direct positivity of Ferm_{s,t} - q Ferm_{s-1,t-1}",
+                "trust": "dead-end",
+                "reason": "three genuine strikes (synthesis-layer4 D15): three different direct approaches failed; certificates of the failed attempts verified. No counterexample -- positivity still believed, route abandoned on cost",
+                "refutation": "judgment",
+                "file": "2026-07-04/scratch/prove-seed2-layer4.md",
+                "children": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "d7-program",
+        "role": "attempt",
+        "approach": "d=7 (mod 10), smallest level unproved anywhere",
+        "trust": "in-progress",
+        "file": null,
+        "children": [
+          {
+            "id": "d7-positive-y-system",
+            "role": "premise",
+            "approach": "complete CW-style manifestly positive y-system (12 rows, exact substitution chains, q-adic contraction uniqueness) => G_c(y,q) in N[[y,q]] for ALL d=7 profiles",
+            "trust": "verified",
+            "review": "verifier SOLID (hand-transcribed rows, symbolic replay, brute-force match) + adversary recompute: 2026-07-04/scratch/verify-seed3-layer4.md",
+            "file": "2026-07-04/proofs/prove-seed3-layer4.tex",
+            "sources": ["corteel_welsh_A2_RR"],
+            "children": []
+          },
+          {
+            "id": "d7-q-positivity",
+            "role": "premise",
+            "approach": "lift G-positivity to Q-positivity at d=7 (Y19)",
+            "trust": "in-progress",
+            "file": null,
+            "children": []
+          }
+        ]
+      },
+      {
+        "id": "bounded-tingley",
+        "role": "attempt",
+        "approach": "bounded mod-d crystal operators on X_m; positivity via source combinatorics",
+        "trust": "in-progress",
+        "file": null,
+        "children": [
+          {
+            "id": "tingley-step1-crystal-operators",
+            "role": "premise",
+            "approach": "f_k/e_k well-defined weight +-1 injective partial bijections for ALL d >= 2 (self-contained: Lemmas 0/L/V, signature-flip); Tingley's n >= 3 hypothesis and 4.2 erratum never invoked",
+            "trust": "proved",
+            "file": "2026-07-04/proofs/prove-seed4-layer4.tex",
+            "sources": ["tingley"],
+            "children": []
+          },
+          {
+            "id": "tingley-vchains-are-sources",
+            "role": "premise",
+            "approach": "every v-chain is a source (matching calculus P1-P4 + provably exhaustive finite case check); source GF lower bound",
+            "trust": "proved",
+            "file": "2026-07-04/proofs/prove-seed4-layer4.tex",
+            "sources": ["tingley"],
+            "children": []
+          },
+          {
+            "id": "tingley-2aii-completeness",
+            "role": "premise",
+            "approach": "every source is a v-chain (m=1 proved exhaustively d <= 10; acyclicity backbone proved)",
+            "trust": "in-progress",
+            "file": null,
+            "children": []
+          },
+          {
+            "id": "tingley-2b-unique-source",
+            "role": "premise",
+            "approach": "unique source per connected component (global confluence verified exhaustively at small size)",
+            "trust": "in-progress",
+            "file": null,
+            "children": [
+              {
+                "id": "newman-local-confluence",
+                "role": "attempt",
+                "approach": "prove 2b via Newman's lemma / local confluence",
+                "trust": "dead-end",
+                "reason": "provably dead (synthesis-layer4 D13): meet depths are unbounded, so local confluence cannot terminate the induction",
+                "refutation": "proved",
+                "file": "2026-07-04/scratch/prove-seed4-layer4.md",
+                "children": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "n2-harnack",
+        "role": "attempt",
+        "approach": "N2/Harnack route: positivity of [q^j]N2 via har-function caps and Harnack monotonicity (target-first orientation per standing-notation erratum)",
+        "trust": "in-progress",
+        "file": null,
+        "children": [
+          {
+            "id": "n2-theorem-package-layer4",
+            "role": "premise",
+            "approach": "CAP-SHARP (har_j depends on min(c_i, j-1)); R0 deep interior closed forms; low band [q^j]N2 >= 0 for j <= 48 (gcd(d,3)=1); S2 fully proved; HM => S1 reduction with HM verified j <= 40; R1 chamber theorem unconditional after wall-enumeration repair",
+            "trust": "verified",
+            "review": "verifier per-theorem SOLID verdicts: 2026-07-04/scratch/verify-seed6-layer4.md; Lemma 7.3 gap repaired: 2026-07-04/scratch/repair-seed6-layer4.md",
+            "file": "2026-07-04/proofs/prove-seed6-layer4.tex",
+            "children": []
+          },
+          {
+            "id": "s1-general",
+            "role": "premise",
+            "approach": "S1 for all j (open on: HM j >= 41; j >= 49 with >= two coords < j-1); gcd(d,3)=1 hypothesis essential",
+            "trust": "in-progress",
+            "file": null,
+            "children": []
+          },
+          {
+            "id": "s1-at-3-divides-d",
+            "role": "attempt",
+            "approach": "S1 without the gcd(d,3)=1 hypothesis",
+            "trust": "dead-end",
+            "reason": "S1 is FALSE at 3|d (BA38): har_13((1,1,1)) = -1, har_15((0,1,2)) = -1, verifier-confirmed independently; any proof of S1 must use gcd(d,3)=1",
+            "refutation": "computed",
+            "file": "2026-07-04/scratch/verify-seed6-layer4.md",
+            "children": []
+          }
+        ]
+      },
+      {
+        "id": "sharp-f0-beta-map",
+        "role": "attempt",
+        "approach": "SHARP-F0 as three-term stratum injection inside the connected crystal vac(X_m) (seed 5)",
+        "trust": "in-progress",
+        "file": null,
+        "children": [
+          {
+            "id": "beta-map-injectivity",
+            "role": "premise",
+            "approach": "set-level beta-map A -> A + e_i at level m is injective with an always-available S-valid choice (two-line lemma)",
+            "trust": "proved",
+            "file": "2026-07-04/scratch/prove-seed5-layer4.md",
+            "children": []
+          },
+          {
+            "id": "q1-vacuum-closure",
+            "role": "premise",
+            "approach": "vacuum closure lemma Q1 (Y12); proof architecture written, Seed 4's Lemma L is the designated tool",
+            "trust": "in-progress",
+            "file": null,
+            "children": []
+          }
+        ]
+      },
+      {
+        "id": "lean-glue",
+        "role": "attempt",
+        "approach": "machine-check the reduction skeleton at abstract (A,q)",
+        "trust": "in-progress",
+        "file": null,
+        "children": [
+          {
+            "id": "theoremD-lean",
+            "role": "premise",
+            "approach": "D-tower kernel identities, ferm-monotonicity via CoeffNonneg, Lemma E in cleared-denominator form; axioms [propext, Classical.choice, Quot.sound] only",
+            "trust": "lean-verified",
+            "lean": "WarnaarGlue.TheoremD",
+            "file": "lean/WarnaarGlue/TheoremD.lean",
+            "children": []
+          }
+        ]
+      },
+      {
+        "id": "y8-conjecture-a",
+        "role": "attempt",
+        "approach": "Conjecture A: nonnegativity pattern of (U - I) rows (Y8)",
+        "trust": "dead-end",
+        "reason": "FALSIFIED for d >= 5 (seed 7 label audit): nonneg (U-I) rows occur EXACTLY at balanced targets; synthesis-layer3 section 4(viii) retracted",
+        "refutation": "computed",
+        "file": "2026-07-04/scratch/label-audit-layer4.md",
+        "children": []
+      }
+    ]
+  }
+}

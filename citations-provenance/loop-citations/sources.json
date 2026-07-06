@@ -1,0 +1,68 @@
+{
+  "format": "loop-sources-v1",
+  "sources": {
+    "warnaar_a2_andrews_gordon_cylindric_partitions": {
+      "title": "The A2 Andrews-Gordon identities and cylindric partitions (conjecture source paper)",
+      "authors": "Warnaar",
+      "extraction": "paper-read",
+      "read": [
+        "2026-07-04/scratch/prove-seed1-layer4.md",
+        "2026-07-04/scratch/prove-seed2-layer4.md"
+      ],
+      "locators": ["Prop_finiteform (source lines 2672-2687, proof 2784-2819)", "Prop_finiteform2 (Eq_mineen, Eq_mineen2)", "Con_cylindric-b"],
+      "corrections": []
+    },
+    "uncu_proofs_modulo11_13_cylindric_kanade_russell": {
+      "title": "Proofs of modulo 11 and 13 cylindric Kanade-Russell conjectures",
+      "authors": "Uncu",
+      "extraction": "paper-read",
+      "read": [
+        "2026-07-04/scratch/prove-seed1-layer4.md",
+        "2026-07-04/scratch/verify-seed2-layer4.md"
+      ],
+      "locators": ["thm:m13", "S11(e_s|e_t)", "S13(e_3|e_3)", "eq:mod11list"],
+      "corrections": [
+        {
+          "date": "2026-07-04",
+          "note": "Provenance caveat N1 (synthesis-layer4 G13): thm:m13 is a computer-assisted proof (ideal-membership certificates); external write-ups inherit that dependency. Not a wrong reading, but a trust qualifier that must not be compressed away."
+        }
+      ]
+    },
+    "corteel_welsh_A2_RR": {
+      "title": "The A2 Rogers-Ramanujan identities (q-difference equations, Prop incex)",
+      "authors": "Corteel, Welsh",
+      "extraction": "paper-read",
+      "read": [
+        "2026-07-04/scratch/prove-seed3-layer4.md",
+        "2026-07-04/scratch/verify-seed3-layer4.md"
+      ],
+      "locators": ["Prop incex"],
+      "corrections": []
+    },
+    "tingley": {
+      "title": "Three crystal constructions (partition-bead bijections, crystal operators)",
+      "authors": "Tingley",
+      "extraction": "paper-read",
+      "read": [
+        "2026-07-04/scratch/prove-seed4-layer4.md"
+      ],
+      "locators": ["Sec 4.2 (erratum region — NOT invoked by the bounded construction, see G16)"],
+      "corrections": []
+    },
+    "kanade_russell_tight_cylindric_partitions": {
+      "title": "Tight cylindric partitions (R-relations / bridge relations)",
+      "authors": "Kanade, Russell",
+      "extraction": "context-read",
+      "read": [
+        "2026-07-04/scratch/prove-seed2-layer4.md"
+      ],
+      "locators": ["R3 contiguous relations"],
+      "corrections": [
+        {
+          "date": "2026-07-04",
+          "note": "Suspected typo in the R3 relation at m == 1 mod 3 was flagged during layer 3; turned out MOOT for the d=10 chain (G13 needs no bridge relation). Bridges are only needed at moduli == -1 mod 3 (scaling-law remark, prove-seed1-layer4.tex)."
+        }
+      ]
+    }
+  }
+}

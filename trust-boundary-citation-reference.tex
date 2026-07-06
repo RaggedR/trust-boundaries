@@ -43,6 +43,9 @@ boundaries via email. Three agents---Clio (algebraic combinatorics),
 Rick (combinatorial Hopf algebras), and MacBeth (category theory)---each
 run independent trust systems inside Docker containers with different
 trust chains, different boundaries, and different evidence duties. A
+fourth deployment---the Warnaar loop experiment---applies the same
+machinery to a RAG-based research workflow where citations must survive
+chunk retrieval rather than dream consolidation. A
 monotone interface map $\varphi$ translates grades between systems;
 a new grade \level{peer-claimed} mediates cross-agent citation via
 email with proof attachments. The core theory (the certificate lemma,
@@ -574,6 +577,7 @@ Agent & Container & Chain & Status \\
 Clio & Docker on OCI & 7 levels, boundary at \level{proved} & Running \\
 Rick & Docker on OCI & 7 levels, boundary at \level{checked-sober} & Running \\
 MacBeth & Docker on OCI & 7 levels, boundary at \level{proved} & Stopped \\
+Loop & Local workflow & 5 levels, boundary at \level{proved} & Running \\
 Template & \texttt{RaggedR/dreaming-agent} & 7 levels, boundary at \level{proved} & Template \\
 \bottomrule
 \end{tabular}
@@ -751,16 +755,101 @@ the system validating its own mathematics. The test fixture is committed
 at \texttt{trustcheck/tests/three-agent-chain/}.
 
 % ===================================================================
+\section{The loop experiment: RAG-based citation provenance}
+\label{sec:loop}
+% ===================================================================
+
+The three Docker agents (Clio, Rick, MacBeth) face a common threat:
+\emph{dream consolidation} compresses notes across cycles, eating
+citations. The loop experiment---a local research workflow for Warnaar's
+$A_2$ Andrews--Gordon positivity conjecture---faces a structurally
+different threat: \emph{RAG retrieval}.
+
+The knowledge pipeline is:
+\[
+\text{RAG query} \to \text{chunk retrieval} \to \text{scratch files}
+\to \text{synthesis layers} \to \text{proof \texttt{.tex}}.
+\]
+Each stage compresses. The characteristic failure mode is \textbf{chunk
+windowing}: a retrieved chunk is a window into a paper. The theorem's
+hypotheses, variable conventions, and normalizations may live in a chunk
+that was \emph{not} retrieved. The text is real; the reading is wrong
+because the context is missing. This is the RAG analogue of the phantom
+determinant---but structurally different, because the source material is
+genuine, only incomplete.
+
+\subsection{Extraction chain}
+
+The loop uses a five-level extraction chain tuned to the RAG pipeline:
+%
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Loop level & Meaning & Agent analogue \\
+\midrule
+\level{recalled} & Training memory; no chunk & (none) \\
+\level{rag-summary} & Only the chunk's summary tag & \level{agent-summary} \\
+\level{chunk-read} & Retrieved chunk read verbatim & \level{abstract} \\
+\level{context-read} & Surrounding chunks checked & \level{deep-read} \\
+\level{paper-read} & Relevant section at line level & \level{verified-quote} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The blocking rule: below \level{context-read} blocks \level{proved}. A
+fact below \level{context-read} may not be load-bearing---the hypotheses
+may live in an unretrieved chunk.
+
+\subsection{Source format}
+
+Sources are keyed by \textbf{paper slug} (the directory name under
+\texttt{literature/chunks/}), not arXiv ID. The slug resolves on disk:
+\texttt{literature/chunks/<slug>/chunk\_NNN.tex}. The machine regex
+matches \texttt{paper\_slug/chunk\_NNN}; the on-disk check catches
+hallucinated chunk references outright---a cited chunk that does not
+exist in the corpus is an error, not a warning.
+
+\subsection{Trust chain}
+
+The loop's trust chain is shorter than the agents':
+%
+\[
+\level{speculative} < \level{computed} < \level{proved} < \level{verified}
+< \level{lean-verified},
+\]
+%
+with boundary at \level{proved}. The \level{verified} grade means an
+independent verifier agent (or Robin) hostile-reviewed the proof; it
+requires a \field{review} field. No \level{peer-claimed},
+\level{peer-reviewed}, or \level{published}---those belong to the
+agents' cross-agent email protocol. No cross-agent interfaces: the
+loop is standalone.
+
+\subsection{Standalone deployment}
+
+The loop experiment has no Docker container and no cross-agent
+interfaces ($\varphi$ maps). Its deployment descriptor declares only
+the trust chain, the blocking rules, and the citation regex. The
+generic validator (\texttt{trustcheck.py}) applies the same
+certificate-checking machinery---Lemma~\ref{lem:certificate} is
+parametric in $T$---but without the cross-agent checks of
+\S\ref{sec:morphisms}.
+
+% ===================================================================
 \section{Conclusion}
 \label{sec:conclusion}
 % ===================================================================
 
 The trust system is live. Four agents (Clio, Rick, MacBeth, and the public
-\texttt{dreaming-agent} template) run independent trust systems with
-different chains, different boundaries, and different evidence duties.
-They compose via email with proof attachments, graded at
+\texttt{dreaming-agent} template) and the Warnaar loop experiment
+(\S\ref{sec:loop}) run independent trust systems with different chains,
+different boundaries, and different evidence duties. The Docker agents
+compose via email with proof attachments, graded at
 \level{peer-claimed}, with the interface map $\varphi$ translating grades
-between systems. The first live composition event---Rick peer-reviewing
+between systems. The loop experiment demonstrates that the same
+certificate-checking machinery (Lemma~\ref{lem:certificate}) applies to
+a RAG-based workflow with a structurally different extraction chain and
+a different failure mode (chunk windowing vs.\ dream consolidation). The first live composition event---Rick peer-reviewing
 Clio's claims, Clio upgrading to \level{peer-reviewed} with the review
 artifact---occurred on the system's first day of deployment. The first
 three-agent citation chain (\S\ref{sec:three-agent})---MacBeth's
