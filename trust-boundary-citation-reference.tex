@@ -707,6 +707,50 @@ chain for attainment; (2) morphisms must be strict at $\bot$; (3) two
 case splits in the proof of Lemma~\ref{lem:transport}.
 
 % ===================================================================
+\section{Three-agent citation chain}
+\label{sec:three-agent}
+% ===================================================================
+
+The first end-to-end test of multi-agent trust composition exercises the
+full chain MacBeth $\to$ Rick $\to$ Clio, with each hop crossing an agent
+boundary through a different interface map.
+
+\begin{center}
+\begin{tabular}{lllll}
+\toprule
+Agent & Registry & Trust & Cites & Via \\
+\midrule
+MacBeth & comonad-laws & \level{lean-verified} & --- & --- \\
+Rick & boundary-stability & \level{proved} & MacBeth & \texttt{shared}: \texttt{macbeth/comonad-laws\#root} \\
+Clio & trust-composition & \level{proved} & Rick & \texttt{shared}: \texttt{rick/boundary-stability\#root} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The composed $\varphi$ maps MacBeth's grades through Rick's non-isomorphic
+chain (which has \level{hunch}, \level{sketched}, and \level{checked-sober}
+--- levels absent from both Clio's and MacBeth's chains) and into Clio's:
+%
+\begin{align*}
+\varphi_{\text{Clio}\leftarrow\text{Rick}} \circ \varphi_{\text{Rick}\leftarrow\text{MacBeth}} &: T_{\text{MacBeth}} \to T_{\text{Clio}} \\
+\level{lean-verified} &\mapsto \level{lean-verified} \mapsto \level{lean-verified} \\
+\level{peer-reviewed} &\mapsto \level{proved} \mapsto \level{proved} \\
+\level{speculative} &\mapsto \level{hunch} \mapsto \level{speculative}
+\end{align*}
+%
+Monotonicity is preserved through both hops (Lemma~\ref{lem:transport}
+composes).
+
+The test is self-referential: the registries are \emph{about} the
+correctness of the trust system. MacBeth proves the directed container
+structure; Rick uses it to prove boundary-rule stability under duplicate;
+Clio combines that with $\tau$-transport to prove cross-agent composition
+works. The subject matter of the registries is the correctness of the
+registries --- not circular (no shared refs point back up the chain), but
+the system validating its own mathematics. The test fixture is committed
+at \texttt{trustcheck/tests/three-agent-chain/}.
+
+% ===================================================================
 \section{Conclusion}
 \label{sec:conclusion}
 % ===================================================================
@@ -718,7 +762,11 @@ They compose via email with proof attachments, graded at
 \level{peer-claimed}, with the interface map $\varphi$ translating grades
 between systems. The first live composition event---Rick peer-reviewing
 Clio's claims, Clio upgrading to \level{peer-reviewed} with the review
-artifact---occurred on the system's first day of deployment.
+artifact---occurred on the system's first day of deployment. The first
+three-agent citation chain (\S\ref{sec:three-agent})---MacBeth's
+Lean formalization flowing through Rick's boundary-stability proof into
+Clio's composition theorem, with $\varphi$ translating non-isomorphic
+trust chains at each hop---validates the full composition machinery.
 
 The full directed container structure is now implemented: all nine
 operations (\S\ref{sec:operations}) are deployed, the coKleisli category
