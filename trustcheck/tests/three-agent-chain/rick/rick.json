@@ -1,0 +1,51 @@
+{
+  "name": "rick",
+  "trust": {
+    "chain": ["hunch", "sketched", "computed", "peer-claimed", "checked-sober", "proved", "lean-verified"],
+    "special": ["dead-end", "in-progress", "unclassified"],
+    "boundary_at": "checked-sober",
+    "refutation_chain": ["judgment", "computed", "proved", "lean-verified"],
+    "evidence": {
+      "peer-claimed": {"field": "claimed_by", "severity": "error", "hint": "peer + artifact"},
+      "checked-sober": {"field": "recheck", "severity": "error", "hint": "re-verification details"},
+      "lean-verified": {"field": "lean", "severity": "warning", "hint": "declaration name"}
+    }
+  },
+  "sources": {
+    "format": "clio-sources-v1",
+    "default_path": "sources.json",
+    "extraction_chain": ["agent-summary", "abstract", "deep-read", "verified-quote"],
+    "blocking": [{"below_extraction": "abstract", "blocks_trust": "checked-sober"}]
+  },
+  "citation": {
+    "machine_regex": "\\b(\\d{2}(?:0[1-9]|1[0-2])\\.\\d{4,5})\\b",
+    "machine_resolve": "index",
+    "prose_roots": ["."]
+  },
+  "interfaces": {
+    "macbeth": {
+      "registry_dir": "peers/macbeth/registry",
+      "artifact_root": null,
+      "sources_path": null,
+      "on_missing_artifact": "warning",
+      "phi": {
+        "speculative": "hunch",
+        "computed": "computed",
+        "peer-claimed": "peer-claimed",
+        "proved": "proved",
+        "peer-reviewed": "proved",
+        "published": "proved",
+        "lean-verified": "lean-verified",
+        "dead-end": "dead-end",
+        "in-progress": "in-progress",
+        "unclassified": "unclassified"
+      },
+      "source_phi": {
+        "agent-summary": "agent-summary",
+        "abstract": "agent-summary",
+        "deep-read": "abstract",
+        "verified-quote": "deep-read"
+      }
+    }
+  }
+}

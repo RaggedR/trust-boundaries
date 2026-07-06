@@ -1,0 +1,33 @@
+{
+  "conjecture": "Cross-agent trust composition preserves the boundary rule: a shared node importing a validated subtree inherits validation, no re-check required",
+  "status": "proved",
+  "date_opened": "2026-07-06",
+  "date_closed": "2026-07-06",
+  "tree": {
+    "id": "root",
+    "approach": "Combine ok_sub (boundary stability under duplicate) with tau_transport (trust transports laxly along morphisms) — the two halves proved to fit",
+    "trust": "proved",
+    "file": null,
+    "role": "premise",
+    "children": [
+      {
+        "id": "boundary-stability",
+        "approach": "Rick's proof that the boundary rule is duplicate-stable (which cites MacBeth's comonad laws)",
+        "trust": "peer-claimed",
+        "shared": "rick/boundary-stability#root",
+        "claimed_by": "Rick — three-agent composition test",
+        "role": "premise",
+        "children": []
+      },
+      {
+        "id": "tau-transport",
+        "approach": "phi(tau(x)) ≤ tau'(F(x)) — trust transports laxly along morphisms (Lemma 3.2, Lean-verified)",
+        "trust": "lean-verified",
+        "lean": "Trust.tau_transport",
+        "file": null,
+        "role": "premise",
+        "children": []
+      }
+    ]
+  }
+}

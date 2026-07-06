@@ -1,0 +1,31 @@
+{
+  "conjecture": "The trust boundary rule is stable under the comonad's duplicate: validating the whole tree validates every subtree",
+  "status": "proved",
+  "date_opened": "2026-07-04",
+  "date_closed": "2026-07-06",
+  "tree": {
+    "id": "root",
+    "approach": "ok_sub: boundary rule at every position implies boundary rule at every position of every subtree, via D4 (sub_shift)",
+    "trust": "proved",
+    "file": null,
+    "role": "premise",
+    "children": [
+      {
+        "id": "comonad-laws",
+        "approach": "The comonad laws (left/right counit, coassociativity) — MacBeth's formalization",
+        "trust": "checked-sober",
+        "shared": "macbeth/comonad-laws#root",
+        "role": "premise",
+        "children": []
+      },
+      {
+        "id": "ok-sub-proof",
+        "approach": "ok_sub θ t h p := sub_shift ▸ h (shift t p q) — one-line transport along D4",
+        "trust": "proved",
+        "file": null,
+        "role": "premise",
+        "children": []
+      }
+    ]
+  }
+}

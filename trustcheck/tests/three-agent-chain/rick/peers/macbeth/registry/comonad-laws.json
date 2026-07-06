@@ -1,0 +1,43 @@
+{
+  "conjecture": "Directed containers induce comonads: all three laws (left counit, right counit, coassociativity)",
+  "status": "lean-verified",
+  "date_opened": "2026-06-09",
+  "date_closed": "2026-06-15",
+  "tree": {
+    "id": "root",
+    "approach": "Formalize D1-D5 for rose trees, derive comonad laws",
+    "trust": "lean-verified",
+    "lean": "DirectedContainer.left_counit, .right_counit, .coassoc",
+    "file": null,
+    "role": "premise",
+    "children": [
+      {
+        "id": "d1-d5",
+        "approach": "D1-D5 for RTree/RPos by structural recursion",
+        "trust": "lean-verified",
+        "lean": "proofSearchN",
+        "file": null,
+        "role": "premise",
+        "children": []
+      },
+      {
+        "id": "counit",
+        "approach": "counit ∘ comult = id from D1+D2",
+        "trust": "lean-verified",
+        "lean": "DirectedContainer.left_counit",
+        "file": null,
+        "role": "premise",
+        "children": []
+      },
+      {
+        "id": "coassoc",
+        "approach": "map comult ∘ comult = comult ∘ comult from D4+D5",
+        "trust": "lean-verified",
+        "lean": "DirectedContainer.coassoc",
+        "file": null,
+        "role": "premise",
+        "children": []
+      }
+    ]
+  }
+}

@@ -1,0 +1,76 @@
+{
+  "name": "clio",
+  "trust": {
+    "chain": ["speculative", "computed", "peer-claimed", "proved", "peer-reviewed", "published", "lean-verified"],
+    "special": ["dead-end", "in-progress", "unclassified"],
+    "boundary_at": "proved",
+    "refutation_chain": ["judgment", "computed", "proved", "lean-verified"],
+    "evidence": {
+      "peer-claimed": {"field": "claimed_by", "severity": "error", "hint": "peer name + artifact"},
+      "peer-reviewed": {"field": "review", "severity": "error", "hint": "reviewer + review path"},
+      "published": {"field": "publication", "severity": "error", "hint": "venue + DOI"},
+      "lean-verified": {"field": "lean", "severity": "warning", "hint": "declaration name"}
+    }
+  },
+  "sources": {
+    "format": "clio-sources-v1",
+    "default_path": "sources.json",
+    "extraction_chain": ["agent-summary", "abstract", "deep-read", "verified-quote"],
+    "blocking": [{"below_extraction": "abstract", "blocks_trust": "proved"}]
+  },
+  "citation": {
+    "machine_regex": "\\b(\\d{2}(?:0[1-9]|1[0-2])\\.\\d{4,5})\\b",
+    "machine_resolve": "index",
+    "prose_roots": ["."]
+  },
+  "interfaces": {
+    "rick": {
+      "registry_dir": "peers/rick/registry",
+      "artifact_root": "peers/rick/artifacts",
+      "sources_path": null,
+      "on_missing_artifact": "warning",
+      "phi": {
+        "hunch": "speculative",
+        "sketched": "speculative",
+        "computed": "computed",
+        "peer-claimed": "peer-claimed",
+        "checked-sober": "peer-claimed",
+        "proved": "proved",
+        "lean-verified": "lean-verified",
+        "dead-end": "dead-end",
+        "in-progress": "in-progress",
+        "unclassified": "unclassified"
+      },
+      "source_phi": {
+        "agent-summary": "agent-summary",
+        "abstract": "agent-summary",
+        "deep-read": "abstract",
+        "verified-quote": "deep-read"
+      }
+    },
+    "macbeth": {
+      "registry_dir": "peers/macbeth/registry",
+      "artifact_root": "peers/macbeth/artifacts",
+      "sources_path": null,
+      "on_missing_artifact": "warning",
+      "phi": {
+        "speculative": "speculative",
+        "computed": "computed",
+        "peer-claimed": "peer-claimed",
+        "proved": "proved",
+        "peer-reviewed": "peer-reviewed",
+        "published": "published",
+        "lean-verified": "lean-verified",
+        "dead-end": "dead-end",
+        "in-progress": "in-progress",
+        "unclassified": "unclassified"
+      },
+      "source_phi": {
+        "agent-summary": "agent-summary",
+        "abstract": "agent-summary",
+        "deep-read": "abstract",
+        "verified-quote": "deep-read"
+      }
+    }
+  }
+}
