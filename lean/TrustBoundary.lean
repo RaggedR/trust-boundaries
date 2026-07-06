@@ -228,4 +228,70 @@ theorem registryOk_sub (t : LTree TrustLevel) (h : RegistryOk t)
 
 end Trust
 
+-- ===================================================================
+-- The loop experiment's trust chain
+-- ===================================================================
+
+namespace LoopTrust
+
+open Containers.Trust (Chain)
+
+/-- The loop experiment's trust chain (Warnaar positivity conjecture):
+
+`unchecked < speculative < computed < proved < verified < leanVerified`.
+
+This differs from the agent chain (`TrustLevel`) in one position:
+`verified` replaces `peerReviewed` and `published`. A `verified` node
+means an independent verifier agent (or Robin) hostile-reviewed the
+proof — the loop's analogue of peer review, without the social-process
+grades.
+
+`unchecked` models `in-progress` and `unclassified` (same as
+`TrustLevel`). `dead-end` is the `dead` flag on `TrustLabel`, not a
+chain element. -/
+inductive LoopTrustLevel where
+  | unchecked
+  | speculative
+  | computed
+  | proved
+  | verified
+  | leanVerified
+deriving DecidableEq
+
+def LoopTrustLevel.rank : LoopTrustLevel → Nat
+  | .unchecked => 0
+  | .speculative => 1
+  | .computed => 2
+  | .proved => 3
+  | .verified => 4
+  | .leanVerified => 5
+
+instance : Chain LoopTrustLevel where
+  le a b := a.rank ≤ b.rank
+  bot := .unchecked
+  le_refl a := Nat.le_refl a.rank
+  le_trans := Nat.le_trans
+  le_antisymm {a b} hab hba := by
+    cases a <;> cases b <;>
+      first
+        | rfl
+        | exact absurd hab (by decide)
+        | exact absurd hba (by decide)
+  le_total a b := Nat.le_total a.rank b.rank
+  bot_le a := Nat.zero_le a.rank
+  dec a b := Nat.decLe a.rank b.rank
+
+/-- The loop experiment's boundary rule: threshold `proved`. By
+`LTree.ok_sub` (parametric in `T` and `θ`), validated loop registries
+have validated subtrees — same structural fact, different chain. -/
+abbrev LoopRegistryOk (t : Containers.LTree LoopTrustLevel) : Prop :=
+  t.Ok LoopTrustLevel.proved
+
+theorem loopRegistryOk_sub (t : Containers.LTree LoopTrustLevel)
+    (h : LoopRegistryOk t) (p : Containers.LTree.LPos t) :
+    LoopRegistryOk (t.sub p) :=
+  Containers.LTree.ok_sub LoopTrustLevel.proved t h p
+
+end LoopTrust
+
 end Containers
