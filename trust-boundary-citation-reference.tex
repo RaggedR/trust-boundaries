@@ -607,39 +607,63 @@ form, 7 nodes): 1 \level{lean-verified}, 2 \level{proved}, 2
 duties (\field{recheck}, \field{file}) fired correctly on first contact.
 
 % ===================================================================
-\section{What remains}
-\label{sec:remaining}
+\section{Directed container operations}
+\label{sec:operations}
 % ===================================================================
 
-Six directed-container operations are at varying stages of implementation:
+All six operations from the original ``what remains'' list are now implemented
+in \texttt{trustcheck.py ops} and deployed across all four agents.
 
-\begin{enumerate}
-\item \textbf{shift$(t, p, q)$}: Lean-verified (D3--D5). Code uses it
-implicitly in shared-ref resolution but does not expose it as an explicit
-operation.
+\begin{center}
+\begin{tabular}{llll}
+\toprule
+Operation & Mathematical role & Lean & Python \\
+\midrule
+\texttt{extract}  & Counit $\varepsilon : W(A) \to A$                           & \texttt{counit} & \checkmark \\
+\texttt{sub}       & $\mathrm{sub} : S \to P(S) \to S$                          & D1--D5          & \checkmark \\
+\texttt{shift}     & $\mathrm{shift} : S \to P(S) \to P(\mathrm{sub}(s,p)) \to P(S)$ & D3--D5    & \checkmark \\
+\texttt{duplicate} & Comultiplication $\delta : W(A) \to W(W(A))$                & \texttt{comult} & \checkmark \\
+\texttt{compose}   & CoKleisli $g \mathbin{.*} f = g \circ W(f) \circ \delta$    & \texttt{cokleisli\_comp} & \checkmark \\
+\texttt{yoneda}    & Universal observation at every position                      & ---             & \checkmark \\
+\texttt{cofree}    & Terminal coalgebra annotation                                & ---             & \checkmark \\
+\texttt{strength}  & $\sigma : W(A \times B) \to A \times W(B)$                  & \texttt{strength} & \checkmark \\
+\texttt{resolve-transitive} & Multi-hop $\varphi$ composition (replaces one-hop rule) & --- & \checkmark \\
+\bottomrule
+\end{tabular}
+\end{center}
 
-\item \textbf{Morphism composition $A \to B \to C$}: the one-hop rule
-prevents multi-hop shared chains. Composing $\varphi$ maps (e.g., Clio
-citing Rick citing MacBeth) is not implemented.
+\textbf{CoKleisli composition.} Given coKleisli morphisms $f : W(X) \to Y$ and
+$g : W(Y) \to Z$, their composite $g \mathbin{.*} f = g \circ \mathrm{extend}(f)$
+is again a coKleisli morphism. Associativity (\texttt{cokleisli\_assoc} in
+\texttt{CoKleisli.lean}) follows from \texttt{extend\_extend}, which itself
+follows from coassociativity of the comonad. Reports now compose: ``extract
+trust at every position, then summarize the trust distribution.''
 
-\item \textbf{Strength / distributive law}: $W(A \times B) \to A \times
-W(B)$---combining a registry with external context as a natural
-transformation. Not implemented; sources are ad-hoc parameters.
+\textbf{Strength.} The canonical strength $\sigma\langle s, v\rangle =
+(\pi_1(v(o(s))),\; \langle s, \pi_2 \circ v\rangle)$ factors a uniform
+context (sources index, deployment config) out of the labelled tree. Naturality
+in both variables is proved in \texttt{CoKleisli.lean}.
 
-\item \textbf{Comonad morphism composition}: reports exist as coKleisli
-morphisms but do not compose (e.g., ``run frontier on this subtree's
-cross-refs'').
+\textbf{Canonical trust ($\tau$).} The Lean formalization proves $\tau$ is the
+greatest sound assignment (\texttt{tau\_sound}), but the Python validator
+previously only checked soundness (no inflation). A new \texttt{report tau}
+computes canonical trust bottom-up and reports whether each node is TIGHT
+($\tau = \text{claimed}$), CONSERVATIVE ($\tau > \text{claimed}$, safe to
+upgrade), or INFLATED ($\tau < \text{claimed}$, boundary violation). This
+closes the Lean--Python gap: every property Lean proves, Python now checks.
 
-\item \textbf{Yoneda embedding}: systematizing reports as representable
-functors. Not implemented.
+\textbf{Multi-hop morphism composition.} The one-hop rule is replaced by
+transitive resolution with cycle detection. When Clio cites Rick citing
+MacBeth, the composed $\varphi = \varphi_{\text{Clio}\leftarrow\text{Rick}}
+\circ \varphi_{\text{Rick}\leftarrow\text{MacBeth}}$ is computed and applied.
+Monotonicity of the composite follows from monotonicity of each factor
+(Lemma~\ref{lem:transport}).
 
-\item \textbf{Cofree comonad}: Lean proves the comonad laws on rose trees.
-The theory notes that no deployed theorem uses $\mathrm{duplicate}$
-non-trivially---the one exception is \texttt{ok\_sub} (boundary-rule
-stability). The honest verdict: ``for $\tau$, the containers supply
-language, not lemmas; the duplicate-shaped content lives in
-\texttt{ok\_sub}.''
-\end{enumerate}
+\textbf{Honest assessment.} The Yoneda embedding and cofree annotation are
+exploratory: they pre-compute all observations at every node, which is
+useful for debugging and inspection but does not yet drive any automated
+decision. The coKleisli composition and $\tau$ computation are the
+load-bearing additions.
 
 % ===================================================================
 \section{Lean formalization summary}
@@ -651,19 +675,32 @@ language, not lemmas; the duplicate-shaped content lives in
 \toprule
 File & Content & Sorry \\
 \midrule
+\texttt{Basic.lean} & Containers, extensions, representation theorem (Yoneda) & 0 \\
+\texttt{Directed.lean} & Directed containers (D1--D5), all three comonad laws & 0 \\
+\texttt{DContCat.lean} & Directed containers as categories, cofunctors, composition & 0 \\
+\texttt{ProofSearchN.lean} & N-ary rose trees as a directed container & 0 \\
 \texttt{Trust.lean} & Trust systems, certificate lemma, transport, & 0 \\
 & consolidation preservation, composition & \\
-\texttt{TrustBoundary.lean} & Rose trees as directed containers (D1--D5), & 0 \\
-& boundary-rule stability under duplicate & \\
+\texttt{TrustBoundary.lean} & Boundary-rule stability under duplicate, deployed chain & 0 \\
+\texttt{CoKleisli.lean} & CoKleisli extension, composition, strength & 0 \\
+\texttt{ProofSearch.lean} & Binary proof search trees & 0 \\
+\texttt{ZappaSzep.lean} & Zappa-Sz\'{e}p products of directed containers & 0 \\
 \bottomrule
 \end{tabular}
 \end{center}
+
+The canonical location is \texttt{macbeth-seed/lean/Containers/Containers/}
+(a buildable Lean~4 project); \texttt{trust-boundaries/lean/} holds
+byte-identical reference copies of all nine files.
 
 Key declarations: \texttt{sound\_le\_tau}, \texttt{tau\_sound},
 \texttt{tau\_transport}, \texttt{tau\_consolidate},
 \texttt{tau\_consolidate\_comp}, \texttt{cyc\_sound\_top}/\texttt{cyc\_no\_deriv}/\texttt{cyc\_not\_wf},
 \texttt{ground\_tau\_hi}/\texttt{layer4\_tau\_bot} (degradation
-counterexample), \texttt{ok\_sub} (boundary stability).
+counterexample), \texttt{ok\_sub} (boundary stability),
+\texttt{left\_counit}/\texttt{right\_counit}/\texttt{coassoc} (comonad laws),
+\texttt{extend\_extend} (coKleisli associativity),
+\texttt{strength\_natural\_left}/\texttt{strength\_natural\_right} (strength naturality).
 
 The formalization corrected the prose in three places: (1) $T$ must be a
 chain for attainment; (2) morphisms must be strict at $\bot$; (3) two
@@ -674,14 +711,21 @@ case splits in the proof of Lemma~\ref{lem:transport}.
 \label{sec:conclusion}
 % ===================================================================
 
-The trust system is live. Three agents run independent trust systems with
+The trust system is live. Four agents (Clio, Rick, MacBeth, and the public
+\texttt{dreaming-agent} template) run independent trust systems with
 different chains, different boundaries, and different evidence duties.
 They compose via email with proof attachments, graded at
 \level{peer-claimed}, with the interface map $\varphi$ translating grades
 between systems. The first live composition event---Rick peer-reviewing
 Clio's claims, Clio upgrading to \level{peer-reviewed} with the review
-artifact---occurred on the system's first day of deployment. The core
-theory is Lean-verified with no sorry.
+artifact---occurred on the system's first day of deployment.
+
+The full directed container structure is now implemented: all nine
+operations (\S\ref{sec:operations}) are deployed, the coKleisli category
+laws are Lean-verified (\texttt{CoKleisli.lean}), and the canonical trust
+$\tau$ is computed by the Python validator, closing the gap between what
+Lean proves (optimality) and what the validator checks (soundness). Nine
+Lean files, zero sorry.
 
 The measurement that remains: after both agents' consolidation cycles,
 does a cross-agent citation survive in machine format, or does it decay
