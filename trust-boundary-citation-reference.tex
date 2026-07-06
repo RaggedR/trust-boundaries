@@ -818,6 +818,45 @@ that resolve on disk but are not machine citations) are backfill
 candidates: upgrading them to machine format is a ten-second edit per
 file.
 
+\textbf{Rick's corpus: the control group.} Running the same measurement on
+Rick's connection and topic files---a comparable corpus (dozens of
+connection files, multiple topic files) but with the citation provenance
+discipline installed only on July~5, much later than Clio's---reveals a
+different pattern:
+%
+\begin{center}
+\begin{tabular}{lrrl}
+\toprule
+& Clio & Rick & \\
+\midrule
+Sources registered in index & 58 & 7 & \\
+Machine citations (in index) & 373 & 6 & resolve in \texttt{sources.json} \\
+Machine citations (unregistered) & 0 & 163 & arXiv IDs present but not indexed \\
+Unique unregistered IDs & 0 & 97 & distinct papers \\
+Deep-reads & multiple & 0 & all 7 entries are \texttt{agent-summary} \\
+Dangling & 0 & 0 & \\
+\bottomrule
+\end{tabular}
+\end{center}
+%
+The comparison isolates what the provenance discipline adds. Both agents'
+browse agents write arXiv IDs naturally---Rick has 97~unique IDs in machine
+format across his consolidated files, all written by browse agents before
+any provenance convention existed. \emph{Machine-format citations survive
+consolidation even without the discipline.} What the discipline adds is
+the \emph{index}: knowing which citations are agent-summaries versus
+deep-reads, tracking corrections, and---critically---catching hallucinated
+extractions before they become load-bearing. Rick's 97~unregistered
+citations are formally unchecked: any one of them could be the next
+Gatzweiler--Krattenthaler phantom. Clio's zero unregistered citations mean
+every machine-format reference in her corpus has an extraction level, a
+correction history, and a provenance floor.
+
+The takeaway: citation \emph{format} survives consolidation by default
+(browse agents write IDs). Citation \emph{provenance}---the extraction
+level, the position map that Theorem~3 requires---must be installed.
+Format is necessary; provenance is sufficient.
+
 \bibliographystyle{alpha}
 \begin{thebibliography}{GKT07}
 
