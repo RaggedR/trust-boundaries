@@ -1094,6 +1094,256 @@ FILE_REPORTS = {"footprint", "shallow", "certificate-gap"}
 
 
 # ---------------------------------------------------------------------------
+# Directed container operations (Lean: Directed.lean, CoKleisli.lean)
+#
+# The registry tree is a directed container (Ahman-Chapman-Uustalu):
+#   Shape  = rose tree structure
+#   Pos    = index-tuple paths: () = root, (i,) = i-th child, ...
+#   root   = ()
+#   sub    = follow the path
+#   shift  = path concatenation (the free monoid on child indices)
+#
+# The comonad on Ext(Shape, Pos):
+#   extract <s,v> = v(root(s))           — read the label at the root
+#   comult  <s,v> = <s, p -> <sub(s,p), q -> v(shift(s,p,q))>>
+#                                         — at each position, the full subtree
+#
+# CoKleisli:
+#   extend f <s,v> = <s, p -> f(sub(s,p))>
+#   g .* f = g o extend(f)
+#
+# Strength:
+#   sigma <s,v> = (fst(v(root(s))), <s, snd o v>)
+# ---------------------------------------------------------------------------
+
+def dc_extract(tree):
+    """Counit: read the label at the root. (Lean: counit)
+
+    extract <s, v> = v(root(s)) = v(()).
+    Returns the root node dict without children."""
+    return {k: v for k, v in tree.items() if k != "children"}
+
+
+def dc_sub(tree, path):
+    """Sub-shape at a position. (Lean: RTree.sub)
+
+    sub(t, ()) = t;  sub(t, (i,)+rest) = sub(children[i], rest)."""
+    node = tree
+    for i in path:
+        children = node.get("children") or []
+        if i < 0 or i >= len(children):
+            raise IndexError(f"child index {i} out of range "
+                             f"(node '{node.get('id')}' has {len(children)} "
+                             f"children)")
+        node = children[i]
+    return node
+
+
+def dc_shift(path_p, path_q):
+    """Shift: path concatenation. (Lean: RTree.shift)
+
+    shift(s, p, q) = p ++ q.  No tree argument needed — positions are
+    the free monoid on child indices."""
+    return path_p + path_q
+
+
+def dc_duplicate(tree):
+    """Comultiplication: at each node, attach the subtree from that point.
+    (Lean: comult)
+
+    comult <s, v> = <s, p -> <sub(s,p), q -> v(shift(s,p,q))>>.
+    Returns a new tree where every node carries "_subtree": the original
+    subtree from that position.  JSON-serializable."""
+    result = {k: v for k, v in tree.items() if k != "children"}
+    result["_subtree"] = tree
+    children = tree.get("children") or []
+    result["children"] = [dc_duplicate(c) for c in children]
+    return result
+
+
+def dc_extend(f, tree):
+    """CoKleisli extension: apply f at every position.  (Lean: extend)
+
+    extend(f) <s, v> = <s, p -> f(<sub(s,p), ...>)>.
+    Returns a tree of same shape where every node carries "_value": f(subtree).
+    When f = dc_extract, extend(extract) = id (right unit law, Lean:
+    extend_counit)."""
+    result = {k: v for k, v in tree.items() if k != "children"}
+    result["_value"] = f(tree)
+    children = tree.get("children") or []
+    result["children"] = [dc_extend(f, c) for c in children]
+    return result
+
+
+def dc_compose(f, g, tree):
+    """CoKleisli composition: g .* f = g o extend(f).  (Lean: cokleisli_comp)
+
+    Associativity: (h .* g) .* f = h .* (g .* f), proved in Lean
+    (cokleisli_assoc via extend_extend)."""
+    extended = dc_extend(f, tree)
+    return g(extended)
+
+
+def dc_strength(registry):
+    """Canonical strength: factor uniform context out of the labelled tree.
+    (Lean: strength)
+
+    sigma <s, v> = (fst(v(root(s))), <s, snd o v>).
+    In practice: split the registry-level metadata (conjecture, status,
+    dates) from the tree of nodes.  Returns (context_dict, tree_dict)."""
+    context = {k: v for k, v in registry.items() if k != "tree"}
+    return context, registry.get("tree")
+
+
+# ---- Canonical trust (tau) --------------------------------------------------
+
+def dc_tau(dep, tree):
+    """Compute canonical trust bottom-up. (Lean: tau, sound_le_tau, tau_sound)
+
+    tau(n) = min(own_trust_rank, min(tau(c) for c in premise_children)).
+    Attempt children are excluded — they are exploration, not dependencies.
+    Dead-end children are excluded — they are abandoned.
+
+    Returns a dict: node_id -> {"claimed": str, "canonical": str,
+    "canonical_rank": int, "status": "TIGHT"|"CONSERVATIVE"|"INFLATED"}."""
+    results = {}
+
+    def compute(node):
+        trust = node.get("trust")
+        own_rank = dep.trank(trust)
+        is_special = trust == "dead-end" or trust in dep.special
+
+        # always recurse into children for reporting
+        min_child = own_rank if not is_special else len(dep.trust_chain)
+        for child in node.get("children") or []:
+            child_tau = compute(child)
+            if child.get("role") == "attempt":
+                continue  # don't constrain parent
+            ct = child.get("trust")
+            if ct == "dead-end" or ct in dep.special:
+                continue
+            if child_tau >= 0 and child_tau < min_child:
+                min_child = child_tau
+
+        if is_special:
+            results[node.get("id")] = {
+                "claimed": trust, "canonical": trust,
+                "canonical_rank": -1, "status": "TIGHT"}
+            return -1
+
+        tau_rank = min(own_rank, min_child) if own_rank >= 0 else -1
+        canonical = (dep.trust_chain[tau_rank]
+                     if 0 <= tau_rank < len(dep.trust_chain) else trust)
+
+        if own_rank < 0:
+            status = "TIGHT"
+        elif tau_rank > own_rank:
+            status = "CONSERVATIVE"
+        elif tau_rank < own_rank:
+            status = "INFLATED"
+        else:
+            status = "TIGHT"
+
+        results[node.get("id")] = {
+            "claimed": trust, "canonical": canonical,
+            "canonical_rank": tau_rank, "status": status}
+        return tau_rank
+
+    compute(tree)
+    return results
+
+
+def report_tau(dep, tree):
+    """Human-readable tau report: per-node TIGHT / CONSERVATIVE / INFLATED."""
+    results = dc_tau(dep, tree)
+    lines = []
+    for node, path in walk(tree):
+        nid = node.get("id")
+        r = results.get(nid)
+        if r is None:
+            continue
+        loc = "/".join(path)
+        s = r["status"]
+        if s == "TIGHT":
+            lines.append(f"  {loc}: {r['claimed']} = tau  [TIGHT]")
+        elif s == "CONSERVATIVE":
+            lines.append(f"  {loc}: claims {r['claimed']}, tau = "
+                         f"{r['canonical']}  [CONSERVATIVE — safe to upgrade]")
+        else:
+            lines.append(f"  {loc}: claims {r['claimed']}, tau = "
+                         f"{r['canonical']}  [INFLATED — boundary violation]")
+    return lines
+
+
+# ---- Multi-hop phi (resolve-transitive) ------------------------------------
+
+def resolve_transitive(dep, tree, registry_dir):
+    """Follow shared stubs across registries, composing phi at each hop.
+
+    Detects cycles. Reports the hop chain and composed trust grade for
+    each shared stub."""
+    cache = {}
+    lines = []
+    for node, path in walk(tree):
+        shared = node.get("shared")
+        if shared is None:
+            continue
+        loc = "/".join(path)
+        hops = []
+        current_ref = shared
+        visited = set()
+        trust = None
+        cycle = False
+        while current_ref is not None:
+            if current_ref in visited:
+                cycle = True
+                break
+            visited.add(current_ref)
+            parsed = parse_shared(current_ref)
+            if parsed is None:
+                break
+            reg, nid = parsed
+            key = reg_key(dep, "", reg)
+            if key is None:
+                hops.append(f"{current_ref} [UNRESOLVABLE]")
+                break
+            canon_tree, err = load_by_key(dep, registry_dir, key, cache)
+            if err or canon_tree is None:
+                hops.append(f"{current_ref} [{err}]")
+                break
+            target = find_node(canon_tree, nid)
+            if target is None:
+                hops.append(f"{current_ref} [NOT FOUND]")
+                break
+            iface = (dep.interfaces.get(key.split("/", 1)[0])
+                     if "/" in key else None)
+            raw_trust = target.get("trust")
+            if iface is not None:
+                mapped = iface["phi"].get(raw_trust)
+                hops.append(f"{current_ref} [{raw_trust} -> {mapped} via phi]")
+                trust = mapped
+            else:
+                hops.append(f"{current_ref} [{raw_trust}]")
+                trust = raw_trust
+            current_ref = target.get("shared")
+
+        if cycle:
+            lines.append(f"  {loc} -> CYCLE at {current_ref}")
+        elif hops:
+            chain = " -> ".join(hops)
+            lines.append(f"  {loc} -> {chain}")
+            if len(hops) > 1:
+                lines.append(f"    composed trust: {trust}")
+        else:
+            lines.append(f"  {loc} -> {shared} [parse error]")
+    return lines or ["  (no shared stubs in this registry)"]
+
+
+DC_OPS = {"extract", "sub", "duplicate", "extend", "strength",
+          "tau", "resolve-transitive"}
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -1132,6 +1382,15 @@ def main():
                    help="a registry (registry reports) or files (file reports)")
     r.add_argument("--registry-dir", default=None)
 
+    o = sub.add_parser("ops", help="directed container operations "
+                                   "(Lean: Directed.lean, CoKleisli.lean)")
+    o.add_argument("op", choices=sorted(DC_OPS))
+    o.add_argument("registry", type=Path)
+    o.add_argument("path_indices", nargs="*", type=int,
+                   help="child indices for 'sub' (e.g. 2 0 = 3rd child, "
+                        "then 1st child)")
+    o.add_argument("--registry-dir", default=None)
+
     args = ap.parse_args()
     dep = load_deployment(args.deployment, args.root)
 
@@ -1143,7 +1402,8 @@ def main():
     elif dep.corpus_dir:
         chunks_dir = dep._resolve(dep.corpus_dir)
         if not chunks_dir.is_dir():
-            print(f"note: {chunks_dir} not found; skipping on-disk chunk checks")
+            print(f"note: {chunks_dir} not found; skipping on-disk chunk checks",
+                  file=sys.stderr)
             chunks_dir = None
     else:
         chunks_dir = None
@@ -1168,6 +1428,48 @@ def main():
         n = len(args.files)
         print(f"sources index OK ({len(sources or {})} sources)"
               + (f"; {n} file(s) resolve cleanly" if n else ""))
+        return 0
+
+    if args.cmd == "ops":
+        try:
+            registry = json.loads(args.registry.read_text())
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"ERROR: cannot read registry: {exc}")
+            return 1
+        tree = registry.get("tree")
+        if not isinstance(tree, dict):
+            print("ERROR: no tree to report on")
+            return 1
+
+        if args.op == "extract":
+            print(json.dumps(dc_extract(tree), indent=2))
+        elif args.op == "sub":
+            path = tuple(args.path_indices or [])
+            try:
+                subtree = dc_sub(tree, path)
+            except (IndexError, KeyError) as exc:
+                print(f"ERROR: {exc}")
+                return 1
+            print(json.dumps(subtree, indent=2))
+        elif args.op == "duplicate":
+            print(json.dumps(dc_duplicate(tree), indent=2))
+        elif args.op == "extend":
+            result = dc_extend(dc_extract, tree)
+            print(json.dumps(result, indent=2))
+        elif args.op == "strength":
+            context, t = dc_strength(registry)
+            print(json.dumps({"context": context, "tree_root":
+                              dc_extract(t) if t else None}, indent=2))
+        elif args.op == "tau":
+            print(f"# tau: {registry.get('conjecture', '?')}")
+            for line in report_tau(dep, tree):
+                print(line)
+        elif args.op == "resolve-transitive":
+            registry_dir = (args.registry_dir
+                            or str(args.registry.resolve().parent))
+            print(f"# resolve-transitive: {registry.get('conjecture', '?')}")
+            for line in resolve_transitive(dep, tree, registry_dir):
+                print(line)
         return 0
 
     if args.cmd == "report":

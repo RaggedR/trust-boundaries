@@ -615,59 +615,68 @@ duties (\field{recheck}, \field{file}) fired correctly on first contact.
 \label{sec:operations}
 % ===================================================================
 
-All six operations from the original ``what remains'' list are now implemented
-in \texttt{trustcheck.py ops} and deployed across all four agents.
+The directed container operations are exposed via \texttt{trustcheck.py ops},
+a subcommand that provides both the core algebra (pure tree operations
+independent of any deployment) and deployment-parametric operations that
+use the trust chain. Positions are index-tuples: \texttt{()} is the root,
+\texttt{(2,)} is the third child, \texttt{(1, 0)} is the first child of
+the second child. \texttt{shift} is tuple concatenation (the free monoid
+on child indices).
 
 \begin{center}
-\begin{tabular}{llll}
+\begin{tabular}{lllll}
 \toprule
-Operation & Mathematical role & Lean & Python \\
+Operation & Mathematical role & Lean & Python & CLI \\
 \midrule
-\texttt{extract}  & Counit $\varepsilon : W(A) \to A$                           & \texttt{counit} & \checkmark \\
-\texttt{sub}       & $\mathrm{sub} : S \to P(S) \to S$                          & D1--D5          & \checkmark \\
-\texttt{shift}     & $\mathrm{shift} : S \to P(S) \to P(\mathrm{sub}(s,p)) \to P(S)$ & D3--D5    & \checkmark \\
-\texttt{duplicate} & Comultiplication $\delta : W(A) \to W(W(A))$                & \texttt{comult} & \checkmark \\
-\texttt{compose}   & CoKleisli $g \mathbin{.*} f = g \circ W(f) \circ \delta$    & \texttt{cokleisli\_comp} & \checkmark \\
-\texttt{yoneda}    & Universal observation at every position                      & ---             & \checkmark \\
-\texttt{cofree}    & Terminal coalgebra annotation                                & ---             & \checkmark \\
-\texttt{strength}  & $\sigma : W(A \times B) \to A \times W(B)$                  & \texttt{strength} & \checkmark \\
-\texttt{resolve-transitive} & Multi-hop $\varphi$ composition (replaces one-hop rule) & --- & \checkmark \\
+\texttt{extract}  & Counit $\varepsilon : W(A) \to A$ & \texttt{counit} & \texttt{dc\_extract} & \texttt{ops extract} \\
+\texttt{sub}       & $\mathrm{sub} : S \to P(S) \to S$ & D1--D5 & \texttt{dc\_sub} & \texttt{ops sub 2 0} \\
+\texttt{shift}     & Path concatenation $p \mathbin{+\!\!+} q$ & D3--D5 & \texttt{dc\_shift} & (library) \\
+\texttt{duplicate} & Comultiplication $\delta$ & \texttt{comult} & \texttt{dc\_duplicate} & \texttt{ops duplicate} \\
+\texttt{extend}    & CoKleisli extension & \texttt{extend} & \texttt{dc\_extend} & \texttt{ops extend} \\
+\texttt{compose}   & $g \mathbin{.*} f = g \circ W(f) \circ \delta$ & \texttt{cokleisli\_comp} & \texttt{dc\_compose} & (library) \\
+\texttt{strength}  & $\sigma : W(A \times B) \to A \times W(B)$ & \texttt{strength} & \texttt{dc\_strength} & \texttt{ops strength} \\
+\texttt{tau}       & Canonical trust $\tau$ (greatest sound) & \texttt{tau\_sound} & \texttt{dc\_tau} & \texttt{ops tau} \\
+\texttt{resolve-transitive} & Multi-hop $\varphi$ composition & --- & \texttt{resolve\_transitive} & \texttt{ops resolve\text{-}transitive} \\
 \bottomrule
 \end{tabular}
 \end{center}
+
+\texttt{shift} and \texttt{compose} are Python library functions rather than
+CLI subcommands: \texttt{shift} is tuple concatenation (one line), and
+\texttt{compose} requires passing two Python functions (not expressible on a
+command line). Both are called internally by the other operations.
 
 \textbf{CoKleisli composition.} Given coKleisli morphisms $f : W(X) \to Y$ and
 $g : W(Y) \to Z$, their composite $g \mathbin{.*} f = g \circ \mathrm{extend}(f)$
 is again a coKleisli morphism. Associativity (\texttt{cokleisli\_assoc} in
 \texttt{CoKleisli.lean}) follows from \texttt{extend\_extend}, which itself
-follows from coassociativity of the comonad. Reports now compose: ``extract
-trust at every position, then summarize the trust distribution.''
+follows from coassociativity of the comonad. The right unit law
+$\mathrm{extend}(\varepsilon) = \mathrm{id}$ (\texttt{extend\_counit}) is
+verified by \texttt{ops extend}: applying \texttt{dc\_extract} at every
+position recovers the original labels.
 
 \textbf{Strength.} The canonical strength $\sigma\langle s, v\rangle =
 (\pi_1(v(o(s))),\; \langle s, \pi_2 \circ v\rangle)$ factors a uniform
-context (sources index, deployment config) out of the labelled tree. Naturality
+context (conjecture, status, dates) out of the labelled tree. Naturality
 in both variables is proved in \texttt{CoKleisli.lean}.
 
-\textbf{Canonical trust ($\tau$).} The Lean formalization proves $\tau$ is the
-greatest sound assignment (\texttt{tau\_sound}), but the Python validator
-previously only checked soundness (no inflation). A new \texttt{report tau}
-computes canonical trust bottom-up and reports whether each node is TIGHT
-($\tau = \text{claimed}$), CONSERVATIVE ($\tau > \text{claimed}$, safe to
-upgrade), or INFLATED ($\tau < \text{claimed}$, boundary violation). This
-closes the Lean--Python gap: every property Lean proves, Python now checks.
+\textbf{Canonical trust ($\tau$).} \texttt{ops tau} computes canonical trust
+bottom-up: $\tau(n) = \min(\mathrm{own\_rank},\; \min_i \tau(c_i))$ over
+premise children (attempt children excluded, matching the boundary rule).
+Each node is classified as TIGHT ($\tau = \text{claimed}$), CONSERVATIVE
+($\tau > \text{claimed}$, safe to upgrade), or INFLATED ($\tau <
+\text{claimed}$, boundary violation). This closes the Lean--Python gap:
+the certificate lemma (Lemma~\ref{lem:certificate}) says $\tau$ is the
+greatest sound assignment; the Python validator checks soundness
+(no inflation) and now also computes $\tau$ (optimality).
 
-\textbf{Multi-hop morphism composition.} The one-hop rule is replaced by
-transitive resolution with cycle detection. When Clio cites Rick citing
-MacBeth, the composed $\varphi = \varphi_{\text{Clio}\leftarrow\text{Rick}}
-\circ \varphi_{\text{Rick}\leftarrow\text{MacBeth}}$ is computed and applied.
+\textbf{Multi-hop morphism composition.} \texttt{ops resolve-transitive}
+follows shared stubs across registries, composing $\varphi$ at each hop
+with cycle detection. When Clio cites Rick citing MacBeth, the composed
+$\varphi = \varphi_{\text{Clio}\leftarrow\text{Rick}} \circ
+\varphi_{\text{Rick}\leftarrow\text{MacBeth}}$ is computed and applied.
 Monotonicity of the composite follows from monotonicity of each factor
 (Lemma~\ref{lem:transport}).
-
-\textbf{Honest assessment.} The Yoneda embedding and cofree annotation are
-exploratory: they pre-compute all observations at every node, which is
-useful for debugging and inspection but does not yet drive any automated
-decision. The coKleisli composition and $\tau$ computation are the
-load-bearing additions.
 
 % ===================================================================
 \section{Lean formalization summary}
