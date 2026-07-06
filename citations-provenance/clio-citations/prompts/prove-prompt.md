@@ -58,7 +58,15 @@ If you fail: write down exactly where and why. This is valuable. Save it for the
 
 If `proofs/registry/<name>.json` exists for your theorem's program, update it:
 add nodes for today's attempts, mark dead ends with a `reason`, adjust trust
-levels. If you cite a pre-registry result, add it as `trust: "unclassified"`
+levels. Every child node must have a `role` field:
+
+- `"role": "premise"` — this child is a dependency. Your proof stands on
+  it. The boundary rule checks premises.
+- `"role": "attempt"` — this child is an approach you tried. Dead ends
+  are always attempts. The boundary rule skips attempts — a proved theorem
+  may have computed attempts beside it.
+
+If you cite a pre-registry result, add it as `trust: "unclassified"`
 with its `file` — promote it only after re-checking (see the README). Then run,
 from `/home/clio/projects`:
 

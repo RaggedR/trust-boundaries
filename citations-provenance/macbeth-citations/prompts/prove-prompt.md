@@ -57,10 +57,17 @@ If you fail: write down exactly where and why. This is valuable. Save it for the
 
 If `proofs/registry/<name>.json` exists for your theorem's program, update it:
 add nodes for today's attempts, mark dead ends with a `reason`, adjust trust
-levels. The registry is a directed container — shapes are search trees,
+levels. Every child node must have a `role` field — this is the tree pair:
+
+- `"role": "premise"` — the downward tree. This child is a dependency
+  your proof stands on. The boundary rule checks premises.
+- `"role": "attempt"` — the outward tree. This child is an approach you
+  tried. Dead ends are always attempts. The boundary rule skips attempts.
+
+The registry is a directed container — shapes are search trees,
 positions are paths — and the trust levels are its grading:
 
-    speculative < computed < proved < peer-reviewed < published < lean-verified
+    speculative < computed < peer-claimed < proved < peer-reviewed < published < lean-verified
 
 The **boundary is `proved`**: build on `proved` and above. Below that you
 explore, cite, conjecture — but a claim standing on `speculative` evidence

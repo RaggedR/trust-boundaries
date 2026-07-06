@@ -452,6 +452,7 @@ def below_extraction(dep, entry, threshold):
 # ---------------------------------------------------------------------------
 
 NODE_REQUIRED = ("id", "approach", "trust", "children")
+VALID_ROLES = ("premise", "attempt")
 
 
 def validate_registry(dep, registry, own_name, files_dir, registry_dir,
@@ -545,6 +546,16 @@ def validate_registry(dep, registry, own_name, files_dir, registry_dir,
             errors.append(f"{loc}: invalid trust '{trust}' "
                           f"(valid: {', '.join(sorted(dep.valid_trust))})")
 
+        # role: required on every non-root node, must be premise or attempt
+        role = node.get("role")
+        if len(path) > 1:  # not root
+            if role is None:
+                errors.append(f"{loc}: missing 'role' field "
+                              f"(must be 'premise' or 'attempt')")
+            elif role not in VALID_ROLES:
+                errors.append(f"{loc}: invalid role '{role}' "
+                              f"(must be 'premise' or 'attempt')")
+
         # shared nodes are stubs; local trust is a cache that must not
         # exceed the canonical trust (cross-registry boundary, Cor 3.5)
         shared = node.get("shared")
@@ -633,17 +644,20 @@ def validate_registry(dep, registry, own_name, files_dir, registry_dir,
                 errors.append(msg)
 
         # boundary rule (+): claiming >= boundary_at requires every
-        # non-dead-end child at least boundary_at, at canonical trust
+        # premise child at least boundary_at, at canonical trust.
+        # Attempt children are exploration, not dependencies.
         if dep.trank(trust) >= dep.trank(b_at):
             for child in node.get("children") or []:
+                if child.get("role") == "attempt":
+                    continue
                 ct = effective_trust(child)
                 if ct == "dead-end":
                     continue
                 if dep.trank(ct) < dep.trank(b_at):
                     errors.append(
-                        f"{loc}: claims '{trust}' but child "
+                        f"{loc}: claims '{trust}' but premise child "
                         f"'{child.get('id')}' is '{ct}' (boundary rule: "
-                        f"non-dead-end children must be at least '{b_at}')")
+                        f"premise children must be at least '{b_at}')")
 
         # citation provenance: phi blocking (Cor 3.4)
         srcs = node.get("sources")

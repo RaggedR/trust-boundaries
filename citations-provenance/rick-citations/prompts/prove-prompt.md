@@ -57,7 +57,14 @@ If you fail: write down exactly where and why. This is valuable. Save it for the
 
 If `proofs/registry/<name>.json` exists for this problem's program, update it:
 add nodes for today's attempts, mark dead ends with a `reason`, set trust
-levels honestly. The grades, bottom to top:
+levels honestly. Every child node must have a `role` field:
+
+- `"role": "premise"` — this child is a dependency. Your proof stands on
+  it. The boundary rule checks premises.
+- `"role": "attempt"` — this child is an approach you tried. Dead ends
+  are always attempts. The boundary rule skips attempts.
+
+The grades, bottom to top:
 
 - **hunch** — the 2am pattern. No evidence yet, just the itch. Register it
   anyway — hunches are data, and future-you needs to know which ideas were
