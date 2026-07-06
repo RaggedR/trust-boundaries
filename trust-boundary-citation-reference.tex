@@ -1,0 +1,712 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{fancyvrb}
+\usepackage{tikz-cd}
+\usepackage[hidelinks]{hyperref}
+
+\definecolor{codebg}{gray}{0.95}
+\DefineVerbatimEnvironment{code}{Verbatim}{fontsize=\small,frame=single,framerule=0.2pt,framesep=2mm}
+
+\newcommand{\level}[1]{\texttt{#1}}
+\newcommand{\field}[1]{\texttt{#1}}
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{proposition}[theorem]{Proposition}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{remark}[theorem]{Remark}
+
+\title{Trust Systems for Autonomous Agent Composition:\\
+\large Theory, Formalization, and Deployment}
+\author{Robin Langer \and Claude}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We describe a trust system for autonomous research agents that grades
+mathematical claims, validates citations, and composes across agent
+boundaries via email. Three agents---Clio (algebraic combinatorics),
+Rick (combinatorial Hopf algebras), and MacBeth (category theory)---each
+run independent trust systems inside Docker containers with different
+trust chains, different boundaries, and different evidence duties. A
+monotone interface map $\varphi$ translates grades between systems;
+a new grade \level{peer-claimed} mediates cross-agent citation via
+email with proof attachments. The core theory (the certificate lemma,
+trust transport, consolidation preservation) is Lean-verified with no
+\texttt{sorry}. The registry structure is a directed container whose
+positions separate into a proof tree (\field{role: "premise"}) and an
+exploration tree (\field{role: "attempt"}). We describe the complete
+system: definitions, theorems, Lean formalization, the generic
+validator, and the operational deployment across four agents.
+\end{abstract}
+
+\tableofcontents
+
+% ===================================================================
+\section{Introduction}
+% ===================================================================
+
+An autonomous research agent proves theorems, reads papers, and
+consolidates memory across cycles. Each of these operations can corrupt
+knowledge: a sub-agent hallucinates paper contents, compression drops
+citations, a proof absorbs hearsay as fact. The trust system exists to
+make such corruption mechanically visible.
+
+This paper describes the complete system as deployed across four agents.
+It is simultaneously a mathematical paper (definitions, theorems, proofs),
+a systems paper (the validator, the descriptors, the email protocol), and
+a field report (what happened when the agents ran). The three contributions
+are:
+
+\begin{enumerate}
+\item \textbf{The theory.} Trust systems $({\mathcal D}, T, s)$ with the
+certificate lemma (Lemma~\ref{lem:certificate}), trust transport
+(Lemma~\ref{lem:transport}), and consolidation preservation
+(Theorem~\ref{thm:consolidation}). All Lean-verified.
+
+\item \textbf{The composition mechanism.} Cross-agent citation via a
+monotone interface map $\varphi$, mediated by email with proof
+attachments, graded at \level{peer-claimed}. The first live composition
+event: Rick peer-reviews Clio's claims; Clio upgrades nodes to
+\level{peer-reviewed} with the review artifact.
+
+\item \textbf{The tree pair.} Every child node carries a \field{role}
+field (\field{"premise"} or \field{"attempt"}) that separates the
+downward proof tree from the outward exploration tree. The boundary rule
+checks only premises. This makes the directed container structure
+explicit: the proof tree is the successful-path coKleisli morphism; the
+exploration tree is the dead-ends morphism.
+\end{enumerate}
+
+% ===================================================================
+\section{The data of a trust system}
+\label{sec:trust-system}
+% ===================================================================
+
+\begin{definition}[Trust system]
+\label{def:trust-system}
+A \emph{trust system} is a triple $({\mathcal D}, T, s)$:
+\begin{enumerate}
+\item \textbf{Dependency structure ${\mathcal D}$}: a multicategory.
+Objects are \emph{claims}. A multimorphism $f : y_1, \ldots, y_n \to x$
+is a \emph{checking step}: a derivation of $x$ from premises
+$y_1, \ldots, y_n$. The $0$-ary case $f : () \to x$ is a \emph{ground
+check} (reading a source, a Lean compilation, a reproduced computation).
+
+\item \textbf{Check-poset $T$}: a bounded chain (linear order with
+$\bot$), ordered by strength of check. Meets and joins are min and max.
+
+\item \textbf{Grading} $s : \mathrm{Mor}({\mathcal D}) \to T$, assigning
+to each checking step the strength of the check it received.
+\end{enumerate}
+\end{definition}
+
+$T$ is the \emph{deployment parameter}. Each agent instantiates it
+differently:
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Agent & Chain $T$ & Boundary \\
+\midrule
+Clio & \level{speculative} $<$ \level{computed} $<$ \level{peer-claimed} $<$ \level{proved} & \level{proved} \\
+& \quad $<$ \level{peer-reviewed} $<$ \level{published} $<$ \level{lean-verified} & \\
+Rick & \level{hunch} $<$ \level{sketched} $<$ \level{computed} $<$ \level{peer-claimed} & \level{checked-sober} \\
+& \quad $<$ \level{checked-sober} $<$ \level{proved} $<$ \level{lean-verified} & \\
+MacBeth & (same as Clio) & \level{proved} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{remark}[Non-isomorphic chains]
+Rick's chain has seven levels; Clio's and MacBeth's have seven (with
+\level{peer-claimed} added between \level{computed} and \level{proved}).
+Rick's chain includes \level{hunch}, \level{sketched}, and
+\level{checked-sober}, which have no direct analogues in Clio's system.
+The interface map $\varphi$ (Definition~\ref{def:morphism}) translates
+between them.
+\end{remark}
+
+\begin{definition}[Grade of a derivation, canonical trust]
+\label{def:canonical-trust}
+The grade of a derivation $\delta = (f; \delta_1, \ldots, \delta_n)$ is
+the weakest link:
+\[
+g(\delta) = s(f) \wedge \bigwedge_i g(\delta_i).
+\]
+The \emph{canonical trust} of a claim $x$ is the best derivation:
+\[
+\tau(x) = \bigvee \{ g(\delta) : \delta \text{ a derivation of } x \},
+\quad \text{with } \bigvee \emptyset = \bot.
+\]
+\end{definition}
+
+This is a provenance-semiring instance (Green--Karvounarakis--Tannen,
+PODS 2007): the min-max specialization. The semiring is not the
+contribution; the deployment is.
+
+\textbf{Standing hypotheses.} ${\mathcal D}$ is finite and well-founded:
+every claim's justification bottoms out in ground checks. Finiteness
+makes all sups attained; well-foundedness is load-bearing
+(Remark~\ref{rem:acyclicity}).
+
+% ===================================================================
+\section{The certificate lemma}
+\label{sec:certificate}
+% ===================================================================
+
+\begin{definition}[Sound assignment]
+\label{def:sound}
+An assignment $t : \mathrm{Ob}({\mathcal D}) \to T$ is \emph{sound} if
+for every claim $x$ with $t(x) > \bot$ there exists a checking step
+$f : y_1, \ldots, y_n \to x$ with
+\begin{equation}
+\label{eq:dagger}
+t(x) \leq s(f) \wedge \bigwedge_i t(y_i). \tag{$\dagger$}
+\end{equation}
+\end{definition}
+
+This is the \textbf{boundary rule} as deployed: a registry node may
+claim level $\ell$ only if the step-check reached $\ell$ and every
+premise child is at least $\ell$. Condition~\eqref{eq:dagger} is
+node-local---checkable without seeing the whole tree. The validator is a
+certificate checker: it verifies~\eqref{eq:dagger} at each node; it
+never computes $\tau$.
+
+\begin{lemma}[Certificate lemma]
+\label{lem:certificate}
+Under the standing hypotheses:
+\begin{enumerate}[label=(\roman*)]
+\item $\tau$ is sound.
+\item Every sound $t$ satisfies $t \leq \tau$ pointwise.
+\end{enumerate}
+Hence $\tau$ is the greatest sound assignment.
+\end{lemma}
+
+\begin{proof}
+(i) Suppose $\tau(x) > \bot$. Since $T$ is a finite chain, the sup is
+attained: $\tau(x) = g(\delta)$ for some $\delta = (f; \delta_1, \ldots,
+\delta_n)$. Then $\tau(x) = s(f) \wedge \bigwedge_i g(\delta_i) \leq
+s(f) \wedge \bigwedge_i \tau(y_i)$, so~\eqref{eq:dagger} holds at $x$.
+
+(ii) By well-founded induction. Let $t$ be sound and pick $f$ as
+in~\eqref{eq:dagger}. By induction $t(y_i) \leq \tau(y_i)$; choose
+$\delta_i$ with $g(\delta_i) = \tau(y_i)$. Then $\delta = (f; \delta_1,
+\ldots, \delta_n)$ has $g(\delta) \geq t(x)$, so $\tau(x) \geq t(x)$.
+
+\emph{Lean:} \texttt{sound\_le\_tau}, \texttt{tau\_sound} in
+\texttt{Trust.lean}, no sorry.
+\end{proof}
+
+\begin{remark}[Well-foundedness is load-bearing]
+\label{rem:acyclicity}
+Drop well-foundedness and (ii) fails: two claims citing each other, both
+graded $\top$, have $t \equiv \top$ sound but $\tau \equiv \bot$.
+Circular citation is trust inflation that passes every node-local check.
+The validator checks acyclicity explicitly via DFS across agent
+namespaces.
+
+\emph{Lean:} \texttt{cyc\_sound\_top}, \texttt{cyc\_no\_deriv},
+\texttt{cyc\_not\_wf}.
+\end{remark}
+
+% ===================================================================
+\section{Morphisms and cross-agent citation}
+\label{sec:morphisms}
+% ===================================================================
+
+\begin{definition}[Morphism of trust systems]
+\label{def:morphism}
+A \emph{morphism} $(F, \varphi) : ({\mathcal D}, T, s) \to ({\mathcal D}',
+T', s')$ is a multifunctor $F : {\mathcal D} \to {\mathcal D}'$ together
+with a monotone map $\varphi : T \to T'$ that is \textbf{strict at bottom}
+($\varphi(\bot) = \bot'$) and laxly compatible with grading:
+\[
+\varphi(s(f)) \leq s'(Ff) \quad \text{for every checking step } f.
+\]
+\end{definition}
+
+Strictness at $\bot$---``a morphism maps \emph{unchecked} to
+\emph{unchecked}''---was found missing by the Lean formalization: without
+it, transport fails on a claim with no derivation.
+
+\begin{lemma}[Transport of trust]
+\label{lem:transport}
+For any morphism $(F, \varphi)$ and claim $x$:
+\[
+\varphi(\tau(x)) \leq \tau'(Fx).
+\]
+\end{lemma}
+
+\begin{proof}
+Induction on derivations. For $\delta = (f; \delta_1, \ldots, \delta_n)$,
+$F\delta$ is a derivation of $Fx$ with
+$g'(F\delta) \geq \varphi(g(\delta))$ by monotonicity and lax
+compatibility. Taking sups and using attainment (finite chain) or
+strictness at $\bot$ (empty derivation set).
+
+\emph{Lean:} \texttt{tau\_transport} in \texttt{Trust.lean}, no sorry.
+Both case splits found by the formalization.
+\end{proof}
+
+\begin{corollary}[Cross-agent citation]
+\label{cor:cross-agent}
+Clio citing a Rick registry node is composition of morphisms: Rick's
+system $\to$ opaque restriction at his registry roots $\to$ Clio's system
+along $\varphi : T_{\text{Rick}} \to T_{\text{Clio}}$.
+Lemma~\ref{lem:transport} composed twice gives the safe import grade.
+\end{corollary}
+
+\subsection{The interface maps}
+
+The $\varphi$ maps are declared in JSON descriptors. The critical rows:
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Direction & Key mapping & Effect \\
+\midrule
+Rick $\to$ Clio & \level{checked-sober} $\mapsto$ \level{peer-claimed} & Below Clio's boundary \\
+Rick $\to$ Clio & \level{proved} $\mapsto$ \level{proved} & At Clio's boundary \\
+Clio $\to$ Rick & \level{peer-claimed} $\mapsto$ \level{peer-claimed} & Below Rick's boundary \\
+Clio $\leftrightarrow$ MacBeth & identity on all grades & Same chain \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Rick's \level{checked-sober} maps to \level{peer-claimed} (not
+\level{computed}) in Clio's system. This is forced by monotonicity:
+\level{peer-claimed} sits between \level{computed} and \level{proved}
+in both chains, and the mapping must preserve order.
+
+\subsection{Source-extraction demotion}
+
+Each interface also declares a \texttt{source\_phi} that demotes
+extraction levels by one step: deep-read by proxy becomes abstract-level
+check locally. A sub-agent's summary of a paper that Rick read is two
+degrees of separation from the mathematics.
+
+\subsection{The validator checks}
+
+The generic validator (\texttt{trustcheck.py}) enforces:
+\begin{enumerate}
+\item \textbf{$\varphi$ side conditions}: total, monotone, strict at $\bot$.
+\item \textbf{Trust cap}: a shared stub's local trust $\leq \varphi(\text{canonical trust})$.
+\item \textbf{Artifact transport}: if $\varphi(\text{canonical trust}) \geq$ boundary and the canonical node has a proof file, the file must exist under the peer's artifact directory.
+\item \textbf{Acyclicity}: DFS across agent namespaces detects circular citation.
+\end{enumerate}
+
+% ===================================================================
+\section{Consolidation preservation}
+\label{sec:consolidation}
+% ===================================================================
+
+\begin{definition}[Consolidation]
+\label{def:consolidation}
+A \emph{consolidation} $C : ({\mathcal D}, T, s) \to ({\mathcal D}', T, s')$
+over the same check-chain consists of:
+\begin{itemize}
+\item \textbf{Shapes forward}: a map on claims $x \mapsto Cx$ and on
+checking steps $f \mapsto Cf$ with premises corresponding and grades not
+dropping: $s(f) \leq s'(Cf)$.
+\item \textbf{Positions backward}: for every claim $x$ and every checking
+step $f' : y'_1, \ldots, y'_m \to Cx$ of the target, a chosen step
+$\rho(f')$ of the source with premises corresponding and the target grade
+cached: $s'(f') \leq s(\rho(f'))$.
+\end{itemize}
+\end{definition}
+
+$\rho$ is the position map; a citation is precisely its cached value at
+one step. The definition never mentions $\tau$: it is a bisimulation-style,
+node-local condition.
+
+\begin{theorem}[Consolidation preservation]
+\label{thm:consolidation}
+If $C$ is a consolidation and both premise relations are well-founded,
+then $\tau'(Cx) = \tau(x)$ for every source claim $x$.
+\end{theorem}
+
+\begin{proof}
+Forward: Lemma~\ref{lem:transport} at $\varphi = \mathrm{id}$. Backward:
+well-founded induction on the source, using attainment, the premise
+correspondence, and the cached-grade condition.
+
+\emph{Lean:} \texttt{tau\_consolidate}, no sorry.
+\end{proof}
+
+\begin{theorem}[Consolidations compose]
+\label{thm:consolidation-comp}
+Consolidations have identities and compose: shapes forward through both
+factors, positions backward (contravariantly), caches by transitivity.
+
+\emph{Lean:} \texttt{Consolidation.id}, \texttt{Consolidation.comp},
+\texttt{tau\_consolidate\_comp}, no sorry.
+\end{theorem}
+
+\subsection{The certificate gap}
+
+The measured ``degradation'' in the loop experiment was not a drop in
+$\tau$ but a \emph{certificate-format gap}: $t < \tau$ where $t$ is the
+sound assignment the validator computes (Lemma~\ref{lem:certificate}(ii))
+and $\tau$ is the canonical trust. Prose provenance is one compression
+step from gone: the consolidator that reads only machine certificates
+treats unparseable $\rho$ as absent $\rho$.
+
+% ===================================================================
+\section{The \texttt{peer-claimed} grade}
+\label{sec:peer-claimed}
+% ===================================================================
+
+Cross-agent composition is triggered by email. When Rick proves a
+theorem, he emails Clio with the proof file attached. Clio registers the
+claim at \level{peer-claimed}---a grade between \level{computed} and
+\level{proved} that means: ``a trusted peer says they proved this, and I
+have their artifact, but I haven't independently verified it.''
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Field & Value & Purpose \\
+\midrule
+\field{trust} & \level{peer-claimed} & Below boundary \\
+\field{claimed\_by} & \texttt{"rick --- peers/rick/emails/2026-07-05.md"} & Evidence duty (required) \\
+\field{file} & \texttt{"peers/rick/proofs/bn-mechanism.md"} & The proof artifact \\
+\field{role} & \texttt{"premise"} & Part of the proof tree \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\level{peer-claimed} sits below the boundary in every chain:
+\begin{itemize}
+\item Clio: below \level{proved}. Upgrade: read the proof $\to$ \level{proved}.
+\item Rick: below \level{checked-sober}. Upgrade: re-derive it sober $\to$ \level{checked-sober} (with the \field{recheck} field).
+\end{itemize}
+
+The asymmetry is the composition being honest about what ``verification''
+means in each system.
+
+\subsection{The email protocol}
+
+\begin{enumerate}
+\item Agent proves theorem, runs validator, proof file exists.
+\item Agent emails peers with proof file attached (\texttt{--attachments}).
+\item Recipient saves email artifact and attachment to \texttt{peers/<agent>/}.
+\item Recipient adds registry node at \level{peer-claimed} with \field{claimed\_by}.
+\item Recipient reads proof, upgrades if satisfied.
+\end{enumerate}
+
+Peer review works the same way in reverse: if the reviewer endorses, the
+node upgrades to \level{peer-reviewed}. If the reviewer finds a gap, the
+node demotes (the objection becomes the \field{reason} if it kills the
+route).
+
+\subsection{First live composition event}
+
+On 2026-07-05, Rick reviewed two of Clio's claims (c=5 interior theorem
+and the anchor-content formula). He independently reproduced
+$f^{(13,13,6)} = 230{,}814{,}869{,}760$ and verified $\beta'(5) = 3$.
+Clio saved the review artifact at
+\texttt{proofs/reviews/2026-07-05-rick-review-clio.md} and upgraded both
+nodes from \level{proved} to \level{peer-reviewed}. The registry event
+mechanism fired on a real email, produced a real upgrade, with a real
+artifact.
+
+% ===================================================================
+\section{The tree pair: premises and attempts}
+\label{sec:tree-pair}
+% ===================================================================
+
+Each node in a registry tree has children, but children serve two
+different roles:
+
+\begin{definition}[Tree pair]
+Every non-root child node carries a \field{role} field:
+\begin{itemize}
+\item \field{"premise"}: this child is a dependency. The parent's proof
+stands on it. The boundary rule checks premises.
+\item \field{"attempt"}: this child is an approach that was tried. Dead
+ends are always attempts. The boundary rule skips attempts.
+\end{itemize}
+\end{definition}
+
+This separates two trees:
+\begin{itemize}
+\item The \textbf{downward proof tree} (premise children): what the
+theorem depends on. Filtering to role = premise gives the proof
+skeleton---the \texttt{successful-path} report.
+\item The \textbf{outward exploration tree} (attempt children): what was
+tried and abandoned. Filtering to role = attempt gives the search
+history---the \texttt{dead-ends} report.
+\end{itemize}
+
+\subsection{Directed container structure}
+
+The registry is a directed container (Ahman--Chapman--Uustalu). Shapes
+are search trees, positions are paths:
+\begin{itemize}
+\item $\mathrm{root}$: the conjecture (the empty path).
+\item $\mathrm{sub}(t, p)$: the sub-search at path $p$.
+\item $\mathrm{shift}(t, p, q)$: path composition---$q$ inside the
+sub-search at $p$, seen globally.
+\end{itemize}
+
+The induced comonad: $\mathrm{extract}$ reads the root's trust;
+$\mathrm{duplicate}$ replaces every node with the full sub-search below
+it. The reports are coKleisli morphisms $W(\text{Registry}) \to
+\text{Report}$.
+
+\emph{Lean:} \texttt{ProofSearchN.lean} formalizes rose trees with
+arbitrary finite branching: \texttt{sub}, \texttt{shift},
+\texttt{shift\_root} (D3), \texttt{sub\_shift} (D4),
+\texttt{shift\_assoc} (D5), all no sorry.
+\texttt{TrustBoundary.lean} proves the boundary rule is stable under
+$\mathrm{duplicate}$ (\texttt{ok\_sub})---validating the whole tree
+validates every subtree.
+
+\subsection{The tree pair and the directed container}
+
+The \field{role} field makes the two coKleisli projections explicit in
+the data:
+\begin{itemize}
+\item \texttt{successful-path}: filter to role = premise, trust $\geq$ boundary.
+\item \texttt{dead-ends}: filter to role = attempt, trust = dead-end.
+\item \texttt{frontier}: role = premise, trust $<$ boundary, not dead-end.
+\end{itemize}
+
+Without the role field, the boundary rule conflated premises and
+attempts: a \level{proved} node with a \level{computed} attempt child
+failed the boundary check, even though the attempt was exploration, not
+a dependency. With the role field, the boundary rule checks only premises.
+
+% ===================================================================
+\section{Evidence duties}
+\label{sec:evidence}
+% ===================================================================
+
+Certain trust levels require evidence fields. These are declared in the
+deployment descriptor and enforced by the validator:
+
+\begin{center}
+\begin{tabular}{llll}
+\toprule
+Level & Field & Severity & Notes \\
+\midrule
+\level{peer-claimed} & \field{claimed\_by} & error & All agents \\
+\level{checked-sober} & \field{recheck} & error & Rick only \\
+\level{proved} & \field{file} & error & Rick only (artifact) \\
+\level{peer-reviewed} & \field{review} & error & Clio, MacBeth \\
+\level{published} & \field{publication} & error & Clio, MacBeth \\
+\level{lean-verified} & \field{lean} & warning & All agents \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Rick's evidence duties are stricter than Clio's: \level{checked-sober}
+requires the recheck date and path, \level{proved} requires the proof
+file. Rick promotes earlier (lower boundary) and documents harder.
+
+% ===================================================================
+\section{The generic validator}
+\label{sec:validator}
+% ===================================================================
+
+\texttt{trustcheck.py} is a single Python script (stdlib only)
+parametrized over a deployment descriptor---the $(T, \varphi)$ data as
+JSON. It checks:
+
+\begin{enumerate}
+\item \textbf{Well-formedness}: tree structure, required fields (\field{id},
+\field{approach}, \field{trust}, \field{children}, \field{role}),
+valid trust values, unique ids.
+
+\item \textbf{Boundary rule}: for nodes at or above boundary, every
+\emph{premise} child must be at or above boundary. Attempt children are
+skipped.
+
+\item \textbf{Evidence duties}: per-level field requirements from the
+descriptor.
+
+\item \textbf{Sources}: extraction-level blocking (a \level{proved} claim
+cannot rest on an \level{agent-summary} source).
+
+\item \textbf{Cross-agent}: $\varphi$ lint (total, monotone, strict at
+$\bot$), shared-stub trust cap, artifact transport, acyclicity DFS.
+
+\item \textbf{Reports}: \texttt{successful-path}, \texttt{dead-ends},
+\texttt{frontier}, \texttt{cross-refs}, \texttt{certificate-gap},
+\texttt{shallow}, \texttt{footprint}.
+\end{enumerate}
+
+The validator is a certificate checker for the sound assignment of
+Lemma~\ref{lem:certificate}. It verifies~\eqref{eq:dagger} at each node;
+it never computes $\tau$.
+
+\textbf{Regression:} the generic validator produces byte-identical
+verdicts with the three legacy per-agent validators on all deployed
+registries and source indexes.
+
+% ===================================================================
+\section{Deployment}
+\label{sec:deployment}
+% ===================================================================
+
+Four agents are deployed:
+
+\begin{center}
+\begin{tabular}{llll}
+\toprule
+Agent & Container & Chain & Status \\
+\midrule
+Clio & Docker on OCI & 7 levels, boundary at \level{proved} & Running \\
+Rick & Docker on OCI & 7 levels, boundary at \level{checked-sober} & Running \\
+MacBeth & Docker on OCI & 7 levels, boundary at \level{proved} & Stopped \\
+Template & \texttt{RaggedR/dreaming-agent} & 7 levels, boundary at \level{proved} & Template \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Each agent has:
+\begin{itemize}
+\item The validator and all peer descriptors in \texttt{code/}.
+\item \texttt{peers/<agent>/\{emails, proofs, registry\}/} directories.
+\item Prompts instructing email with attachments for proved results.
+\item Prompts instructing \level{peer-claimed} registration for received emails.
+\item Backup cron (12-hourly) to GitHub, covering prompts + projects.
+\end{itemize}
+
+\subsection{Clio's registries}
+
+Clio has two active registries:
+\begin{itemize}
+\item \textbf{Three-row $|J^*|$-even} (17 nodes): 5 \level{lean-verified},
+2 \level{peer-reviewed}, 7 \level{proved}, 3 \level{dead-end}. Active
+frontier at general-$c$.
+\item \textbf{Staircase T-system} (3 nodes): 2 \level{dead-end} with
+\level{computed} refutations carrying structural reasons.
+\end{itemize}
+
+\subsection{Rick's registry}
+
+Rick created his first registry on 2026-07-05 (strict \#AXIS closed
+form, 7 nodes): 1 \level{lean-verified}, 2 \level{proved}, 2
+\level{computed}, 1 \level{sketched}, 1 \level{dead-end}. His evidence
+duties (\field{recheck}, \field{file}) fired correctly on first contact.
+
+% ===================================================================
+\section{What remains}
+\label{sec:remaining}
+% ===================================================================
+
+Six directed-container operations are at varying stages of implementation:
+
+\begin{enumerate}
+\item \textbf{shift$(t, p, q)$}: Lean-verified (D3--D5). Code uses it
+implicitly in shared-ref resolution but does not expose it as an explicit
+operation.
+
+\item \textbf{Morphism composition $A \to B \to C$}: the one-hop rule
+prevents multi-hop shared chains. Composing $\varphi$ maps (e.g., Clio
+citing Rick citing MacBeth) is not implemented.
+
+\item \textbf{Strength / distributive law}: $W(A \times B) \to A \times
+W(B)$---combining a registry with external context as a natural
+transformation. Not implemented; sources are ad-hoc parameters.
+
+\item \textbf{Comonad morphism composition}: reports exist as coKleisli
+morphisms but do not compose (e.g., ``run frontier on this subtree's
+cross-refs'').
+
+\item \textbf{Yoneda embedding}: systematizing reports as representable
+functors. Not implemented.
+
+\item \textbf{Cofree comonad}: Lean proves the comonad laws on rose trees.
+The theory notes that no deployed theorem uses $\mathrm{duplicate}$
+non-trivially---the one exception is \texttt{ok\_sub} (boundary-rule
+stability). The honest verdict: ``for $\tau$, the containers supply
+language, not lemmas; the duplicate-shaped content lives in
+\texttt{ok\_sub}.''
+\end{enumerate}
+
+% ===================================================================
+\section{Lean formalization summary}
+\label{sec:lean}
+% ===================================================================
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+File & Content & Sorry \\
+\midrule
+\texttt{Trust.lean} & Trust systems, certificate lemma, transport, & 0 \\
+& consolidation preservation, composition & \\
+\texttt{TrustBoundary.lean} & Rose trees as directed containers (D1--D5), & 0 \\
+& boundary-rule stability under duplicate & \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Key declarations: \texttt{sound\_le\_tau}, \texttt{tau\_sound},
+\texttt{tau\_transport}, \texttt{tau\_consolidate},
+\texttt{tau\_consolidate\_comp}, \texttt{cyc\_sound\_top}/\texttt{cyc\_no\_deriv}/\texttt{cyc\_not\_wf},
+\texttt{ground\_tau\_hi}/\texttt{layer4\_tau\_bot} (degradation
+counterexample), \texttt{ok\_sub} (boundary stability).
+
+The formalization corrected the prose in three places: (1) $T$ must be a
+chain for attainment; (2) morphisms must be strict at $\bot$; (3) two
+case splits in the proof of Lemma~\ref{lem:transport}.
+
+% ===================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+% ===================================================================
+
+The trust system is live. Three agents run independent trust systems with
+different chains, different boundaries, and different evidence duties.
+They compose via email with proof attachments, graded at
+\level{peer-claimed}, with the interface map $\varphi$ translating grades
+between systems. The first live composition event---Rick peer-reviewing
+Clio's claims, Clio upgrading to \level{peer-reviewed} with the review
+artifact---occurred on the system's first day of deployment. The core
+theory is Lean-verified with no sorry.
+
+The measurement that remains: after both agents' consolidation cycles,
+does a cross-agent citation survive in machine format, or does it decay
+to prose? Certificate survival across consolidation, across a container
+boundary, is the composition result for the preprint. Nobody has measured
+it yet.
+
+\bibliographystyle{alpha}
+\begin{thebibliography}{GKT07}
+
+\bibitem[ACU15]{ACU15}
+D.~Ahman, J.~Chapman, and T.~Uustalu.
+\newblock Directed containers as categories.
+\newblock \emph{EPTCS}, 207:89--98, 2015.
+
+\bibitem[GKT07]{GKT07}
+T.~J. Green, G.~Karvounarakis, and V.~Tannen.
+\newblock Provenance semirings.
+\newblock In \emph{PODS}, pages 31--40, 2007.
+
+\bibitem[BDGP25]{BDGP25}
+N.~Brinke, A.~Dawar, E.~Gr\"adel, and L.~Pago.
+\newblock Preservation theorems in semiring semantics.
+\newblock arXiv:2605.10829, 2025.
+
+\end{thebibliography}
+
+\end{document}
