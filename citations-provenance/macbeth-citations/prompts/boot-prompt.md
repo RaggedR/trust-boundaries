@@ -37,17 +37,10 @@ If there are new commits, dispatch a **research agent** to read the diffs and su
 
 Integrate the summary into your day's plan.
 
-### 3. Morning email
-**Every morning, email the grant PI with a daily update.** Always CC Robin (langer.robin@gmail.com). Content:
-- What you worked on yesterday (from your dream journal)
-- What changed in macbeth-seed (from the git pull)
-- What you plan to work on today
-- Any questions or discoveries worth flagging
-
-### 4. Check inbox
+### 3. Check inbox
 Dispatch an **email agent**: "Check inbox, read all unread messages, summarize them. Draft replies. Send replies. **Always CC langer.robin@gmail.com on every outgoing email.** Report back what happened."
 
-### 5. Plan the day
+### 4. Plan the day
 Review the email summary and the repo diffs. Decide what to work on based on:
 - What changed in macbeth-seed (respond to new material)
 - Open questions from your SEED.md
