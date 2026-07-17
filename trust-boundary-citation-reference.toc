@@ -1,0 +1,29 @@
+\contentsline {section}{\numberline {1}Introduction}{2}{section.1}%
+\contentsline {section}{\numberline {2}The data of a trust system}{2}{section.2}%
+\contentsline {section}{\numberline {3}The certificate lemma}{3}{section.3}%
+\contentsline {section}{\numberline {4}Morphisms and cross-agent citation}{4}{section.4}%
+\contentsline {subsection}{\numberline {4.1}The interface maps}{4}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}Source-extraction demotion}{5}{subsection.4.2}%
+\contentsline {subsection}{\numberline {4.3}The validator checks}{5}{subsection.4.3}%
+\contentsline {section}{\numberline {5}Consolidation preservation}{5}{section.5}%
+\contentsline {subsection}{\numberline {5.1}The certificate gap}{5}{subsection.5.1}%
+\contentsline {section}{\numberline {6}The \texttt {peer-claimed} grade}{6}{section.6}%
+\contentsline {subsection}{\numberline {6.1}The email protocol}{6}{subsection.6.1}%
+\contentsline {subsection}{\numberline {6.2}First live composition event}{6}{subsection.6.2}%
+\contentsline {section}{\numberline {7}The tree pair: premises and attempts}{6}{section.7}%
+\contentsline {subsection}{\numberline {7.1}Directed container structure}{7}{subsection.7.1}%
+\contentsline {subsection}{\numberline {7.2}The tree pair and the directed container}{7}{subsection.7.2}%
+\contentsline {section}{\numberline {8}Evidence duties}{7}{section.8}%
+\contentsline {section}{\numberline {9}The generic validator}{8}{section.9}%
+\contentsline {section}{\numberline {10}Deployment}{8}{section.10}%
+\contentsline {subsection}{\numberline {10.1}Clio's registries}{8}{subsection.10.1}%
+\contentsline {subsection}{\numberline {10.2}Rick's registry}{9}{subsection.10.2}%
+\contentsline {section}{\numberline {11}Directed container operations}{9}{section.11}%
+\contentsline {section}{\numberline {12}Lean formalization summary}{10}{section.12}%
+\contentsline {section}{\numberline {13}Three-agent citation chain}{10}{section.13}%
+\contentsline {section}{\numberline {14}The loop experiment: RAG-based citation provenance}{11}{section.14}%
+\contentsline {subsection}{\numberline {14.1}Extraction chain}{11}{subsection.14.1}%
+\contentsline {subsection}{\numberline {14.2}Source format}{11}{subsection.14.2}%
+\contentsline {subsection}{\numberline {14.3}Trust chain}{11}{subsection.14.3}%
+\contentsline {subsection}{\numberline {14.4}Standalone deployment}{11}{subsection.14.4}%
+\contentsline {section}{\numberline {15}Conclusion}{12}{section.15}%

@@ -1,0 +1,437 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{tikz-cd}
+\usepackage{booktabs}
+
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{example}[definition]{Example}
+\theoremstyle{plain}
+\newtheorem{theorem}[definition]{Theorem}
+\newtheorem{lemma}[definition]{Lemma}
+\newtheorem{corollary}[definition]{Corollary}
+\theoremstyle{remark}
+\newtheorem{remark}[definition]{Remark}
+
+\newcommand{\DCont}{\mathbf{DCont}}
+\newcommand{\Cat}{\mathbf{Cat}}
+\newcommand{\Pos}{\mathrm{Pos}}
+\newcommand{\sub}{\mathop{\downarrow}}
+\newcommand{\shape}{\mathrm{Shape}}
+
+\title{Directed Containers in Trust Boundaries:\\
+How Proof Registries Are Comonads}
+\author{Robin Langer}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We describe how the \emph{trust-boundaries} framework uses directed
+containers (Ahman--Chapman--Uustalu) as the organising mathematical
+structure for AI agent proof registries. A proof registry is a
+finitely-branching rose tree whose nodes carry trust labels; the
+directed container structure equips it with a comonad whose
+\texttt{extract} reads the root's trust level and whose
+\texttt{duplicate} replaces every node with the full sub-registry below
+it. The boundary rule---the core invariant of the trust system---is a
+coKleisli condition: a local predicate applied at every position
+produced by \texttt{duplicate}. Stability of this rule under
+\texttt{duplicate} (Theorem~\ref{thm:ok-sub}) makes cross-agent
+composition sound: a shared stub importing a validated sub-registry
+inherits a validated subtree with no re-checking required. The entire
+development, including the five directed container laws, the three
+comonad laws, coKleisli extension, and boundary stability, is
+formalised in sorry-free Lean~4.
+\end{abstract}
+
+\tableofcontents
+
+\section{Background: containers and directed containers}
+
+We recall the definitions from Abbott--Altenkirch--Ghani and
+Ahman--Chapman--Uustalu, following the Lean formalisation in
+\texttt{lean/Basic.lean} and \texttt{lean/Directed.lean}.
+
+\begin{definition}[Container]
+A \emph{container} is a pair $C = (S, P)$ where $S$ is a type of
+\emph{shapes} and $P : S \to \mathrm{Type}$ is a family of
+\emph{positions}. Its \emph{extension} is the polynomial functor
+\[
+  \llbracket C \rrbracket(X) = \sum_{s : S} (P(s) \to X).
+\]
+\end{definition}
+
+Container morphisms $(f, f^\sharp) : C \to D$ consist of a shape map
+$f : S_C \to S_D$ and a \emph{contravariant} position map
+$f^\sharp_s : P_D(f\,s) \to P_C(s)$. The representation theorem
+(formalised in \texttt{Basic.lean}) establishes: container morphisms
+$C \to D$ are in bijection with natural transformations
+$\llbracket C \rrbracket \Rightarrow \llbracket D \rrbracket$.
+
+\begin{definition}[Directed container]\label{def:dcont}
+A \emph{directed container} extends a container $(S, P)$ with three
+operations:
+\begin{itemize}[nosep]
+  \item $\mathrm{root} : \prod_{s : S} P(s)$ \quad (the distinguished root position),
+  \item $({-})\sub({-}) : \prod_{s : S} P(s) \to S$ \quad (the sub-shape at a position),
+  \item $({-}) \oplus ({-}) : \prod_{s : S} \prod_{p : P(s)} P(s \sub p) \to P(s)$ \quad (the shift),
+\end{itemize}
+subject to five laws:
+\begin{enumerate}[label=\textbf{D\arabic*},nosep]
+  \item $s \sub \mathrm{root}(s) = s$,
+  \item $\mathrm{root}(s) \oplus q = q$ \quad (transported along D1),
+  \item $p \oplus \mathrm{root}(s \sub p) = p$,
+  \item $s \sub (p \oplus q) = (s \sub p) \sub q$,
+  \item $(p \oplus q) \oplus r = p \oplus (q \oplus r)$ \quad (transported along D4).
+\end{enumerate}
+\end{definition}
+
+The key insight of Ahman--Chapman--Uustalu: directed containers are
+exactly the containers whose extension functor carries a comonad
+structure. The comonad operations are:
+\begin{align*}
+  \varepsilon\,\langle s, v \rangle &= v(\mathrm{root}(s)), \\
+  \delta\,\langle s, v \rangle &= \langle s,\; \lambda p.\, \langle s \sub p,\; \lambda q.\, v(p \oplus q) \rangle \rangle.
+\end{align*}
+The three comonad laws follow from the five directed container laws:
+left counit from D1+D2, right counit from D3, coassociativity from
+D4+D5.
+
+\begin{definition}[Directed containers as categories]\label{def:dcont-cat}
+A directed container $D$ presents a small category $\mathcal{C}(D)$:
+\begin{itemize}[nosep]
+  \item objects are shapes $s : S$;
+  \item a morphism $s \to s'$ is a position $p : P(s)$ with $s \sub p = s'$;
+  \item the identity at $s$ is $\mathrm{root}(s)$ (by D1);
+  \item composition is the shift $\oplus$ (by D4).
+\end{itemize}
+The category laws are D2/D3 (identities) and D5 (associativity).
+Morphisms of directed containers are \emph{cofunctors} of the
+presented categories (formalised in \texttt{DContCat.lean}, both round
+trips proved \texttt{rfl}).
+\end{definition}
+
+\section{Proof registries as directed containers}
+
+\subsection{The shape: finitely-branching rose trees}
+
+A deployed proof registry (\texttt{proofs/registry/*.json}) is a
+finitely-branching tree. Each node represents a mathematical claim; its
+children are the sub-results the claim depends on.
+
+\begin{definition}[Rose tree]
+The type \texttt{RTree} of finitely-branching rose trees is defined
+inductively:
+\[
+  \texttt{node}(n, \mathit{children}) \quad\text{where}\quad
+  n : \mathbb{N},\quad \mathit{children} : \mathrm{Fin}(n) \to \texttt{RTree}.
+\]
+A leaf (dead end or ground check) is $\texttt{node}(0, !)$ where $!$
+is the vacuous function from $\mathrm{Fin}(0)$.
+\end{definition}
+
+\begin{definition}[Position in a rose tree]
+The type $\texttt{RPos}(t)$ of positions (paths from root to a node)
+in a tree $t$ is:
+\begin{itemize}[nosep]
+  \item $\texttt{here} : \texttt{RPos}(t)$ \quad (the root),
+  \item $\texttt{child}(i, p) : \texttt{RPos}(\texttt{node}(n, c))$
+    \quad where $i : \mathrm{Fin}(n)$ and $p : \texttt{RPos}(c(i))$.
+\end{itemize}
+\end{definition}
+
+The directed container structure on $(\texttt{RTree}, \texttt{RPos})$
+is path manipulation:
+
+\begin{definition}[The \texttt{proofSearchN} directed container]
+\label{def:proofsearchn}
+\begin{align*}
+  \mathrm{root}(t) &= \texttt{here}, \\
+  t \sub \texttt{here} &= t, \\
+  t \sub \texttt{child}(i, p) &= c(i) \sub p, \\
+  \texttt{here} \oplus q &= q, \\
+  \texttt{child}(i, p) \oplus q &= \texttt{child}(i,\; c(i).\mathrm{shift}(p, q)).
+\end{align*}
+Laws D1 and D2 hold \emph{definitionally} (\texttt{rfl} in Lean).
+D3--D5 are proved by structural recursion on paths. This is formalised
+in \texttt{ProofSearchN.lean}.
+\end{definition}
+
+\subsection{Trust labels and the labelled directed container}
+
+In the deployed system, each node carries a \emph{trust label}: a
+trust level from a totally ordered chain $T$, plus a Boolean dead-end
+flag.
+
+\begin{definition}[Labelled rose tree]
+\texttt{LTree}$(T)$ extends \texttt{RTree} with a label
+$\ell = (\mathrm{trust}, \mathrm{dead})$ at every node:
+\[
+  \texttt{node}(\ell, n, \mathit{children}) \quad\text{where}\quad
+  \ell : T \times \mathbb{B},\quad
+  n : \mathbb{N},\quad
+  \mathit{children} : \mathrm{Fin}(n) \to \texttt{LTree}(T).
+\]
+The directed container \texttt{trustRegistry}$(T)$ has shapes
+\texttt{LTree}$(T)$ and positions \texttt{LPos}$(T)$. Labels play no
+role in navigation---they ride along as passengers---so the five laws
+are word-for-word those of \texttt{proofSearchN}. This is formalised
+in \texttt{TrustBoundary.lean}.
+\end{definition}
+
+\subsection{The comonad reading}
+
+The comonad induced by \texttt{trustRegistry} on
+$\llbracket C \rrbracket(X) = \sum_{t : \texttt{LTree}} (\texttt{LPos}(t) \to X)$
+has the following operational meaning:
+
+\begin{center}
+\begin{tabular}{lp{9cm}}
+\toprule
+\textbf{Operation} & \textbf{Meaning for proof registries} \\
+\midrule
+$\varepsilon\,\langle t, v \rangle = v(\texttt{here})$
+  & Read the trust label at the root: ``is this conjecture proved?'' \\
+$\delta\,\langle t, v \rangle$
+  & At every node, replace its label with the full sub-registry below
+    it. Every claim now sees its entire dependency tree. \\
+\texttt{extend}\,$f$
+  & Apply a local analysis $f$ (a coKleisli morphism) at every node,
+    where $f$ can inspect the whole sub-tree. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The validator's report modes---\texttt{report frontier},
+\texttt{report dead-ends}, \texttt{report certificate-gap}---are
+coKleisli morphisms $W(\text{Registry}) \to \text{Report}$: strategies
+that inspect the entire tree before summarising.
+
+\section{The boundary rule as a coKleisli condition}
+
+\begin{definition}[Local boundary rule]
+For a threshold $\theta \in T$ (deployed: $\theta = \texttt{proved}$),
+the \emph{local boundary rule} at a node $\texttt{node}(\ell, n, c)$ is:
+\[
+  \theta \le \ell.\mathrm{trust} \implies
+  \forall\, i : \mathrm{Fin}(n),\;
+  c(i).\mathrm{dead} = \texttt{true} \;\lor\; \theta \le c(i).\mathrm{trust}.
+\]
+``If this node claims $\theta$ or above, every non-dead child must
+claim $\theta$ or above.'' Dead ends are exempt: abandoned approaches
+are not required premises.
+\end{definition}
+
+\begin{definition}[Global boundary rule]
+The \emph{global boundary rule} $\mathrm{Ok}(\theta, t)$ holds when
+the local check passes at \emph{every} position:
+\[
+  \mathrm{Ok}(\theta, t) \;\iff\;
+  \forall\, p : \texttt{LPos}(t),\;
+  \mathrm{localOk}(\theta,\; t \sub p).
+\]
+This is the coKleisli form: apply the local predicate to every
+sub-search produced by $\delta$ (duplicate).
+\end{definition}
+
+\begin{theorem}[Duplicate-stability of the boundary rule]
+\label{thm:ok-sub}
+If\/ $\mathrm{Ok}(\theta, t)$ then $\mathrm{Ok}(\theta, t \sub p)$
+for every position $p$.
+\end{theorem}
+
+\begin{proof}
+The proof is a one-line transport along D4. Given $q : \texttt{LPos}(t \sub p)$, we need $\mathrm{localOk}(\theta, (t \sub p) \sub q)$. By D4, $(t \sub p) \sub q = t \sub (p \oplus q)$, so the hypothesis $\mathrm{Ok}(\theta, t)$ applied at position $p \oplus q$ gives exactly the required local check. In Lean:
+\begin{verbatim}
+  theorem ok_sub (θ : T) (t : LTree T) (h : Ok θ t) (p : LPos t) :
+      Ok θ (t.sub p) :=
+    fun q => t.sub_shift p q ▸ h (t.shift p q)
+\end{verbatim}
+\end{proof}
+
+\begin{remark}
+Theorem~\ref{thm:ok-sub} is the load-bearing fact for cross-agent
+composition. When Clio imports a sub-registry from Rick via a shared
+stub, the stub points into a validated registry. By
+Theorem~\ref{thm:ok-sub}, the subtree rooted at that stub is
+\emph{automatically} validated---no re-checking is required across the
+agent boundary.
+\end{remark}
+
+\section{CoKleisli structure}
+
+The directed container comonad has a full coKleisli category,
+formalised in \texttt{CoKleisli.lean}.
+
+\begin{definition}[CoKleisli extension]
+Given $f : W(X) \to Y$, the extension is:
+\[
+  \mathrm{extend}(f)\,\langle s, v \rangle
+  = \langle s,\; \lambda p.\, f\,\langle s \sub p,\; \lambda q.\, v(p \oplus q) \rangle \rangle.
+\]
+This equals $W(f) \circ \delta$ (map followed by comultiplication).
+\end{definition}
+
+The coKleisli category has:
+\begin{itemize}[nosep]
+  \item \textbf{Objects}: types.
+  \item \textbf{Morphisms} $X \to Y$: functions $W(X) \to Y$
+    (strategies that see the whole tree before producing a result).
+  \item \textbf{Composition}: $g \bullet f = g \circ \mathrm{extend}(f)$.
+  \item \textbf{Identity}: $\varepsilon$ (extract the root).
+\end{itemize}
+
+The three coKleisli laws are proved:
+\begin{enumerate}[nosep]
+  \item $\mathrm{extend}(\varepsilon) = \mathrm{id}$ \quad (from D3),
+  \item $\varepsilon \circ \mathrm{extend}(f) = f$ \quad (from D1+D2),
+  \item $\mathrm{extend}(g \circ \mathrm{extend}(f)) = \mathrm{extend}(g) \circ \mathrm{extend}(f)$ \quad (from D4+D5).
+\end{enumerate}
+
+\begin{definition}[Canonical strength]
+The strength $\sigma : W(A \times B) \to A \times W(B)$ is:
+\[
+  \sigma\,\langle s, v \rangle = \bigl(\pi_1(v(\mathrm{root}(s))),\;
+  \langle s,\; \pi_2 \circ v \rangle\bigr).
+\]
+This factors a uniform context $A$ out of a labelled tree. In the
+Python validator (\texttt{trustcheck.py}), this is
+\texttt{dc\_strength}: it separates metadata from the trust-labelled
+content.
+\end{definition}
+
+\section{Directed containers as categories: cofunctors and composition}
+
+The equivalence $\DCont \simeq \Cat$ of Ahman--Uustalu (2016) is
+formalised in \texttt{DContCat.lean}. For trust boundaries, the key
+consequence is:
+
+\begin{theorem}[Morphisms are cofunctors]
+A directed container morphism $(f, f^\sharp) : C \to D$ (shape map
+covariant, position map contravariant, satisfying M0--M2) is exactly a
+cofunctor $\mathcal{C}(C) \to \mathcal{C}(D)$. The bijection has both
+round trips \texttt{rfl}.
+\end{theorem}
+
+This matters for trust composition: cross-agent shared stubs are
+container morphisms between registries. The trust cap (a stub's local
+trust must not exceed the canonical trust) is the morphism condition.
+Cofunctor composition gives transitive cross-agent citation: if Clio
+cites Rick and Rick cites MacBeth, the composite cofunctor gives the
+end-to-end trust transport. The Lean proof (\texttt{Cofunctor.comp})
+verifies that cofunctor composition is strictly associative and
+unital---both round trips are \texttt{rfl}.
+
+\section{Transport of trust and consolidation}
+
+The trust system theory (\texttt{Trust.lean}) connects to directed
+containers through two results:
+
+\begin{lemma}[Transport of trust]
+Given a morphism of trust systems
+$(F, \varphi) : (D, T, s) \to (D', T', s')$ where $\varphi : T \to T'$
+is monotone and strict at $\bot$, the canonical trust transports laxly:
+\[
+  \varphi(\tau(x)) \le \tau'(F(x)).
+\]
+\end{lemma}
+
+This is the mathematical guarantee behind the $\varphi$ maps in
+deployment descriptors. When Clio imports a claim from Rick, the
+interface map $\varphi$ translates trust levels:
+
+\begin{center}
+\begin{tabular}{lcl}
+Rick's \texttt{checked-sober} & $\xrightarrow{\varphi}$ & Clio's \texttt{computed} \\
+Rick's \texttt{proved} & $\xrightarrow{\varphi}$ & Clio's \texttt{proved} \\
+Rick's \texttt{hunch} & $\xrightarrow{\varphi}$ & Clio's \texttt{speculative} \\
+\end{tabular}
+\end{center}
+
+The transport lemma guarantees that $\varphi$ never inflates trust:
+Clio cannot claim more than $\varphi$ of Rick's canonical trust.
+
+\begin{theorem}[Consolidation preservation]
+A \emph{consolidation} is a morphism of trust systems at $\varphi =
+\mathrm{id}$ together with a backward position map (every checking
+step in the target pulls back to a checking step in the source,
+premises corresponding, cached grade $\le$ source grade). Under
+consolidation, canonical trust is preserved on the nose:
+$\tau'(F(x)) = \tau(x)$.
+\end{theorem}
+
+The position map is the container-theoretic content: shapes (checking
+steps) map forward, positions (justifications) map backward. This is
+precisely the data of a container morphism---covariant on shapes,
+contravariant on positions. The consolidation theorem says: when both
+halves are present (not just shapes), trust is preserved exactly.
+
+Consolidations compose (\texttt{Consolidation.comp}): the pipeline
+scratch $\to$ synthesis $\to$ proof preserves $\tau$ end-to-end iff it
+preserves $\tau$ layer by layer. The composition is cofunctor
+composition on the position maps---contravariantly, as it must be.
+
+\section{The Zappa--Sz\'ep product}
+
+The formalisation includes a Zappa--Sz\'ep product of monoids
+(\texttt{ZappaSzep.lean}), proving that the four Brin cocycle axioms
+ZS1--ZS4 are equivalent to associativity of the product. This connects
+to the broader programme: directed containers model the \emph{internal}
+structure of each agent's proof registry (the comonad), while
+Zappa--Sz\'ep products model the \emph{interaction} between agents
+whose symmetry groups act on each other. The cocycle conditions are the
+trust-composition analogue of the directed container laws: both encode
+coherence of a layered algebraic structure.
+
+\section{Summary: what directed containers buy us}
+
+\begin{enumerate}
+\item \textbf{The comonad is the validator's logic.} Extract reads trust
+  at the root; duplicate gives every node its full dependency context;
+  the boundary rule is a coKleisli condition.
+
+\item \textbf{Stability under duplicate gives compositional
+  validation.} Theorem~\ref{thm:ok-sub}: validated registries have
+  validated sub-registries. Shared stubs inherit validity for free.
+
+\item \textbf{CoKleisli morphisms are report modes.} Each
+  \texttt{trustcheck.py report} subcommand is a coKleisli morphism:
+  it inspects the whole sub-tree at every position before producing
+  a summary.
+
+\item \textbf{Container morphisms are cross-agent links.} Shared
+  stubs between agents are container morphisms (shapes forward,
+  positions backward). The trust cap is the morphism condition.
+
+\item \textbf{Cofunctors compose transitively.} Multi-agent citation
+  chains (Clio $\to$ Rick $\to$ MacBeth) compose as cofunctors.
+  Trust transport along the composite is guaranteed by the Lean-verified
+  \texttt{tau\_transport}.
+
+\item \textbf{Consolidation = container morphism at $\varphi = \mathrm{id}$
+  with position map.} This distinguishes genuine consolidation (both
+  halves present, trust preserved) from shape-only restatement
+  (positions lost, trust degrades to $\bot$).
+
+\item \textbf{Everything is sorry-free in Lean~4.} The five directed
+  container laws, three comonad laws, coKleisli extension laws,
+  boundary stability, trust transport, consolidation preservation,
+  the circular-citation counterexample, and the shape-only degradation
+  counterexample---all proved with no sorry, no Mathlib dependency.
+\end{enumerate}
+
+\section*{Acknowledgements}
+
+The directed container framework is due to Ahman, Chapman, and
+Uustalu. The equivalence $\DCont \simeq \Cat$ and the cofunctor
+characterisation of morphisms are from Ahman and Uustalu (2016). The
+application to trust systems emerged from work with Neil Ghani at
+Kodamai.
+
+\end{document}
