@@ -1,0 +1,434 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath,amsthm,mathtools}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{parskip}
+\usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
+
+% Theorem environments (arXiv / journal style)
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{remark}[theorem]{Remark}
+
+% Notation
+\newcommand{\Ext}{\mathrm{Ext}}
+\newcommand{\Shape}{\mathrm{Shape}}
+\newcommand{\Pos}{\mathrm{Pos}}
+\newcommand{\Type}{\mathbf{Type}}
+\newcommand{\id}{\mathrm{id}}
+
+\title{Containers, Extensions, and Morphisms:\\
+  The Representation Theorem}
+\author{Extracted from a machine-checked development}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We present the elementary theory of \emph{containers} in the sense of Abbott,
+Altenkirch, and Ghani: a shape type equipped with a family of position types.
+Each container determines a polynomial endofunctor on types---its
+\emph{extension}. Morphisms of containers induce natural transformations
+between extensions, and conversely every natural transformation between
+extensions arises uniquely from a container morphism. The proofs of all stated
+results have been machine-checked; we record only the mathematical content.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%======================================================================
+\section{Introduction}
+%======================================================================
+
+A recurring pattern in data-type theory is that a polymorphic type constructor
+is determined by a collection of \emph{shapes} together with, for each shape,
+a set of \emph{positions} at which payload values may be stored. Lists are
+determined by a natural number (the length) and one position per index; binary
+trees by a shape tree and positions at the leaves or nodes; and so on.
+
+Containers make this pattern precise. A container is simply a type of shapes
+and a dependent family of positions. Its \emph{extension} is the associated
+polynomial functor: an element of the extension at a type~$X$ is a shape
+together with an $X$-labelling of the positions of that shape. Container
+morphisms---maps on shapes and \emph{contravariant} maps on
+positions---correspond exactly to natural transformations between extensions.
+That correspondence is the content of the representation theorem (Theorem
+\ref{thm:representation} below).
+
+The material is elementary and self-contained. We work throughout in a single
+universe of types, writing $\Type$ for that universe. No special categorical
+machinery beyond the notions of functor and natural transformation is
+required. The statements below are those of a formal development in dependent
+type theory; proofs are indicated by the phrase ``by lean,'' meaning they have
+been checked by a proof assistant rather than written out in prose.
+
+\paragraph{What this note claims.}
+In ordinary mathematical language, the claim is: polynomial functors of the
+form
+\[
+  X \;\longmapsto\; \sum_{s \in S} X^{P(s)}
+\]
+and the natural transformations between them, are completely classified by
+the combinatorial data $(S,P)$ of shapes and positions, together with
+shape-and-position maps in the sense of Definition~\ref{def:morphism}. There
+is nothing more to a natural transformation between two such functors than a
+map of shapes and a family of position pullbacks.
+
+%======================================================================
+\section{Containers and their extensions}
+%======================================================================
+
+\begin{definition}[Container]\label{def:container}
+A \textbf{container} $C$ consists of
+\begin{enumerate}
+  \item a type $\Shape(C)$ of \emph{shapes}, and
+  \item for each shape $s \in \Shape(C)$, a type $\Pos(C)(s)$ of
+        \emph{positions} of~$s$.
+\end{enumerate}
+We write $C = \bigl(\Shape(C),\, \Pos(C)\bigr)$, or more briefly $C = (S,P)$
+when the names of the components are clear.
+\end{definition}
+
+\begin{example}
+\begin{enumerate}
+  \item \textbf{Lists.} Let $\Shape = \mathbb{N}$ and $\Pos(n) = \{0,\ldots,n-1\}$.
+        The extension (defined below) at~$X$ is the type of finite lists of
+        elements of~$X$.
+  \item \textbf{Streams.} Let $\Shape = 1$ (a singleton) and $\Pos(\ast) =
+        \mathbb{N}$. The extension at~$X$ is the type of infinite streams of
+        elements of~$X$.
+  \item \textbf{Binary trees with values at leaves.} Shapes are full binary
+        tree skeletons; positions of a skeleton are its leaves.
+\end{enumerate}
+\end{example}
+
+\begin{definition}[Extension]\label{def:ext}
+Let $C = (S,P)$ be a container and let $X$ be a type. The \textbf{extension}
+of $C$ at~$X$ is the dependent sum
+\begin{equation}
+  \Ext\,C\,X \;=\; \sum_{s \,:\, S}\; \bigl(P(s) \to X\bigr).
+\end{equation}
+An element of $\Ext\,C\,X$ is a pair $\langle s,\, v \rangle$ consisting of a
+shape $s \in S$ and a function $v : P(s) \to X$ labelling the positions of~$s$
+by elements of~$X$.
+\end{definition}
+
+Thus $\Ext\,C$ is the polynomial functor associated to the family~$P$.
+
+\begin{definition}[Functorial action]\label{def:map}
+Let $C$ be a container and let $f : X \to Y$ be a function. The
+\textbf{functorial action} of the extension on~$f$ is the map
+\begin{equation}
+  \Ext\,C\,f \;:\; \Ext\,C\,X \;\longrightarrow\; \Ext\,C\,Y
+\end{equation}
+defined by relabelling positions:
+\begin{equation}
+  \Ext\,C\,f\,\bigl\langle s,\, v \bigr\rangle
+  \;=\;
+  \bigl\langle s,\; f \circ v \bigr\rangle.
+\end{equation}
+The shape is left unchanged; only the labels are post-composed with~$f$.
+\end{definition}
+
+\begin{proposition}[Identity law]\label{prop:map-id}
+For every container $C$ and every type~$X$,
+\begin{equation}
+  \Ext\,C\,\id_X \;=\; \id_{\Ext\,C\,X}.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{proposition}[Composition law]\label{prop:map-comp}
+For every container $C$ and functions $f : X \to Y$, $g : Y \to Z$,
+\begin{equation}
+  \Ext\,C\,(g \circ f) \;=\; \Ext\,C\,g \;\circ\; \Ext\,C\,f.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+Taken together, Propositions~\ref{prop:map-id} and~\ref{prop:map-comp} say that
+$\Ext\,C$ is an endofunctor of~$\Type$. The proofs are immediate from the
+definitions: both sides act by post-composition of the labelling function, and
+post-composition preserves identities and composition.
+
+%======================================================================
+\section{Morphisms of containers}
+%======================================================================
+
+A morphism of containers must induce a natural transformation of extensions.
+Because an element of an extension is a shape plus a labelling of positions,
+mapping from $\Ext\,C$ to $\Ext\,D$ requires sending $C$-shapes to $D$-shapes
+and \emph{pulling} $D$-positions back to $C$-positions (so that a $C$-labelling
+can be reindexed to a $D$-labelling). The position component is therefore
+contravariant.
+
+\begin{definition}[Container morphism]\label{def:morphism}
+Let $C = (S_C, P_C)$ and $D = (S_D, P_D)$ be containers. A \textbf{morphism of
+containers} $\varphi : C \Rightarrow D$ consists of
+\begin{enumerate}
+  \item a map on shapes $u : S_C \to S_D$, and
+  \item for each $s \in S_C$, a function
+        \[
+          g_s \;:\; P_D\bigl(u(s)\bigr) \;\longrightarrow\; P_C(s)
+        \]
+        (a \emph{contravariant} map on positions).
+\end{enumerate}
+We write $\varphi = (u,g)$ when we need the components explicitly.
+\end{definition}
+
+\begin{remark}
+The variance on positions is forced by the intended semantics. Given a
+labelling $v : P_C(s) \to X$ of a $C$-shape, and a $D$-position $i$ of the
+image shape $u(s)$, one obtains a label by composing
+\[
+  i \;\longmapsto\; g_s(i) \;\longmapsto\; v\bigl(g_s(i)\bigr).
+\]
+Thus positions of the target are pulled back to positions of the source.
+\end{remark}
+
+\begin{definition}[Induced map on extensions]\label{def:tonat}
+Let $\varphi = (u,g) : C \Rightarrow D$ be a container morphism and let $X$ be
+a type. The \textbf{induced map}
+\begin{equation}
+  \varphi^*_X \;:\; \Ext\,C\,X \;\longrightarrow\; \Ext\,D\,X
+\end{equation}
+is defined by
+\begin{equation}
+  \varphi^*_X\bigl\langle s,\, v \bigr\rangle
+  \;=\;
+  \bigl\langle u(s),\; v \circ g_s \bigr\rangle.
+\end{equation}
+\end{definition}
+
+\begin{proposition}[Naturality]\label{prop:natural}
+For every container morphism $\varphi : C \Rightarrow D$ and every function
+$f : X \to Y$, the following square commutes:
+\begin{equation}
+  \Ext\,D\,f \;\circ\; \varphi^*_X
+  \;=\;
+  \varphi^*_Y \;\circ\; \Ext\,C\,f.
+\end{equation}
+In other words, the family $\bigl(\varphi^*_X\bigr)_{X}$ is a natural
+transformation $\Ext\,C \Longrightarrow \Ext\,D$.
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+The naturality square says that it does not matter whether one first applies
+the container morphism and then relabels, or first relabels and then applies
+the morphism: both routes send $\langle s, v \rangle$ to
+$\langle u(s),\, f \circ v \circ g_s \rangle$.
+
+%======================================================================
+\section{The representation theorem}
+%======================================================================
+
+We now state the correspondence between container morphisms and natural
+transformations of extensions. First we package the latter as a definition.
+
+\begin{definition}[Natural transformation of extensions]\label{def:nattrans}
+Let $C$ and $D$ be containers. A \textbf{natural transformation}
+$\eta : \Ext\,C \Longrightarrow \Ext\,D$ is a family of maps
+\begin{equation}
+  \eta_X \;:\; \Ext\,C\,X \;\longrightarrow\; \Ext\,D\,X,
+\end{equation}
+indexed by types~$X$, such that for every $f : X \to Y$,
+\begin{equation}
+  \Ext\,D\,f \;\circ\; \eta_X
+  \;=\;
+  \eta_Y \;\circ\; \Ext\,C\,f.
+\end{equation}
+\end{definition}
+
+\begin{definition}[From morphisms to natural transformations]\label{def:forward}
+Every container morphism $\varphi : C \Rightarrow D$ determines a natural
+transformation
+\begin{equation}
+  \varphi^* \;:\; \Ext\,C \Longrightarrow \Ext\,D
+\end{equation}
+whose component at~$X$ is the map $\varphi^*_X$ of Definition~\ref{def:tonat}.
+Naturality holds by Proposition~\ref{prop:natural}.
+\end{definition}
+
+The converse direction recovers a container morphism by probing a natural
+transformation at a carefully chosen ``generic'' element. Fix a shape
+$s \in \Shape(C)$. Consider the type of positions $P_C(s)$ itself as the
+payload type, and form the element
+\begin{equation}
+  \bigl\langle s,\, \id_{P_C(s)} \bigr\rangle
+  \;\in\;
+  \Ext\,C\,\bigl(P_C(s)\bigr).
+\end{equation}
+This is the \emph{generic element} at shape~$s$: it labels each position by
+itself. Applying $\eta$ to it yields a shape of~$D$ and a labelling of that
+shape's positions by $C$-positions---precisely the data of a container
+morphism.
+
+\begin{definition}[From natural transformations to morphisms]\label{def:backward}
+Let $\eta : \Ext\,C \Longrightarrow \Ext\,D$ be a natural transformation.
+Define a container morphism $\varphi = (u,g) : C \Rightarrow D$ by
+\begin{align}
+  u(s)
+  &\;=\;
+  \pi_1\Bigl(
+    \eta_{P_C(s)}\bigl\langle s,\, \id \bigr\rangle
+  \Bigr), \\[4pt]
+  g_s
+  &\;=\;
+  \pi_2\Bigl(
+    \eta_{P_C(s)}\bigl\langle s,\, \id \bigr\rangle
+  \Bigr),
+\end{align}
+where $\pi_1$ and $\pi_2$ are the projections of the dependent sum
+$\Ext\,D\,\bigl(P_C(s)\bigr)$. We write $\varphi = \eta^\sharp$ for this
+morphism.
+\end{definition}
+
+\begin{theorem}[Morphism round-trip]\label{thm:morphism-roundtrip}
+Let $\varphi : C \Rightarrow D$ be a container morphism. Recovering a morphism
+from the induced natural transformation returns the original:
+\begin{equation}
+  \bigl(\varphi^*\bigr)^\sharp \;=\; \varphi.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+This direction is purely computational. Evaluating $\varphi^*$ on the generic
+element $\langle s, \id \rangle$ yields $\langle u(s),\, g_s \rangle$ by
+definition of $\varphi^*$, so reading off shape and position maps recovers
+$(u,g)$ immediately. No appeal to naturality is required.
+\end{remark}
+
+\begin{theorem}[Natural transformation round-trip]\label{thm:nat-roundtrip}
+Let $\eta : \Ext\,C \Longrightarrow \Ext\,D$ be a natural transformation.
+The natural transformation induced by the recovered morphism coincides with
+$\eta$:
+\begin{equation}
+  \bigl(\eta^\sharp\bigr)^*_X \;=\; \eta_X
+  \qquad\text{for every type } X.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}[Idea of the argument]
+This is the substantive half of the correspondence. For an arbitrary element
+$p = \langle s,\, v \rangle \in \Ext\,C\,X$, naturality of $\eta$ at the
+function $v : P_C(s) \to X$ applied to the generic element gives
+\begin{equation}
+  \eta_X\bigl\langle s,\, v \bigr\rangle
+  \;=\;
+  \Ext\,D\,v\Bigl(
+    \eta_{P_C(s)}\bigl\langle s,\, \id \bigr\rangle
+  \Bigr),
+\end{equation}
+because $\Ext\,C\,v\,\langle s, \id \rangle = \langle s, v \rangle$. The
+right-hand side is exactly $\bigl(\eta^\sharp\bigr)^*_X\langle s, v \rangle$
+by definition of the induced map. Thus $\eta$ is completely determined by its
+values on generic elements---a Yoneda-style reconstruction.
+\end{remark}
+
+\begin{theorem}[Representation theorem]\label{thm:representation}
+For any containers $C$ and $D$, there is a bijection
+\begin{equation}
+  \bigl\{\,\text{container morphisms } C \Rightarrow D\,\bigr\}
+  \;\cong\;
+  \bigl\{\,\text{natural transformations }
+    \Ext\,C \Longrightarrow \Ext\,D\,\bigr\},
+\end{equation}
+implemented by $\varphi \mapsto \varphi^*$ in one direction and
+$\eta \mapsto \eta^\sharp$ in the other. The two constructions are mutually
+inverse by Theorems~\ref{thm:morphism-roundtrip}
+and~\ref{thm:nat-roundtrip}.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{Discussion}
+%======================================================================
+
+\paragraph{What has been established.}
+Containers are combinatorial presentations of a class of polynomial functors.
+The representation theorem says that this presentation is faithful at the
+level of morphisms: natural transformations between extensions are no more and
+no less than maps of shapes with position pullbacks. In particular, there are
+no ``exotic'' natural transformations that would require additional data
+beyond Definition~\ref{def:morphism}.
+
+\paragraph{Relation to the Yoneda lemma.}
+The reconstruction of a natural transformation from its values on generic
+elements is an instance of the same idea that underlies the Yoneda lemma:
+a natural transformation out of a representable (or, here, polynomial) functor
+is determined by where it sends universal arrows. The generic element
+$\langle s, \id \rangle$ plays the role of the identity morphism at the
+object corresponding to shape~$s$.
+
+\paragraph{Scope.}
+The development treats a single universe of types and does not address
+size issues, universe polymorphism, or the interaction of containers with
+dependent type formers beyond the dependent sum used in $\Ext$. It also does
+not yet impose directedness, comonad structure, or other refinements; those
+belong to subsequent developments built on the same foundations.
+
+\paragraph{Machine checking.}
+Every definition and theorem statement above corresponds to a declaration in a
+machine-checked formalisation. The phrase ``by lean'' indicates that the proof
+has been verified by a proof assistant; we have not reproduced the formal
+proof scripts here. A mathematician reading this note need only verify that
+the English statements match the intended mathematics; the formal system is
+responsible for the derivations.
+
+%======================================================================
+\section*{Acknowledgements}
+%======================================================================
+
+The mathematical content follows the theory of containers introduced by
+Abbott, Altenkirch, and Ghani. The presentation here is a prose rendering of a
+formal development intended for human review of the theorem statements.
+
+\begin{thebibliography}{9}
+
+\bibitem{abbott2005}
+M.~Abbott, T.~Altenkirch, and N.~Ghani.
+\newblock Containers: constructing strictly positive types.
+\newblock \emph{Theoretical Computer Science}, 342(1):3--27, 2005.
+
+\bibitem{abbott2003}
+M.~Abbott, T.~Altenkirch, and N.~Ghani.
+\newblock Categories of containers.
+\newblock In \emph{FoSSaCS}, volume~2620 of \emph{LNCS}, pages 23--38.
+\newblock Springer, 2003.
+
+\end{thebibliography}
+
+\end{document}

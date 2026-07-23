@@ -1,0 +1,397 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath,amsthm,mathtools}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{parskip}
+\usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
+
+% Theorem environments (arXiv / journal style)
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{remark}[theorem]{Remark}
+
+% Notation
+\newcommand{\Shape}{\mathrm{Shape}}
+\newcommand{\Pos}{\mathrm{Pos}}
+\newcommand{\Type}{\mathbf{Type}}
+\newcommand{\id}{\mathrm{id}}
+\newcommand{\src}{\mathrm{src}}
+\newcommand{\tgt}{\mathrm{tgt}}
+\newcommand{\rootpos}{\mathrm{root}}
+\newcommand{\sub}{\mathrm{sub}}
+\newcommand{\shift}{\mathrm{shift}}
+
+\title{Compositional Tracking on Shipping Networks}
+\author{Extracted from a machine-checked development}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Given a directed graph~$G$ and a monoid~$M$, a \emph{compositional tracking}
+of $M$-valued data on the shipping network of~$G$ assigns to every route an
+element of~$M$, sending the empty route to the unit and sending concatenation
+of routes to multiplication in~$M$. We prove that such trackings are in
+bijection with arbitrary labellings of the edges of~$G$ by elements of~$M$:
+restriction to single-edge routes and folding of edge labels along a path are
+mutually inverse. Three monoid instances illustrate the construction---peak
+temperature, cold-chain integrity, and licence accumulation---and a minimal
+example shows that a single warm last-mile leg breaks an entire cold-chain
+route. The proofs of all stated results have been machine-checked; we record
+only the mathematical content.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%======================================================================
+\section{Introduction}
+%======================================================================
+
+Shipping networks, presented as directed containers, organise nodes and
+directed paths. Once that geometry is fixed, one often wishes to track
+\emph{data along routes}: peak temperatures, cold-chain integrity flags,
+accumulated licence requirements, and so on. Compositionality demands that the
+value on a concatenated route be the monoid product of the values on the
+factors, and that the empty route carry the monoid unit.
+
+The present note isolates that structure. Working directly on the directed
+container $\mathrm{network}(G)$ associated to a directed graph~$G$, a
+compositional tracking with values in a monoid~$M$ is a family of maps from
+positions to~$M$ satisfying a root law and a shift law. The main theorem is a
+bijection: every tracking arises uniquely by folding an edge labelling along
+paths, and every edge labelling extends uniquely to a tracking.
+
+Categorically, a tracking is a functor from the free category on~$G$ to the
+delooping of~$M$ (the one-object category with morphisms~$M$). The edge-folding
+description is the elementary content of that functoriality.
+
+The development works throughout in a single universe of types. Proofs are
+indicated by the phrase ``by lean,'' meaning they have been checked by a proof
+assistant rather than written out in prose.
+
+\paragraph{What this note claims.}
+In ordinary mathematical language: monoid-valued functors on the free category
+of a directed graph are precisely edge labellings, extended by multiplication
+along paths. There is no further coherence data beyond the monoid laws of~$M$
+and the path algebra of~$G$.
+
+%======================================================================
+\section{Monoids}
+%======================================================================
+
+\begin{definition}[Monoid]\label{def:monoid}
+A \textbf{monoid} $M$ consists of a type $\lvert M\rvert$, a binary operation
+$\cdot : \lvert M\rvert \to \lvert M\rvert \to \lvert M\rvert$, and a unit
+element $1 \in \lvert M\rvert$, such that for all $a,b,c \in \lvert M\rvert$,
+\begin{equation}
+  (a \cdot b) \cdot c \;=\; a \cdot (b \cdot c),
+  \qquad
+  1 \cdot a \;=\; a,
+  \qquad
+  a \cdot 1 \;=\; a.
+\end{equation}
+\end{definition}
+
+We work with monoids as bundled structures rather than as typeclass instances.
+When the monoid is clear we write $M$ both for the structure and for its
+carrier.
+
+%======================================================================
+\section{Compositional trackings}
+%======================================================================
+
+Fix a directed graph~$G$ with node type~$V$ and edge type~$E$, and write
+$\mathcal{N} := \mathrm{network}(G)$ for the associated directed container:
+shapes are nodes; a position at~$v$ is a pair $\langle w,\rho \rangle$ of an
+endpoint and a finite directed path $\rho$ from $v$ to~$w$; the root is the
+empty path; sub returns the endpoint; and shift is path concatenation.
+
+\begin{definition}[Compositional tracking]\label{def:tracking}
+Let $M$ be a monoid. A \textbf{compositional tracking} of $M$-data on
+$\mathcal{N}$ consists of a family
+\begin{equation}
+  d \;:\; \prod_{v \,:\, V}\;
+    \Bigl(\Pos(\mathcal{N})(v) \;\longrightarrow\; M\Bigr)
+\end{equation}
+satisfying
+\begin{enumerate}
+  \item \textbf{(T-root)} for every node~$v$,
+        \[
+          d_v\bigl(\rootpos(v)\bigr) \;=\; 1;
+        \]
+  \item \textbf{(T-shift)} for every node~$v$, every position
+        $\rho \in \Pos(\mathcal{N})(v)$, and every position
+        $\sigma \in \Pos(\mathcal{N})\bigl(\sub(v,\rho)\bigr)$,
+        \[
+          d_v\bigl(\shift(v,\rho,\sigma)\bigr)
+          \;=\;
+          d_v(\rho) \cdot d_{\sub(v,\rho)}(\sigma).
+        \]
+\end{enumerate}
+\end{definition}
+
+Thus empty routes are labelled by the unit, and concatenated routes are labelled
+by monoid products. Equivalently, $d$ is a functor $\mathcal{N}(G) \to BM$ from
+the free category on~$G$ to the delooping of~$M$.
+
+%======================================================================
+\section{Folding along paths}
+%======================================================================
+
+\begin{definition}[Path fold]\label{def:fold}
+Let $f : E \to M$ be a function labelling edges by monoid elements. The
+\textbf{fold} of $f$ along a path is the map
+\begin{equation}
+  \mathrm{fold}_f \;:\;
+  \prod_{v,w \,:\, V}\;
+    \bigl(\mathrm{Path}_G(v,w) \;\longrightarrow\; M\bigr)
+\end{equation}
+defined by
+\begin{align}
+  \mathrm{fold}_f\bigl(\mathrm{nil}(v)\bigr) &\;=\; 1, \\
+  \mathrm{fold}_f\bigl(\mathrm{cons}(e,p)\bigr)
+  &\;=\;
+  f(e) \cdot \mathrm{fold}_f(p).
+\end{align}
+\end{definition}
+
+\begin{proposition}[Fold of the empty path]\label{prop:fold-nil}
+For every edge labelling $f : E \to M$ and every node~$v$,
+\[
+  \mathrm{fold}_f\bigl(\mathrm{nil}(v)\bigr) \;=\; 1.
+\]
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{proposition}[Fold preserves concatenation]\label{prop:fold-append}
+For every edge labelling $f : E \to M$ and paths
+$p : \mathrm{Path}_G(v,w)$, $q : \mathrm{Path}_G(w,u)$,
+\[
+  \mathrm{fold}_f\bigl(p \mathbin{{+}{+}} q\bigr)
+  \;=\;
+  \mathrm{fold}_f(p) \cdot \mathrm{fold}_f(q).
+\]
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+The empty-path case is immediate from the left unit law of~$M$. The inductive
+step for a cons-path uses associativity of multiplication.
+
+%======================================================================
+\section{From edge labellings to trackings and back}
+%======================================================================
+
+\begin{definition}[Tracking from an edge labelling]\label{def:of-edge}
+Let $f : E \to M$. Define a tracking $\mathrm{ofEdge}(f)$ by
+\begin{equation}
+  d_v\bigl\langle w,\rho \bigr\rangle
+  \;=\;
+  \mathrm{fold}_f(\rho).
+\end{equation}
+The root law holds by Proposition~\ref{prop:fold-nil}; the shift law holds by
+Proposition~\ref{prop:fold-append}.
+\end{definition}
+
+\begin{definition}[Single-edge position]\label{def:single-edge}
+For an edge $e \in E$, the \textbf{single-edge position} at $\src(e)$ is
+\begin{equation}
+  \varepsilon_e
+  \;=\;
+  \bigl\langle
+    \tgt(e),\;
+    \mathrm{cons}\bigl(e,\, \mathrm{nil}(\tgt(e))\bigr)
+  \bigr\rangle
+  \;\in\;
+  \Pos(\mathcal{N})\bigl(\src(e)\bigr).
+\end{equation}
+\end{definition}
+
+\begin{definition}[Edge labelling from a tracking]\label{def:to-edge}
+Let $t$ be a tracking with value family~$d$. Define
+\begin{equation}
+  \mathrm{toEdge}(t) \;:\; E \;\longrightarrow\; M,
+  \qquad
+  e \;\longmapsto\; d_{\src(e)}(\varepsilon_e).
+\end{equation}
+\end{definition}
+
+\begin{lemma}[Fold recovers the tracking]\label{lem:fold-eq}
+Let $t$ be a tracking with value family~$d$. For every path
+$p : \mathrm{Path}_G(v,w)$,
+\begin{equation}
+  \mathrm{fold}_{\mathrm{toEdge}(t)}(p)
+  \;=\;
+  d_v\bigl\langle w,\, p \bigr\rangle.
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}[Idea of the argument]
+The proof is by induction on~$p$. The nil case is the root law. For a cons-path
+$\mathrm{cons}(e,p)$, the shift law applied to the single-edge position
+$\varepsilon_e$ and the residual position $\langle w,p \rangle$ yields the
+multiplicative step, after observing that shifting $\varepsilon_e$ by that
+residual is definitionally $\langle w,\, \mathrm{cons}(e,p) \rangle$.
+\end{remark}
+
+\begin{theorem}[Round-trip: tracking to edges and back]\label{thm:of-to}
+For every tracking~$t$,
+\[
+  \mathrm{ofEdge}\bigl(\mathrm{toEdge}(t)\bigr) \;=\; t.
+\]
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[Round-trip: edges to tracking and back]\label{thm:to-of}
+For every edge labelling $f : E \to M$,
+\[
+  \mathrm{toEdge}\bigl(\mathrm{ofEdge}(f)\bigr) \;=\; f.
+\]
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[Tracking--edge bijection]\label{thm:tracking-bij}
+For every directed graph~$G$ and monoid~$M$, there is a bijection
+\begin{equation}
+  \bigl\{\,\text{compositional trackings of $M$-data on
+    $\mathrm{network}(G)$}\,\bigr\}
+  \;\cong\;
+  \bigl\{\,\text{functions } E \to M\,\bigr\},
+\end{equation}
+implemented by $\mathrm{toEdge}$ in one direction and $\mathrm{ofEdge}$ in the
+other. The two constructions are mutually inverse by
+Theorems~\ref{thm:of-to} and~\ref{thm:to-of}.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{Monoid instances}
+%======================================================================
+
+\begin{example}[Peak temperature]\label{ex:maxtemp}
+Let $\mathrm{MaxTemp} = \{\mathrm{Cold},\, \mathrm{Warm}\}$ with multiplication
+\begin{equation}
+  \mathrm{Cold} \cdot x \;=\; x,
+  \qquad
+  \mathrm{Warm} \cdot x \;=\; \mathrm{Warm},
+\end{equation}
+and unit $\mathrm{Cold}$. This is an idempotent monoid: a single warm leg along
+a route dominates all cold legs, and subsequent refrigeration cannot undo a
+prior breach of the temperature bound.
+\end{example}
+
+\begin{example}[Cold-chain integrity]\label{ex:coldchain}
+Let $M = \{\mathsf{true},\, \mathsf{false}\}$ with multiplication given by
+boolean conjunction and unit $\mathsf{true}$. Interpreting $\mathsf{true}$ as
+``intact'' and $\mathsf{false}$ as ``broken,'' a route is intact if and only if
+every leg is intact. Once a leg breaks the chain, no subsequent leg can repair
+it.
+\end{example}
+
+\begin{example}[Licence accumulation]\label{ex:licences}
+Let $L$ be a type of licence tokens, and take the monoid of finite lists of
+elements of~$L$ under concatenation, with unit the empty list. Routes accumulate
+the licences required by their individual legs. (Deduplication is not needed for
+the algebraic structure.)
+\end{example}
+
+\begin{proposition}[Warm last-mile breaks the cold chain]\label{prop:warm-last-mile}
+Consider the two-node digraph with nodes $\{\mathrm{Hub},\, \mathrm{Shop}\}$ and
+a single edge $\mathrm{lastMile} : \mathrm{Hub} \to \mathrm{Shop}$, labelled
+$\mathsf{false}$ in the cold-chain monoid of Example~\ref{ex:coldchain}. Let
+$t$ be the tracking induced by this edge labelling. Then:
+\begin{enumerate}
+  \item the empty route at $\mathrm{Hub}$ is intact ($t$ returns
+        $\mathsf{true}$);
+  \item the single-edge route $\mathrm{Hub} \to \mathrm{Shop}$ is broken
+        ($t$ returns $\mathsf{false}$).
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{Discussion}
+%======================================================================
+
+\paragraph{What has been established.}
+Compositional trackings on a shipping network are completely classified by
+edge labellings with values in the target monoid. The reconstruction is
+canonical: fold labels along paths in one direction, restrict to single-edge
+routes in the other. The monoid laws of~$M$ and the path algebra of~$G$ are the
+only ingredients.
+
+\paragraph{Relation to functors into deloopings.}
+The root and shift laws are exactly the requirements that $d$ preserve
+identities and composition in the free category on~$G$. The edge-labelling
+description is the usual fact that a functor out of a free category is
+determined by its values on generating morphisms.
+
+\paragraph{Scope.}
+The development treats a single monoid of values and does not address
+multi-parameter trackings, dependent value types, or interaction with
+aggregation morphisms of networks. Those extensions sit on top of the same
+bijection.
+
+\paragraph{Machine checking.}
+Every definition and theorem statement above corresponds to a declaration in a
+machine-checked formalisation. The phrase ``by lean'' indicates that the proof
+has been verified by a proof assistant.
+
+%======================================================================
+\section*{Acknowledgements}
+%======================================================================
+
+The mathematical content follows the construction of compositional trackings in
+the supply-chain development that motivated this note. The presentation is a
+prose rendering of a formal development intended for human review of the
+theorem statements.
+
+\begin{thebibliography}{9}
+
+\bibitem{abbott2005}
+M.~Abbott, T.~Altenkirch, and N.~Ghani.
+\newblock Containers: constructing strictly positive types.
+\newblock \emph{Theoretical Computer Science}, 342(1):3--27, 2005.
+
+\bibitem{ahman2014}
+D.~Ahman and T.~Uustalu.
+\newblock Coalgebraic update lenses.
+\newblock In \emph{MFPS}, volume~308 of \emph{ENTCS}, pages 25--48, 2014.
+
+\end{thebibliography}
+
+\end{document}

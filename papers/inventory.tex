@@ -1,0 +1,466 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath,amsthm,mathtools}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{parskip}
+\usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
+
+% Theorem environments (arXiv / journal style)
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{remark}[theorem]{Remark}
+
+% Notation
+\newcommand{\Type}{\mathbf{Type}}
+\newcommand{\id}{\mathrm{id}}
+\newcommand{\Update}{\mathsf{Update}}
+
+\title{Inventory as an Update Monad:\\
+  Constant-Position Directed Containers}
+\author{Extracted from a machine-checked development}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Directed containers whose position sets are constant are exactly monoid
+actions. We record the equivalence in both directions, embed the
+constant-position presentation into the general theory of directed
+containers, and cointerpret the resulting structure as an \emph{update
+monad} $TX = S \to M \times X$ whose Kleisli maps observe a stock level
+and emit a movement. Two supply-chain remarks are machine-checked:
+abelianization of movement words forgets audit-trail order, and truncated
+subtraction on~$\mathbb{N}$ clamps unmet demand (repaired by passing
+to~$\mathbb{Z}$). A two-product warehouse with an order-up-to policy
+illustrates the Kleisli reading. The proofs of all stated results have
+been machine-checked; we record only the mathematical content.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%======================================================================
+\section{Introduction}
+%======================================================================
+
+Inventory management tracks a stock level and a monoid of stock
+movements. Applying a movement updates the stock; composing movements
+associates; the empty movement does nothing. This is a right monoid
+action of movements on stock levels.
+
+The same data may be read as a directed container whose positions do not
+depend on the shape: the single position set is the monoid of movements,
+the root is the unit, and the shift is multiplication. Conversely, every
+constant-position directed container is a monoid action. Under this
+correspondence the cointerpretation of Ahman and Uustalu becomes the
+\emph{update monad}
+\[
+  TX \;=\; S \longrightarrow M \times X,
+\]
+whose Kleisli arrows observe a state and emit an update together with a
+result---precisely the form of an inventory policy that looks at current
+stock and decides what to order.
+
+\paragraph{What this note claims.}
+In ordinary mathematical language:
+\begin{enumerate}
+  \item monoid actions $\longleftrightarrow$ constant-position directed
+        containers, with both round trips definitional;
+  \item the embedding of the constant-position case into general directed
+        containers is transport-free once one uses that transport along a
+        shape equality is the identity when positions are constant;
+  \item the update monad of a monoid action satisfies the three monad
+        laws;
+  \item abelianization of free movement words forgets order (audit trail
+        versus balance), and monus on~$\mathbb{N}$ clamps backorders
+        while~$\mathbb{Z}$ does not.
+\end{enumerate}
+
+We work throughout in a single universe of types. Proofs are indicated by
+the phrase ``by lean,'' meaning they have been checked by a proof
+assistant rather than written out in prose.
+
+%======================================================================
+\section{Monoid actions}
+%======================================================================
+
+\begin{definition}[Monoid]\label{def:monoid}
+A \textbf{monoid} $M$ consists of a type $|M|$, a multiplication
+$\cdot : |M| \times |M| \to |M|$, and a unit $1 \in |M|$, satisfying
+associativity and the two unit laws.
+\end{definition}
+
+\begin{definition}[Monoid action]\label{def:action}
+A \textbf{right monoid action} consists of a monoid~$M$, a type~$S$ of
+states, and a map
+\[
+  \mathbin{\triangleleft} \;:\; S \times |M| \;\longrightarrow\; S
+\]
+satisfying
+\begin{equation}
+  s \mathbin{\triangleleft} 1 \;=\; s,
+  \qquad
+  (s \mathbin{\triangleleft} m) \mathbin{\triangleleft} m'
+  \;=\;
+  s \mathbin{\triangleleft} (m \cdot m').
+\end{equation}
+For inventory, $S$ is the set of stock levels and $M$ the monoid of stock
+movements; $s \mathbin{\triangleleft} m$ applies the movements~$m$ to the
+stock~$s$.
+\end{definition}
+
+%======================================================================
+\section{Constant-position directed containers}
+%======================================================================
+
+\begin{definition}[Constant-position directed container]\label{def:const-dc}
+A \textbf{constant-position directed container} consists of
+\begin{enumerate}
+  \item a type $S$ of shapes (states),
+  \item a single type $M$ of positions,
+  \item a sub-shape map $\mathsf{sub} : S \to M \to S$,
+  \item a root position $r \in M$ (independent of shape),
+  \item a shift operation $\mathsf{shift} : M \to M \to M$
+        (independent of shape),
+\end{enumerate}
+subject to the five laws, stated without transport:
+\begin{align}
+  \mathsf{sub}\,s\,r &\;=\; s, \label{eq:c1}\\
+  \mathsf{shift}\,r\,m &\;=\; m, \label{eq:c2}\\
+  \mathsf{shift}\,m\,r &\;=\; m, \label{eq:c3}\\
+  \mathsf{sub}\,s\,(\mathsf{shift}\,p\,q)
+    &\;=\; \mathsf{sub}\,(\mathsf{sub}\,s\,p)\,q, \label{eq:c4}\\
+  \mathsf{shift}\,(\mathsf{shift}\,p\,q)\,r'
+    &\;=\; \mathsf{shift}\,p\,(\mathsf{shift}\,q\,r'). \label{eq:c5}
+\end{align}
+\end{definition}
+
+\begin{remark}[Why constant positions matter]
+With constant positions, the shift is a genuine binary operation on the
+single set~$M$. In the general directed-container case, positions vary
+with shape, so shift is only a fibrewise composition and no global monoid
+exists on positions. The constant-position case is the sound special
+case of that observation.
+\end{remark}
+
+\begin{remark}
+We deliberately do \emph{not} formulate the structure as a general
+directed container plus a type equality $\forall s.\; \mathsf{Pos}(s)=M$.
+That formulation buries every law in transports. The presentation above
+keeps the equalities homogeneous.
+\end{remark}
+
+%======================================================================
+\section{The equivalence}
+%======================================================================
+
+\begin{definition}[From constant-position DC to action]\label{def:to-action}
+Given a constant-position directed container~$C$, define a monoid action
+by taking $|M| = C.M$, multiplication $= C.\mathsf{shift}$, unit $=
+C.r$, states $= C.S$, and action $= C.\mathsf{sub}$. Laws~\eqref{eq:c2},
+\eqref{eq:c3}, \eqref{eq:c5} are the monoid laws;
+laws~\eqref{eq:c1},~\eqref{eq:c4} are the action laws.
+\end{definition}
+
+\begin{definition}[From action to constant-position DC]\label{def:to-const}
+Given a monoid action of~$M$ on~$S$, define a constant-position directed
+container by taking shapes~$S$, positions~$|M|$, sub-shape $=$ the
+action, root $=$ the monoid unit, and shift $=$ monoid multiplication.
+\end{definition}
+
+\begin{theorem}[Round trips]\label{thm:roundtrips}
+The constructions of Definitions~\ref{def:to-action}
+and~\ref{def:to-const} are mutually inverse:
+\begin{equation}
+  A \longmapsto \text{const} \longmapsto \text{action}
+  \;=\; A,
+  \qquad
+  C \longmapsto \text{action} \longmapsto \text{const}
+  \;=\; C.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+The equalities are definitional: both directions are dictionaries
+renaming the same data, and the round trips hold by structure $\eta$ and
+proof irrelevance.
+\end{remark}
+
+%======================================================================
+\section{Embedding into directed containers}
+%======================================================================
+
+\begin{lemma}[Transport is trivial]\label{lem:transport-const}
+Let $S$ and $M$ be types, and let $h : s = t$ be an equality of shapes.
+For every $q \in M$,
+\begin{equation}
+  \mathsf{transport}_{h}(q) \;=\; q.
+\end{equation}
+That is, transport of a position along a shape equality is the identity
+when the position family is constant.
+\end{lemma}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{definition}[Embedding]\label{def:to-directed}
+Every constant-position directed container~$C$ determines a directed
+container with
+\begin{enumerate}
+  \item shapes $C.S$,
+  \item $\mathsf{Pos}(s) = C.M$ for every shape~$s$,
+  \item root constantly equal to $C.r$,
+  \item sub-shape and shift as in~$C$.
+\end{enumerate}
+\end{definition}
+
+\begin{theorem}[Laws match]\label{thm:to-directed}
+Under the embedding of Definition~\ref{def:to-directed}, the five
+directed-container axioms are exactly the five constant-position laws of
+Definition~\ref{def:const-dc}, with the D2/D5 transports erased by
+Lemma~\ref{lem:transport-const}.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{corollary}[Monoid actions as directed containers]\label{cor:action-dc}
+Every monoid action determines a directed container, by composing
+Definition~\ref{def:to-const} with Definition~\ref{def:to-directed}.
+Directed containers whose position sets are constant are exactly monoid
+actions.
+\end{corollary}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{The update monad}
+%======================================================================
+
+\begin{definition}[Update monad]\label{def:update}
+Let $A$ be a monoid action of monoid~$M$ on states~$S$. The
+\textbf{update monad} of~$A$ is the endofunctor
+\begin{equation}
+  \Update_A X \;=\; S \longrightarrow |M| \times X.
+\end{equation}
+A Kleisli map $X \to \Update_A Y$ observes a state in~$S$ and emits an
+update in~$|M|$ together with a result in~$Y$.
+\end{definition}
+
+\begin{definition}[Unit and bind]\label{def:pure-bind}
+\begin{enumerate}
+  \item $\mathsf{pure} : X \to \Update_A X$ emits the monoid unit and
+        returns the value:
+        \[
+          \mathsf{pure}(x)(s) \;=\; (1,\, x).
+        \]
+  \item Given $t : \Update_A X$ and $k : X \to \Update_A Y$,
+        \[
+          \mathsf{bind}(t,k)(s)
+          \;=\;
+          \bigl(
+            m \cdot m',\;
+            y
+          \bigr),
+        \]
+        where $(m,x) = t(s)$, $(m',y) = k(x)\bigl(s \mathbin{\triangleleft} m\bigr)$:
+        run~$t$, apply its update to the state, run~$k$ on the updated
+        state, and multiply the two updates.
+\end{enumerate}
+\end{definition}
+
+\begin{theorem}[Monad laws]\label{thm:monad}
+For every monoid action~$A$ and types $X,Y,Z$:
+\begin{enumerate}
+  \item \textbf{Left unit:}
+        $\mathsf{bind}(\mathsf{pure}(x),\, k) = k(x)$;
+  \item \textbf{Right unit:}
+        $\mathsf{bind}(t,\, \mathsf{pure}) = t$;
+  \item \textbf{Associativity:}
+        $\mathsf{bind}(\mathsf{bind}(t,k),\, h)
+         = \mathsf{bind}\bigl(t,\, x \mapsto \mathsf{bind}(k(x),h)\bigr)$.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+The left unit uses the action unit law (the state is unchanged) and the
+monoid left unit law. The right unit uses the monoid right unit law.
+Associativity uses the action multiplication law (the middle state is the
+same under either bracketing) and monoid associativity.
+\end{remark}
+
+\begin{remark}[Cointerpretation]
+The update monad is the cointerpretation of the constant-position
+directed container associated to~$A$, in the sense of Ahman and Uustalu:
+directed containers cointerpret as monads, and the constant-position case
+specialises to update monads.
+\end{remark}
+
+%======================================================================
+\section{Two remarks on movements and stock}
+%======================================================================
+
+\begin{definition}[Movement words]\label{def:movements}
+A \textbf{stock movement} for a single product is either a receipt of
+quantity $q \in \mathbb{N}$ or an issue of quantity~$q$. Words in the free
+monoid on movements are the storekeeper's \textbf{audit trail}. The
+\textbf{net effect} of a word is its image in the abelianization
+$\mathbb{Z}$ (the ledger \textbf{balance}):
+\begin{equation}
+  \mathsf{net}([]) = 0,\quad
+  \mathsf{net}(\mathsf{receipt}\,q :: w) = q + \mathsf{net}(w),\quad
+  \mathsf{net}(\mathsf{issue}\,q :: w) = \mathsf{net}(w) - q.
+\end{equation}
+\end{definition}
+
+\begin{proposition}[Abelianization forgets order]\label{prop:abelian}
+Receive-$2$-then-issue-$1$ and issue-$1$-then-receive-$2$ have the same
+net balance but are distinct as lists:
+\begin{equation}
+  \mathsf{net}\bigl([\mathsf{receipt}\,2,\, \mathsf{issue}\,1]\bigr)
+  \;=\;
+  \mathsf{net}\bigl([\mathsf{issue}\,1,\, \mathsf{receipt}\,2]\bigr),
+\end{equation}
+while the two words are unequal. Operationally the difference matters:
+from a stock of zero the second word passes through a shortage the first
+never sees.
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{proposition}[Monus clamps; integers admit backorders]\label{prop:monus}
+\begin{enumerate}
+  \item There exist $s,m \in \mathbb{N}$ with
+        $(s \mathbin{\dot{-}} m) + m \neq s$ (truncated subtraction
+        silently discards unmet demand).
+  \item For all $s,m \in \mathbb{Z}$,
+        $(s - m) + m = s$ (negative stock is a backorder; every issue is
+        exactly undone by the matching receipt).
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{Example: a two-product warehouse}
+%======================================================================
+
+\begin{example}[Inventory action]\label{ex:warehouse}
+Let $M = \mathbb{Z} \times \mathbb{Z}$ under componentwise addition (net
+movements for two products; the abelianization $\mathbb{Z}^{\mathrm{Prod}}$
+with $|\mathrm{Prod}| = 2$), and let $S = \mathbb{Z} \times \mathbb{Z}$
+(stock levels, backorders admitted). The action is componentwise
+addition:
+\begin{equation}
+  (s_1,s_2) \mathbin{\triangleleft} (m_1,m_2)
+  \;=\;
+  (s_1+m_1,\, s_2+m_2).
+\end{equation}
+The associated directed container has stock levels as shapes and
+movements as positions: a receipt followed by an equal issue is a
+nontrivial endomorphism of the stock state.
+\end{example}
+
+\begin{definition}[Order-up-to policy]\label{def:policy}
+The Kleisli map $\mathsf{policy} : 1 \to \Update_{\mathrm{inv}} 1$ is the
+replenishment rule: for each product, if stock is below the reorder point
+$5$, order up to~$10$; otherwise order nothing. Goods inward
+$\mathsf{receive}(m)$ is the Kleisli map that unconditionally emits the
+movement~$m$.
+\end{definition}
+
+\begin{proposition}[Policy behaviour]\label{prop:policy}
+\begin{enumerate}
+  \item At stock $(2,7)$, the policy emits movement $(8,0)$.
+  \item Applying that movement yields stock $(10,7)$.
+  \item Kleisli composition threads state: receiving $(3,0)$ before the
+        policy, starting from stock $(1,7)$, produces total movement
+        $(9,0)$ (the policy sees stock $4$ and orders~$6$).
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{Discussion}
+%======================================================================
+
+\paragraph{What has been established.}
+Constant-position directed containers and monoid actions are the same
+data. Their cointerpretation is the update monad, with the three monad
+laws following from the monoid and action laws. The two remarks separate
+the free monoid of audit trails from its abelianization (balances), and
+motivate working over~$\mathbb{Z}$ rather than~$\mathbb{N}$ when unmet
+demand must be recorded.
+
+\paragraph{Scope.}
+The development treats a single universe of types and does not address
+multi-echelon inventory, stochastic demand, or cost optimisation. The
+warehouse example is a pure illustration of the Kleisli reading.
+
+\paragraph{Machine checking.}
+Every definition and theorem statement above corresponds to a declaration
+in a machine-checked formalisation. The phrase ``by lean'' indicates that
+the proof has been verified by a proof assistant.
+
+%======================================================================
+\section*{Acknowledgements}
+%======================================================================
+
+The mathematical content follows the cointerpretation of directed
+containers as monads due to Ahman and Uustalu, specialised to the
+constant-position case and read as inventory. The presentation here is a
+prose rendering of a formal development intended for human review of the
+theorem statements.
+
+\begin{thebibliography}{9}
+
+\bibitem{ahman2016}
+D.~Ahman and T.~Uustalu.
+\newblock Directed containers as categories.
+\newblock In \emph{MSFP}, volume~207 of \emph{EPTCS}, pages 89--98, 2016.
+
+\bibitem{ahman-uustalu-update}
+D.~Ahman and T.~Uustalu.
+\newblock Update monads: cointerpreting directed containers.
+\newblock In \emph{TLCA}, volume~8560 of \emph{LNCS}, pages 1--15.
+\newblock Springer, 2014.
+
+\bibitem{abbott2005}
+M.~Abbott, T.~Altenkirch, and N.~Ghani.
+\newblock Containers: constructing strictly positive types.
+\newblock \emph{Theoretical Computer Science}, 342(1):3--27, 2005.
+
+\end{thebibliography}
+
+\end{document}

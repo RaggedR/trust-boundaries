@@ -1,0 +1,477 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath,amsthm,mathtools}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{parskip}
+\usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
+
+% Theorem environments (arXiv / journal style)
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{remark}[theorem]{Remark}
+
+% Notation
+\newcommand{\Ext}{\mathrm{Ext}}
+\newcommand{\Shape}{\mathrm{Shape}}
+\newcommand{\Pos}{\mathrm{Pos}}
+\newcommand{\Type}{\mathbf{Type}}
+\newcommand{\id}{\mathrm{id}}
+\newcommand{\rootpos}{\mathsf{o}}
+\newcommand{\sub}{\mathbin{\downarrow}}
+\newcommand{\shift}{\oplus}
+\newcommand{\cat}{\mathcal{C}}
+\newcommand{\DCont}{\mathbf{DCont}}
+\newcommand{\Cof}{\mathbf{Cof}}
+\newcommand{\Cat}{\mathbf{Cat}}
+\newcommand{\Hom}{\mathrm{Hom}}
+
+\title{Directed Containers as Categories\\
+  and Their Morphisms as Cofunctors}
+\author{Extracted from a machine-checked development}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We formalise the object-level dictionary between directed containers and small
+categories: every directed container presents a small category whose objects
+are shapes and whose morphisms are positions with specified codomain; every
+small category yields a directed container whose positions are outgoing
+morphisms. The two constructions are mutually inverse up to a pointwise
+bijection on positions, not up to definitional equality. At the morphism
+level, directed-container morphisms coincide with cofunctors of the presented
+categories: the two structures carry identical data, compose strictly, and the
+correspondence is an isomorphism of categories. The proofs of all stated
+results have been machine-checked; we record only the mathematical content.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%======================================================================
+\section{Introduction}
+%======================================================================
+
+Directed containers equip a container $(S,P)$ with root, sub-shape, and shift
+operations satisfying five laws D1--D5. Reading the data categorically---shapes
+as objects, positions as morphisms, root as identity, shift as
+composition---one obtains a small category. Conversely, from a small category
+one builds a directed container by taking outgoing morphisms as positions.
+This is the object-level dictionary of Ahman and Uustalu.
+
+The two constructions are inverse only up to isomorphism. Starting from a
+directed container $D$, the round trip replaces each position type $P(s)$ by
+the total space of the fibration of positions over their codomains---each
+position tagged with the shape it lands on and a proof of that landing. We
+exhibit the evident pointwise bijection and leave the upgrade to an
+isomorphism of directed containers for later work.
+
+At the morphism level the situation is cleaner. A directed-container morphism
+has a covariant shape map and a contravariant position map, compatible with
+root, sub-shape, and shift. This is not a functor of the presented categories
+(the variance on hom-sets is wrong); it is a cofunctor. Under the dictionary
+the two structures are definitionally the same data, and the correspondence is
+an isomorphism of categories.
+
+\paragraph{What this note claims.}
+In ordinary mathematical language: (i)~directed containers present small
+categories, and small categories present directed containers, inverse up to a
+canonical bijection on positions; (ii)~morphisms of directed containers
+\emph{are} cofunctors of those categories, and the identification is an
+isomorphism $\DCont\cong\Cof$.
+
+%======================================================================
+\section{Preliminaries}
+%======================================================================
+
+We work in a single universe $\Type$.
+
+\begin{definition}[Directed container]\label{def:directed}
+A \textbf{directed container} $D$ consists of a shape type $S$, a position
+family $P$, a root $\rootpos(s)\in P(s)$, a sub-shape $s\sub p\in S$, and a
+shift $p\shift q\in P(s)$ for $q\in P(s\sub p)$, subject to:
+\begin{enumerate}
+  \item[\textbf{D1.}] $s\sub\rootpos(s)=s$;
+  \item[\textbf{D4.}] $s\sub(p\shift q)=(s\sub p)\sub q$;
+  \item[\textbf{D2.}] $\rootpos(s)\shift q = (\mathrm{D1})\cdot q$
+        (transport along D1);
+  \item[\textbf{D3.}] $p\shift\rootpos(s\sub p)=p$;
+  \item[\textbf{D5.}]
+        $(p\shift q)\shift\bigl((\mathrm{D4})^{-1}\cdot q'\bigr)
+        = p\shift(q\shift q')$
+        (transport along D4).
+\end{enumerate}
+\end{definition}
+
+\begin{definition}[Small category]\label{def:smallcat}
+A \textbf{small category} $\mathcal{C}$ consists of a type of objects, a type
+of morphisms $\Hom(a,b)$ between any two objects, identity morphisms, and
+composition in \emph{diagrammatic} order
+\[
+  \mathrm{comp}:\Hom(a,b)\to\Hom(b,c)\to\Hom(a,c),
+\]
+subject to the usual left unit, right unit, and associativity laws.
+Diagrammatic order matches the shift of a directed container: $p\shift q$
+first travels along $p$, then along $q$.
+\end{definition}
+
+\begin{lemma}[Transport cancellation]\label{lem:transport-cancel}
+For a family $P$ over a type $\alpha$, an equality $h:x=y$ in $\alpha$, and
+$p\in P(y)$,
+\begin{equation}
+  h\cdot\bigl(h^{-1}\cdot p\bigr) \;=\; p.
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{From directed containers to small categories}
+%======================================================================
+
+\begin{lemma}[Codomain of a composite]\label{lem:sub-shift}
+Let $D$ be a directed container, and let $a,b,c\in S$ with $p\in P(a)$,
+$h_p:a\sub p=b$, $q\in P(b)$, and $h_q:b\sub q=c$. Then
+\begin{equation}
+  a\sub\bigl(p\shift(h_p^{-1}\cdot q)\bigr) \;=\; c.
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+This is D4 with both shape equalities made into hypotheses, so that the
+subtype property of composition in the induced category is well-typed.
+\end{remark}
+
+\begin{definition}[Presented category]\label{def:to-smallcat}
+Let $D$ be a directed container. The \textbf{presented small category}
+$\cat(D)$ has
+\begin{enumerate}
+  \item objects: the shapes $S$;
+  \item morphisms $a\to b$: the subtype
+        $\bigl\{p\in P(a) \mid a\sub p = b\bigr\}$;
+  \item identity at $a$: $\langle\rootpos(a),\,\mathrm{D1}_a\rangle$;
+  \item composition of $\langle p,h_p\rangle:a\to b$ with
+        $\langle q,h_q\rangle:b\to c$:
+        \[
+          \bigl\langle
+            p\shift(h_p^{-1}\cdot q),\;
+            \text{the equality of Lemma~\ref{lem:sub-shift}}
+          \bigr\rangle.
+        \]
+\end{enumerate}
+\end{definition}
+
+\begin{theorem}[Category laws for $\cat(D)$]\label{thm:cat-laws}
+The data of Definition~\ref{def:to-smallcat} satisfy the left unit, right
+unit, and associativity laws of a small category. Explicitly:
+\begin{enumerate}
+  \item left unit uses D2 and transport cancellation
+        (Lemma~\ref{lem:transport-cancel});
+  \item right unit uses D3;
+  \item associativity uses D5.
+\end{enumerate}
+In each case one substitutes the codomain equalities, after which transports
+reduce definitionally (proofs of shape equalities are definitionally
+irrelevant), leaving the corresponding directed-container law.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{From small categories to directed containers}
+%======================================================================
+
+\begin{definition}[Presented directed container]\label{def:to-dcont}
+Let $\mathcal{C}$ be a small category. The \textbf{presented directed
+container} $D(\mathcal{C})$ has
+\begin{enumerate}
+  \item shapes: the objects of $\mathcal{C}$;
+  \item positions over $s$: outgoing morphisms
+        $\sum_{s'}\Hom_{\mathcal{C}}(s,s')$;
+  \item root at $s$: $\langle s,\,\id_s\rangle$;
+  \item sub-shape of $\langle s',\,f\rangle$: the codomain $s'$;
+  \item shift of $\langle s',\,f\rangle$ by $\langle s'',\,g\rangle$:
+        $\langle s'',\, g\circ f\rangle$ (diagrammatic composition in
+        $\mathcal{C}$).
+\end{enumerate}
+\end{definition}
+
+\begin{theorem}[Directed laws for $D(\mathcal{C})$]\label{thm:d-laws}
+The data of Definition~\ref{def:to-dcont} satisfy D1--D5. Laws D1 and D4 hold
+strictly (the codomain of a composite is the codomain of the second factor,
+definitionally), so the transports in D2 and D5 vanish; the remaining laws are
+exactly the category laws of $\mathcal{C}$.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{The object-level round trip}
+%======================================================================
+
+Starting from a directed container $D$, the composite
+$D\mapsto\cat(D)\mapsto D(\cat(D))$ is not definitionally $D$: its positions
+over $s$ are
+\[
+  \sum_{s'}\bigl\{p\in P(s) \mid s\sub p = s'\bigr\},
+\]
+each position tagged with its codomain and a proof. The total space of this
+fibration is in bijection with $P(s)$.
+
+\begin{definition}[Round-trip position maps]\label{def:roundtrip-pos}
+Let $D$ be a directed container and $s\in S$.
+\begin{enumerate}
+  \item \textbf{Forward.} Send $p\in P(s)$ to
+        $\bigl\langle s\sub p,\; \langle p,\,\mathsf{refl}\rangle\bigr\rangle$
+        in $D\bigl(\cat(D)\bigr)$'s position type at $s$.
+  \item \textbf{Backward.} Send
+        $\bigl\langle s',\; \langle p,\,h\rangle\bigr\rangle$ to the
+        underlying position $p\in P(s)$.
+\end{enumerate}
+\end{definition}
+
+\begin{theorem}[Position bijection, forward-then-back]\label{thm:pos-rt-1}
+For every directed container $D$, shape $s$, and position $p\in P(s)$,
+applying the forward map and then the backward map returns $p$.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[Position bijection, back-then-forward]\label{thm:pos-rt-2}
+For every directed container $D$, shape $s$, and position $q$ of
+$D\bigl(\cat(D)\bigr)$ at $s$, applying the backward map and then the forward
+map returns $q$.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}[Honesty about the gap]
+The pointwise bijection of Theorems~\ref{thm:pos-rt-1}
+and~\ref{thm:pos-rt-2} does not by itself yield a definitional equality of
+directed containers, nor automatically an isomorphism of directed containers:
+one would need a notion of directed-container isomorphism that transports
+root, sub-shape, and shift along the bijection. That upgrade, and the
+resulting equivalence of categories $\DCont\simeq\Cat$ (Ahman--Uustalu 2016,
+Theorem~3.6), remains at the paper level relative to the present formalisation.
+The other direction (category to container to category) has the same flavour:
+hom-sets get wrapped in a subtype over a dependent sum, equal only up to the
+evident bijection.
+\end{remark}
+
+%======================================================================
+\section{Morphisms as cofunctors}
+%======================================================================
+
+\begin{definition}[Directed-container morphism]\label{def:dcont-morph}
+A \textbf{morphism of directed containers} $\varphi:C\Rightarrow D$ consists
+of a shape map $f:\Shape(C)\to\Shape(D)$ and a contravariant position map
+$f^\sharp_s:\Pos(D)\bigl(f(s)\bigr)\to\Pos(C)(s)$, satisfying:
+\begin{enumerate}
+  \item[\textbf{M0.}]
+        $f\bigl(s\sub f^\sharp_s(h)\bigr)=f(s)\sub h$;
+  \item[\textbf{M1.}]
+        $f^\sharp_s\bigl(\rootpos(f(s))\bigr)=\rootpos(s)$;
+  \item[\textbf{M2.}]
+        $f^\sharp_s(h\shift k)
+        = f^\sharp_s(h)\shift
+          f^\sharp_{s\sub f^\sharp_s(h)}
+            \bigl((\mathrm{M0})^{-1}\cdot k\bigr)$.
+\end{enumerate}
+\end{definition}
+
+\begin{definition}[Cofunctor]\label{def:cofunctor}
+A \textbf{cofunctor} $\phi:\cat(C)\to\cat(D)$ consists of an object map
+$\mathrm{obj}$ and a lift
+$\mathrm{lift}_s:\Pos(D)\bigl(\mathrm{obj}(s)\bigr)\to\Pos(C)(s)$,
+satisfying:
+\begin{enumerate}
+  \item[\textbf{C0.}]
+        $\mathrm{obj}\bigl(s\sub\mathrm{lift}_s(h)\bigr)
+        =\mathrm{obj}(s)\sub h$;
+  \item[\textbf{C1.}]
+        $\mathrm{lift}_s\bigl(\rootpos(\mathrm{obj}(s))\bigr)
+        =\rootpos(s)$;
+  \item[\textbf{C2.}]
+        $\mathrm{lift}_s(h\shift k)
+        =\mathrm{lift}_s(h)\shift
+          \mathrm{lift}_{s\sub\mathrm{lift}_s(h)}
+            \bigl((\mathrm{C0})^{-1}\cdot k\bigr)$.
+\end{enumerate}
+\end{definition}
+
+\begin{remark}
+C0/C1/C2 are M0/M1/M2 read through the dictionary of $\cat(-)$: sub-shape is
+codomain, root is identity, shift is composition. The two structures carry
+identical data.
+\end{remark}
+
+\begin{definition}[Correspondence]\label{def:correspondence}
+Every directed-container morphism $\varphi$ determines a cofunctor
+$\varphi^\wedge$ by reading $(f,f^\sharp)$ as $(\mathrm{obj},\mathrm{lift})$.
+Every cofunctor $\phi$ determines a directed-container morphism $\phi^\vee$ by
+the inverse reading.
+\end{definition}
+
+\begin{theorem}[Hom-set bijection]\label{thm:hom-bij}
+The two assignments are mutually inverse:
+\begin{equation}
+  \bigl(\varphi^\wedge\bigr)^\vee \;=\; \varphi,
+  \qquad
+  \bigl(\phi^\vee\bigr)^\wedge \;=\; \phi.
+\end{equation}
+Consequently there is a bijection between directed-container morphisms
+$C\Rightarrow D$ and cofunctors $\cat(C)\to\cat(D)$.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{The category of cofunctors}
+%======================================================================
+
+\begin{definition}[Identity and composition]\label{def:cof-ops}
+The \textbf{identity cofunctor} on $\cat(C)$ is the identity on objects and
+on positions. The \textbf{composite} of cofunctors
+$\phi:\cat(C)\to\cat(D)$ and $\psi:\cat(D)\to\cat(E)$ has object map
+$\mathrm{obj}_\psi\circ\mathrm{obj}_\phi$ and lift
+\[
+  m \;\mapsto\;
+  \mathrm{lift}_\phi\bigl(s,\,
+    \mathrm{lift}_\psi\bigl(\mathrm{obj}_\phi(s),\,m\bigr)
+  \bigr).
+\]
+\end{definition}
+
+\begin{lemma}[Composite transport]\label{lem:comp-transport}
+Let $\psi:\cat(D)\to\cat(E)$, equalities $e:y=x$ in $\Shape(D)$ and
+$e_2:\mathrm{obj}_\psi(x)=z$, and $k\in\Pos(E)(z)$. Then
+\begin{equation}
+  e^{-1}\cdot\bigl(
+    \mathrm{lift}_\psi(x,\,e_2^{-1}\cdot k)
+  \bigr)
+  \;=\;
+  \mathrm{lift}_\psi\bigl(
+    y,\,
+    \bigl((\mathrm{obj}_\psi\cdot e)\cdot e_2\bigr)^{-1}\cdot k
+  \bigr).
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[Cofunctors form a strict category]\label{thm:cof-cat}
+Identity and composition of cofunctors satisfy left unit, right unit, and
+associativity strictly. Directed containers and cofunctors therefore form a
+strict category $\Cof$.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{definition}[Operations in $\DCont$]\label{def:dcont-ops}
+Identity and composition of directed-container morphisms are obtained by
+transporting the cofunctor operations across the hom-set bijection of
+Theorem~\ref{thm:hom-bij}.
+\end{definition}
+
+\begin{theorem}[Isomorphism of categories]\label{thm:iso}
+The assignment $\varphi\mapsto\varphi^\wedge$ preserves identities and
+composition, is the identity on objects, and is bijective on hom-sets.
+Hence it is an isomorphism of categories
+\begin{equation}
+  \DCont \;\cong\; \Cof.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{Discussion}
+%======================================================================
+
+\paragraph{What has been established.}
+Directed containers and small categories are intertranslatable at the object
+level, inverse up to a canonical position bijection. At the morphism level the
+translation is tighter: directed-container morphisms and cofunctors are the
+same data, and the categories they form are isomorphic.
+
+\paragraph{Why cofunctors rather than functors.}
+Container morphisms pull positions backward. Functors push morphisms forward.
+The mismatch is definitional; cofunctors (object map forward, morphism action
+backward) are the matching notion.
+
+\paragraph{The remaining gap.}
+Upgrading the pointwise position bijection to an equivalence of categories
+$\DCont\simeq\Cat$ requires a notion of isomorphism (or equivalence) of
+directed containers compatible with root, sub-shape, and shift. The present
+development stops short of that packaging; the bijection itself is fully
+proved.
+
+\paragraph{Machine checking.}
+Every definition and theorem statement above corresponds to a declaration in a
+machine-checked formalisation. The phrase ``by lean'' indicates that the proof
+has been verified by a proof assistant.
+
+%======================================================================
+\section*{Acknowledgements}
+%======================================================================
+
+The mathematical content follows Ahman and Uustalu, \emph{Directed containers
+as categories} (2016), together with the cofunctor reading of
+directed-container morphisms. The presentation here is a prose rendering of a
+formal development intended for human review of the theorem statements.
+
+\begin{thebibliography}{9}
+
+\bibitem{ahman2012}
+D.~Ahman, J.~Chapman, and T.~Uustalu.
+\newblock When is a container a comonad?
+\newblock In \emph{FoSSaCS}, volume~7213 of \emph{LNCS}, pages 74--88.
+\newblock Springer, 2012.
+
+\bibitem{ahman2016}
+D.~Ahman and T.~Uustalu.
+\newblock Directed containers as categories.
+\newblock In \emph{MSFP}, volume~207 of \emph{EPTCS}, pages 89--98, 2016.
+
+\bibitem{abbott2005}
+M.~Abbott, T.~Altenkirch, and N.~Ghani.
+\newblock Containers: constructing strictly positive types.
+\newblock \emph{Theoretical Computer Science}, 342(1):3--27, 2005.
+
+\end{thebibliography}
+
+\end{document}

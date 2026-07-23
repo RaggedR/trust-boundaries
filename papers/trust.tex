@@ -1,0 +1,653 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath,amsthm,mathtools}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{parskip}
+\usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
+
+% Theorem environments (arXiv / journal style)
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{remark}[theorem]{Remark}
+
+% Notation
+\newcommand{\Type}{\mathbf{Type}}
+\newcommand{\bott}{\mathrm{bot}}
+\newcommand{\cmin}{\mathrm{cmin}}
+\newcommand{\cmax}{\mathrm{cmax}}
+\newcommand{\tauCan}{\tau}
+\newcommand{\Prem}{\mathrm{Prem}}
+\newcommand{\Sound}{\mathrm{Sound}}
+\newcommand{\Deriv}{\mathrm{Deriv}}
+
+\title{Trust Systems:\\
+  Canonical Trust, Certificates, and Consolidation}
+\author{Extracted from a machine-checked development}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We develop the elementary theory of \emph{trust systems}: dependency
+structures on claims, graded in a linearly ordered poset of check
+strengths. Each system carries a \emph{canonical trust} assignment~$\tau$,
+characterised both as the greatest sound assignment of grades to claims
+and as the supremum of grades of derivations. Morphisms of trust systems
+transport canonical trust laxly. \emph{Consolidations}---shape maps
+equipped with position pullbacks that cache grades---preserve~$\tau$ on
+the nose. A circular-citation counterexample shows that well-foundedness
+of the premise relation is load-bearing; a shape-only consolidation
+counterexample shows that dropping checking steps degrades trust.
+All stated results have been machine-checked.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%======================================================================
+\section{Introduction}
+%======================================================================
+
+A recurring situation in formal and informal mathematical work is that a
+body of claims is justified by checking steps, each step resting on
+premises and receiving a grade recording how thoroughly it was checked.
+One wants a coherent global notion of how much each claim can be trusted,
+computed from the local data, and one wants to know how that global grade
+moves when claims are restated, imported, or consolidated across layers.
+
+Trust systems make this precise. A trust system is a type of claims, a
+type of checking steps, and a grading of steps in a chain of check
+strengths. The \emph{canonical trust}~$\tau$ of a claim is the
+widest-bottleneck value: the best derivation's weakest link. It may be
+defined either by well-founded recursion on the premise relation
+(fixpoint form) or as the supremum of derivation grades (max--min form);
+the two agree.
+
+\paragraph{What this note claims.}
+In ordinary mathematical language: every sound assignment of grades is
+bounded by~$\tau$, and~$\tau$ itself is sound, so~$\tau$ is the greatest
+sound assignment. Morphisms transport trust laxly
+($\phi(\tau(x)) \le \tau'(F(x))$). A consolidation with a genuine
+position map preserves trust exactly
+($\tau'(F(x)) = \tau(x)$). Without well-foundedness of the premise
+relation, local certificates can certify circular trust that no
+derivation supports; without position pullbacks, restating claims alone
+can drop trust from the top grade to bottom.
+
+%======================================================================
+\section{Chains of check strengths}
+%======================================================================
+
+\begin{definition}[Chain]\label{def:chain}
+A \textbf{chain} is a type~$T$ equipped with a preorder~$\le$ such that
+\begin{enumerate}
+  \item $\le$ is a partial order (reflexive, transitive, antisymmetric);
+  \item $\le$ is total: for all $a,b \in T$, either $a \le b$ or $b \le a$;
+  \item there is a bottom element $\bott \in T$ with $\bott \le a$ for every
+        $a \in T$;
+  \item $\le$ is decidable.
+\end{enumerate}
+We write $\bott$ for ``no check performed''.
+\end{definition}
+
+\begin{definition}[Meet and join]\label{def:cmin-cmax}
+On a chain~$T$, define the binary meet and join by
+\begin{align}
+  \cmin(a,b) &\;=\;
+  \begin{cases}
+    a & \text{if } a \le b, \\
+    b & \text{otherwise},
+  \end{cases}
+  \\[4pt]
+  \cmax(a,b) &\;=\;
+  \begin{cases}
+    b & \text{if } a \le b, \\
+    a & \text{otherwise}.
+  \end{cases}
+\end{align}
+\end{definition}
+
+\begin{proposition}\label{prop:cmin-cmax}
+For all $a,b \in T$:
+\begin{enumerate}
+  \item $\cmin(a,b) \le a$ and $\cmin(a,b) \le b$;
+  \item if $c \le a$ and $c \le b$, then $c \le \cmin(a,b)$;
+  \item $a \le \cmax(a,b)$ and $b \le \cmax(a,b)$;
+  \item $\cmax(a,b)$ equals~$a$ or equals~$b$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+We extend $\cmin$ and $\cmax$ to finite lists by right folds, writing
+$\mathrm{foldr}_{\cmax}(\ell, i)$ and $\mathrm{foldr}_{\cmin}(\ell, i)$
+for the fold of a list~$\ell$ with initial value~$i$.
+
+\begin{proposition}[Fold properties]\label{prop:folds}
+Let $T$ be a chain.
+\begin{enumerate}
+  \item If $a \in \ell$, then $a \le \mathrm{foldr}_{\cmax}(\ell, i)$.
+  \item $\mathrm{foldr}_{\cmax}(\ell, i)$ equals~$i$ or belongs to~$\ell$
+        (attainment).
+  \item If $a \in \ell$, then $\mathrm{foldr}_{\cmin}(\ell, i) \le a$;
+        also $\mathrm{foldr}_{\cmin}(\ell, i) \le i$.
+  \item Pointwise domination of mapped values lifts to $\cmin$-folds.
+  \item Every monotone map $\phi : T \to T'$ is lax for $\cmin$-folds:
+        $\phi(\mathrm{foldr}_{\cmin}(\ell, i))
+         \le \mathrm{foldr}_{\cmin}(\phi(\ell), \phi(i))$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+Attainment of finite joins (item~(2) above) uses totality of the chain:
+in a general lattice a finite join need not be attained by any single
+element. All check-posets used in applications are finite chains.
+\end{remark}
+
+%======================================================================
+\section{Trust systems and canonical trust}
+%======================================================================
+
+\begin{definition}[Trust system]\label{def:system}
+Let $C$ be a type of claims and let $T$ be a chain. A \textbf{trust
+system}~$S$ over~$C$ graded in~$T$ consists of
+\begin{enumerate}
+  \item a type $\mathrm{Step}$ of checking steps;
+  \item a conclusion map $\mathrm{concl} : \mathrm{Step} \to C$;
+  \item a premise list $\mathrm{prems} : \mathrm{Step} \to \mathrm{List}(C)$;
+  \item a grade map $\mathrm{grade} : \mathrm{Step} \to T$;
+  \item for each claim~$x$, a finite list $\mathrm{stepsInto}(x)$ of steps
+        concluding~$x$, such that
+        $f \in \mathrm{stepsInto}(x)$ if and only if $\mathrm{concl}(f) = x$.
+\end{enumerate}
+\end{definition}
+
+\begin{definition}[Premise relation]\label{def:prem}
+The \textbf{premise relation} $\Prem_S \subseteq C \times C$ is defined by
+\[
+  y \;\Prem_S\; x
+  \quad\Longleftrightarrow\quad
+  \exists\, f \in \mathrm{stepsInto}(x)
+  \text{ with } y \in \mathrm{prems}(f).
+\]
+Well-foundedness of $\Prem_S$ is the standing hypothesis for the
+certificate lemma below.
+\end{definition}
+
+\begin{definition}[Step grade]\label{def:stepgrade}
+Given an assignment $t : C \to T$, the \textbf{grade conferred by a
+step}~$f$ under~$t$ is the meet of the step's own grade with the assigned
+levels of its premises:
+\begin{equation}
+  \mathrm{stepGrade}_S(t,f)
+  \;=\;
+  \mathrm{foldr}_{\cmin}\bigl(
+    t\bigl(\mathrm{prems}(f)\bigr),\;
+    \mathrm{grade}(f)
+  \bigr).
+\end{equation}
+\end{definition}
+
+\begin{definition}[Canonical trust]\label{def:tau}
+Assume $\Prem_S$ is well-founded. The \textbf{canonical trust}
+$\tauCan_S : C \to T$ is defined by well-founded recursion on~$\Prem_S$:
+\begin{equation}
+  \tauCan_S(x)
+  \;=\;
+  \mathrm{foldr}_{\cmax}\Bigl(
+    \bigl\{\,
+      \mathrm{stepGrade}_S(\tauCan_S, f)
+      \bigm|\,
+      f \in \mathrm{stepsInto}(x)
+    \,\bigr\},\;
+    \bott
+  \Bigr).
+\end{equation}
+In words: $\tauCan_S(x)$ is the best step into~$x$, valued at its step-grade
+under~$\tauCan_S$ itself.
+\end{definition}
+
+\begin{definition}[Sound assignment]\label{def:sound}
+An assignment $t : C \to T$ is \textbf{sound} if every claim trusted above
+bottom carries a node-local certificate: for every $x$ with $t(x) \ne \bott$,
+there exists $f \in \mathrm{stepsInto}(x)$ such that
+\[
+  t(x) \;\le\; \mathrm{stepGrade}_S(t, f).
+\]
+\end{definition}
+
+\begin{theorem}[Certificate lemma, upper bound]\label{thm:sound-le-tau}
+Assume $\Prem_S$ is well-founded. Every sound assignment is bounded by
+canonical trust: if $t$ is sound, then
+\[
+  t(x) \;\le\; \tauCan_S(x)
+  \qquad\text{for every claim } x.
+\]
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[Certificate lemma, soundness of $\tau$]\label{thm:tau-sound}
+Assume $\Prem_S$ is well-founded. Canonical trust is itself sound.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{corollary}[Greatest sound assignment]\label{cor:greatest}
+Under well-foundedness of $\Prem_S$, the assignment $\tauCan_S$ is the
+greatest sound assignment of grades to claims.
+\end{corollary}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+The soundness of~$\tau$ uses attainment of finite joins, hence totality of
+the chain. The upper bound (Theorem~\ref{thm:sound-le-tau}) would hold more
+generally.
+\end{remark}
+
+%======================================================================
+\section{Derivations and the max--min semantics}
+%======================================================================
+
+\begin{definition}[Derivation]\label{def:deriv}
+A \textbf{derivation} of a claim~$x$ in a trust system~$S$ is a checking
+step~$f$ with $\mathrm{concl}(f) = x$, together with a derivation of each
+premise of~$f$:
+\begin{equation}
+  \frac{
+    f : \mathrm{Step}
+    \qquad
+    \bigl(\forall\, y \in \mathrm{prems}(f).\;
+      \Deriv_S(y)\bigr)
+  }{
+    \Deriv_S\bigl(\mathrm{concl}(f)\bigr)
+  }\,.
+\end{equation}
+\end{definition}
+
+\begin{definition}[Derivation grade]\label{def:derivgrade}
+The \textbf{grade of a derivation} is the meet of every step-grade in the
+derivation tree (the weakest link): for a node with step~$f$ and
+sub-derivations of grades $g_y$,
+\begin{equation}
+  \mathrm{derivGrade}\bigl(\mathrm{node}(f, \mathrm{sub})\bigr)
+  \;=\;
+  \mathrm{foldPrems}\bigl(
+    \mathrm{prems}(f),\;
+    y \mapsto \mathrm{derivGrade}(\mathrm{sub}_y),\;
+    \mathrm{grade}(f)
+  \bigr).
+\end{equation}
+\end{definition}
+
+\begin{theorem}[Fixpoint dominates derivations]\label{thm:deriv-le-tau}
+Assume $\Prem_S$ is well-founded. For every derivation~$d$ of a claim~$x$,
+\[
+  \mathrm{derivGrade}(d) \;\le\; \tauCan_S(x).
+\]
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[Attainment by a derivation]\label{thm:tau-le-deriv}
+Assume $\Prem_S$ is well-founded. If $\tauCan_S(x) \ne \bott$, then there
+exists a derivation~$d$ of~$x$ such that
+\[
+  \tauCan_S(x) \;\le\; \mathrm{derivGrade}(d).
+\]
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{corollary}[Agreement of fixpoint and max--min forms]
+\label{cor:agree}
+Under well-foundedness, the fixpoint form of~$\tau$ and the
+max-over-derivations of min-over-grades semantics coincide: whenever
+$\tauCan_S(x) \ne \bott$, the value $\tauCan_S(x)$ is attained by some
+derivation and bounds every derivation from above.
+\end{corollary}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{Morphisms and transport of trust}
+%======================================================================
+
+\begin{definition}[Morphism of trust systems]\label{def:mor}
+Let $S$ be a trust system over claims~$C$ graded in a chain~$T$, and let
+$S'$ be a trust system over claims~$C'$ graded in a chain~$T'$. A
+\textbf{morphism} $M : S \to S'$ consists of
+\begin{enumerate}
+  \item a map on claims $F : C \to C'$;
+  \item a map on steps $F_{\mathrm{Step}} : \mathrm{Step}_S \to
+        \mathrm{Step}_{S'}$;
+  \item a map on grades $\phi : T \to T'$ that is monotone,
+        satisfies $\phi(\bott) = \bott$, and is lax on step grades:
+        \[
+          \phi\bigl(\mathrm{grade}_S(f)\bigr)
+          \;\le\;
+          \mathrm{grade}_{S'}\bigl(F_{\mathrm{Step}}(f)\bigr);
+        \]
+  \item premise preservation:
+        $\mathrm{prems}_{S'}(F_{\mathrm{Step}}(f))
+         = F\bigl(\mathrm{prems}_S(f)\bigr)$;
+  \item step-membership preservation:
+        if $f \in \mathrm{stepsInto}_S(x)$, then
+        $F_{\mathrm{Step}}(f) \in \mathrm{stepsInto}_{S'}(F(x))$.
+\end{enumerate}
+\end{definition}
+
+\begin{remark}
+Strictness of~$\phi$ at bottom---``unchecked maps to unchecked''---is
+essential. Monotonicity alone fails when a source claim has no derivation
+but $\phi(\bott)$ exceeds the target's bottom.
+\end{remark}
+
+\begin{theorem}[Lax transport of trust]\label{thm:tau-transport}
+Let $M : S \to S'$ be a morphism, and assume both premise relations are
+well-founded. Then for every claim~$x$,
+\begin{equation}
+  \phi\bigl(\tauCan_S(x)\bigr)
+  \;\le\;
+  \tauCan_{S'}\bigl(F(x)\bigr).
+\end{equation}
+Importing along a morphism never claims more than the image under~$\phi$
+of the source's canonical trust.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{The circular-citation counterexample}
+%======================================================================
+
+Well-foundedness of the premise relation is load-bearing. We exhibit a
+two-claim cycle in which every node-local certificate passes, yet no
+derivation exists at all.
+
+\begin{definition}[Two-level chain]\label{def:two}
+Let $\mathbf{Two} = \{\mathrm{lo}, \mathrm{hi}\}$ with
+$\mathrm{lo} \le \mathrm{hi}$ (and $\mathrm{lo} = \bott$).
+\end{definition}
+
+\begin{definition}[Circular system]\label{def:cyc}
+Let claims be booleans $\mathbb{B} = \{\mathsf{true}, \mathsf{false}\}$.
+Define a trust system $\mathrm{cyc}$ over $\mathbb{B}$ graded in
+$\mathbf{Two}$ by: the unique step into a claim~$x$ has single premise
+$\neg x$ and grade~$\mathrm{hi}$.
+\end{definition}
+
+\begin{proposition}[Constant-top is sound]\label{prop:cyc-sound}
+The constant assignment $t(x) = \mathrm{hi}$ is sound on~$\mathrm{cyc}$.
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{proposition}[No derivations]\label{prop:cyc-no-deriv}
+No claim in~$\mathrm{cyc}$ admits any derivation.
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{proposition}[Premise relation not well-founded]\label{prop:cyc-not-wf}
+The premise relation of~$\mathrm{cyc}$ is not well-founded.
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+Circular citation is trust inflation invisible to any local check:
+well-foundedness is a global hypothesis and must be checked globally. The
+certificate lemma does not apply---as it must not.
+\end{remark}
+
+%======================================================================
+\section{Consolidation preserves trust}
+%======================================================================
+
+Consolidation restates claims (a shape map) and, when done with provenance,
+carries a position map: every checking step into a consolidated claim pulls
+back to a checking step into each source claim, with corresponding
+premises and a cached grade not exceeding the source grade.
+
+\begin{definition}[Consolidation]\label{def:consolidation}
+A \textbf{consolidation} $K$ from a trust system~$S$ over~$C$ to a trust
+system~$S'$ over~$C'$, both graded in the same chain~$T$, consists of
+\begin{enumerate}
+  \item a map on claims $F : C \to C'$;
+  \item a forward map on steps $F_{\mathrm{Step}} : \mathrm{Step}_S \to
+        \mathrm{Step}_{S'}$ preserving premises (after applying~$F$),
+        lax on grades ($S.\mathrm{grade}(f) \le
+        S'.\mathrm{grade}(F_{\mathrm{Step}}(f))$), and preserving
+        step-membership;
+  \item a backward map on positions: for each $x \in C$ and each step
+        $f' \in \mathrm{stepsInto}_{S'}(F(x))$, a step
+        $\mathrm{posn}(f') \in \mathrm{stepsInto}_S(x)$ such that
+        \[
+          \mathrm{prems}_{S'}(f')
+          \;=\;
+          F\bigl(\mathrm{prems}_S(\mathrm{posn}(f'))\bigr)
+        \]
+        and
+        \[
+          S'.\mathrm{grade}(f')
+          \;\le\;
+          S.\mathrm{grade}\bigl(\mathrm{posn}(f')\bigr).
+        \]
+\end{enumerate}
+The position map is indexed by the preimage~$x$: when consolidation merges
+claims, every justification of the merged claim must pull back on
+\emph{each} side.
+\end{definition}
+
+\begin{remark}
+The definition of consolidation never mentions~$\tau$. The condition is
+bisimulation-style and node-local; preservation of canonical trust is a
+theorem, not a definition.
+\end{remark}
+
+\begin{proposition}[Forward half is a morphism]\label{prop:to-mor}
+Every consolidation determines a morphism of trust systems at
+$\phi = \mathrm{id}_T$.
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{lemma}[No trust inflation]\label{lem:tau-le}
+Let $K$ be a consolidation from~$S$ to~$S'$, and assume both premise
+relations are well-founded. Then for every claim~$x$,
+\[
+  \tauCan_{S'}\bigl(F(x)\bigr)
+  \;\le\;
+  \tauCan_S(x).
+\]
+\end{lemma}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[Consolidation preservation]\label{thm:tau-consolidate}
+Let $K$ be a consolidation from~$S$ to~$S'$, and assume both premise
+relations are well-founded. Then for every claim~$x$,
+\begin{equation}
+  \tauCan_{S'}\bigl(F(x)\bigr)
+  \;=\;
+  \tauCan_S(x).
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+The forward inequality is lax transport at $\phi = \mathrm{id}$; the
+backward inequality is Lemma~\ref{lem:tau-le}, using the position map to
+pull every target justification back to the source.
+\end{remark}
+
+%======================================================================
+\section{Composition of consolidations}
+%======================================================================
+
+\begin{definition}[Identity consolidation]\label{def:id-consol}
+The identity consolidation on a trust system~$S$ has identity maps on
+claims and steps, and identity position pullbacks, with exact (not merely
+lax) grade caches.
+\end{definition}
+
+\begin{definition}[Composition of consolidations]\label{def:comp-consol}
+If $K : S \to S'$ and $L : S' \to S''$ are consolidations (same chain~$T$),
+their composite $K ; L : S \to S''$ has
+\begin{itemize}
+  \item shapes composed covariantly:
+        $F_{K;L} = F_L \circ F_K$,
+        $(F_{\mathrm{Step}})_{K;L} =
+         (F_{\mathrm{Step}})_L \circ (F_{\mathrm{Step}})_K$;
+  \item positions composed contravariantly:
+        $\mathrm{posn}_{K;L}(f'') =
+         \mathrm{posn}_K\bigl(\mathrm{posn}_L(f'')\bigr)$;
+  \item cached grades chained by transitivity of~$\le$.
+\end{itemize}
+\end{definition}
+
+\begin{theorem}[End-to-end preservation]\label{thm:comp-preserve}
+If $K : S \to S'$ and $L : S' \to S''$ are consolidations and all three
+premise relations are well-founded, then for every claim~$x$,
+\begin{equation}
+  \tauCan_{S''}\bigl((K;L)(x)\bigr)
+  \;=\;
+  \tauCan_S(x).
+\end{equation}
+Moreover, the equation factors as the conjunction of the two layer-wise
+preservations.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+Position maps compose as plain functions between step types---cofunctor
+composition---not via a comonadic duplicate. Trust is preserved end-to-end
+if and only if it is preserved layer by layer.
+\end{remark}
+
+%======================================================================
+\section{The shape-only counterexample}
+%======================================================================
+
+A consolidation that restates claims but drops checking steps is not a
+consolidation in the sense of Definition~\ref{def:consolidation}, and
+trust degrades.
+
+\begin{definition}[Ground system]\label{def:ground}
+Let $\mathrm{ground}$ be the trust system over a singleton claim set with
+a single ground checking step graded~$\mathrm{hi}$ (empty premises).
+\end{definition}
+
+\begin{definition}[Shape-only target]\label{def:layer4}
+Let $\mathrm{layer4}$ be the trust system over a singleton claim set with
+\emph{no} checking steps at all.
+\end{definition}
+
+\begin{proposition}\label{prop:ground-layer4}
+Both premise relations are well-founded (they are empty). Moreover
+\[
+  \tauCan_{\mathrm{ground}}(\ast) \;=\; \mathrm{hi},
+  \qquad
+  \tauCan_{\mathrm{layer4}}(\ast) \;=\; \bott.
+\]
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+No consolidation $\mathrm{ground} \to \mathrm{layer4}$ can exist: there is
+no target step for the forward step map to hit. If one did, Theorem
+\ref{thm:tau-consolidate} would force
+$\tauCan_{\mathrm{layer4}}(\ast) = \mathrm{hi}$, contradicting the
+computation above. Shape-only restatement without position pullbacks is
+precisely the failure mode that degrades trust from top to bottom.
+\end{remark}
+
+%======================================================================
+\section{Discussion}
+%======================================================================
+
+\paragraph{What has been established.}
+Canonical trust is the greatest sound assignment of check grades to
+claims, equivalently the max--min grade over the derivation tree, under
+well-foundedness of the premise relation. Morphisms transport trust
+laxly; consolidations with genuine position maps preserve it exactly and
+compose.
+
+\paragraph{Corrections discovered by formalisation.}
+Two hypotheses, invisible or underspecified in informal prose, are forced
+by the machine-checked development:
+\begin{enumerate}
+  \item the check-poset must be a chain (for attainment of finite joins
+        in the soundness of~$\tau$);
+  \item morphisms must send bottom to bottom (for transport on
+        underivable claims).
+\end{enumerate}
+
+\paragraph{Machine checking.}
+Every definition and theorem statement above corresponds to a declaration
+in a machine-checked formalisation. The phrase ``by lean'' indicates that
+the proof has been verified by a proof assistant. A mathematician reading
+this note need only verify that the English statements match the intended
+mathematics.
+
+%======================================================================
+\section*{Acknowledgements}
+%======================================================================
+
+The presentation here is a prose rendering of a formal development
+intended for human review of the theorem statements.
+
+\end{document}

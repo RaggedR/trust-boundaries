@@ -1,0 +1,451 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath,amsthm,mathtools}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{parskip}
+\usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
+
+% Theorem environments (arXiv / journal style)
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{remark}[theorem]{Remark}
+
+% Notation
+\newcommand{\Ext}{\mathrm{Ext}}
+\newcommand{\Shape}{\mathrm{Shape}}
+\newcommand{\Pos}{\mathrm{Pos}}
+\newcommand{\Type}{\mathbf{Type}}
+\newcommand{\id}{\mathrm{id}}
+\newcommand{\Cont}{\mathbf{Cont}}
+\newcommand{\compop}{\mathbin{\triangleleft}}
+
+\title{Container Composition and Its\\
+  Monoidal Structure}
+\author{Extracted from a machine-checked development}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We equip the category of containers with the composition product
+$G\compop F$, the operation whose extension is composition of the induced
+polynomial functors: $\Ext(G\compop F)=\Ext\,G\circ\Ext\,F$. The unit is the
+identity container $I$ with a single shape and a single position. We construct
+the left and right unitors $I\compop F\cong F$ and $F\compop I\cong F$, and
+the associator $(H\compop G)\compop F\cong H\compop(G\compop F)$, as
+isomorphisms of containers. All dependent types arising in the construction
+agree definitionally, so the monoidal coherences involve no transport. The
+proofs of all stated results have been machine-checked; we record only the
+mathematical content.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%======================================================================
+\section{Introduction}
+%======================================================================
+
+Containers classify polynomial endofunctors on types. Their morphisms form a
+category $\Cont$. Beyond products and coproducts, $\Cont$ carries a monoidal
+structure whose tensor encodes \emph{composition of functors}: if $F$ and $G$
+are containers, there is a composite container $G\compop F$ (``$G$ outside,
+$F$ inside'') satisfying
+\[
+  \Ext\,(G\compop F) \;=\; \Ext\,G \;\circ\; \Ext\,F
+\]
+as endofunctors of $\Type$. The unit for this product is the identity
+container $I$, whose extension is the identity functor.
+
+This monoidal structure is the spine of the directed-container programme: a
+$\compop$-comonoid in $\Cont$ is precisely a directed container (equivalently,
+a comonad on types whose underlying functor is a container). The present note
+develops the monoidal data itself---the product, the unit, the unitors, and
+the associator---leaving the comonoid correspondence as an organising remark.
+
+\paragraph{What this note claims.}
+In ordinary mathematical language: containers admit a composition product
+whose shapes are outer shapes paired with assignments of inner shapes to outer
+positions, and whose positions are pairs of an outer position and an inner
+position in the assigned shape. Extension turns this product into functor
+composition. The unitors and associator are isomorphisms of containers, and
+they are transport-free because the relevant dependent sums reassociate
+definitionally.
+
+%======================================================================
+\section{Preliminaries}
+%======================================================================
+
+We work in a single universe $\Type$. A \textbf{container} $C$ consists of a
+shape type $\Shape(C)$ and a position family $\Pos(C)$. Its \textbf{extension}
+at a type $X$ is
+\[
+  \Ext\,C\,X \;=\; \sum_{s\,:\,\Shape(C)}\bigl(\Pos(C)(s)\to X\bigr).
+\]
+A \textbf{morphism of containers} $\varphi:C\Rightarrow D$ consists of a
+forward map on shapes and a contravariant map on positions. Containers and
+their morphisms form a category $\Cont$ (as in the companion note on the
+category of containers).
+
+\begin{definition}[Isomorphism of containers]\label{def:iso}
+An \textbf{isomorphism of containers} $C\cong D$ is a pair of morphisms
+$\mathrm{hom}:C\Rightarrow D$ and $\mathrm{inv}:D\Rightarrow C$ that are
+mutually inverse:
+\begin{equation}
+  \mathrm{inv}\circ\mathrm{hom} \;=\; \id_C,
+  \qquad
+  \mathrm{hom}\circ\mathrm{inv} \;=\; \id_D.
+\end{equation}
+\end{definition}
+
+\begin{remark}
+The unitors and associator below are isomorphisms, not equalities: the
+underlying shape types are only bijective (for instance
+$(1\to S)\cong S$), not definitionally identical.
+\end{remark}
+
+%======================================================================
+\section{The composition product}
+%======================================================================
+
+\begin{definition}[Container composition]\label{def:comp}
+Let $G=(T,Q)$ and $F=(S,P)$ be containers. Their \textbf{composition}
+$G\compop F$ (``$G$ outside, $F$ inside'') is the container with
+\begin{enumerate}
+  \item shapes
+        \[
+          \sum_{t\,:\,T}\bigl(Q(t)\to S\bigr)
+          \qquad
+          \text{(outer shape + assignment of inner shapes to outer positions),}
+        \]
+  \item positions at $\langle t,\,f\rangle$ given by
+        \[
+          \sum_{q\,:\,Q(t)} P\bigl(f(q)\bigr)
+          \qquad
+          \text{(outer position + inner position in the shape at that position).}
+        \]
+\end{enumerate}
+\end{definition}
+
+\begin{definition}[Identity container]\label{def:I}
+The \textbf{identity container} $I$ has shape type $1$ (a singleton) and a
+single position at the unique shape. Its extension is the identity functor on
+$\Type$, and it is the unit for $\compop$.
+\end{definition}
+
+\begin{example}
+If $F$ presents lists and $G$ presents non-empty lists, then $G\compop F$
+presents non-empty lists of lists: an outer length together with an inner
+list-length at each outer index, and positions that pick an outer index and
+then an offset in the corresponding inner list.
+\end{example}
+
+%======================================================================
+\section{Extension is functor composition}
+%======================================================================
+
+The defining property of $\compop$ is that extension turns it into composition
+of functors.
+
+\begin{definition}[Forward comparison]\label{def:comp-ext}
+For containers $G$ and $F$ and a type $X$, the map
+\begin{equation}
+  \kappa_X \;:\;
+  \Ext\,(G\compop F)\,X
+  \;\longrightarrow\;
+  \Ext\,G\bigl(\Ext\,F\,X\bigr)
+\end{equation}
+sends $\bigl\langle\langle t,f\rangle,\,v\bigr\rangle$ to
+\begin{equation}
+  \Bigl\langle
+    t,\;
+    q \mapsto
+    \bigl\langle
+      f(q),\;
+      r \mapsto v\langle q,\,r\rangle
+    \bigr\rangle
+  \Bigr\rangle.
+\end{equation}
+It regroups a labelling of the nested position sum as an outer structure of
+inner structures.
+\end{definition}
+
+\begin{definition}[Backward comparison]\label{def:comp-ext-inv}
+The inverse map
+\begin{equation}
+  \kappa_X^{-1} \;:\;
+  \Ext\,G\bigl(\Ext\,F\,X\bigr)
+  \;\longrightarrow\;
+  \Ext\,(G\compop F)\,X
+\end{equation}
+sends $\langle t,\,m\rangle$ to
+\begin{equation}
+  \Bigl\langle
+    \bigl\langle t,\; q\mapsto \pi_1(m(q))\bigr\rangle,\;
+    \langle q,r\rangle \mapsto \pi_2(m(q))(r)
+  \Bigr\rangle.
+\end{equation}
+\end{definition}
+
+\begin{theorem}[Round-trip, composite side]\label{thm:comp-rt-1}
+For every element $p\in\Ext\,(G\compop F)\,X$,
+\begin{equation}
+  \kappa_X^{-1}\bigl(\kappa_X(p)\bigr) \;=\; p.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[Round-trip, functor side]\label{thm:comp-rt-2}
+For every element $p\in\Ext\,G\bigl(\Ext\,F\,X\bigr)$,
+\begin{equation}
+  \kappa_X\bigl(\kappa_X^{-1}(p)\bigr) \;=\; p.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{corollary}[Extension preserves composition]\label{cor:ext-comp}
+For any containers $G$ and $F$ and any type $X$, there is a natural bijection
+\begin{equation}
+  \Ext\,(G\compop F)\,X
+  \;\cong\;
+  \Ext\,G\bigl(\Ext\,F\,X\bigr).
+\end{equation}
+In other words, $\Ext\,(G\compop F)=\Ext\,G\circ\Ext\,F$ as endofunctors of
+$\Type$, up to the natural isomorphism $\kappa$.
+\end{corollary}
+
+\begin{proof}
+By lean. (The two maps are mutually inverse by Theorems~\ref{thm:comp-rt-1}
+and~\ref{thm:comp-rt-2}.)
+\end{proof}
+
+\begin{remark}
+Both fibres agree definitionally: a position
+$\langle q,r\rangle$ of $G\compop F$ at $\langle t,f\rangle$ is an element of
+$P(f(q))$, and the corresponding position in the nested extension is the same
+element. The round trips therefore hold after a case analysis on the nested
+pairs, with no transport.
+\end{remark}
+
+%======================================================================
+\section{The left unitor}
+%======================================================================
+
+A shape of $I\compop F$ is a pair $\langle \ast,\, f\rangle$ with
+$f:1\to\Shape(F)$; the bijection with $\Shape(F)$ evaluates $f$ at the unique
+point (forward) or forms the constant assignment (backward). Positions
+transport along the same collapse of $1$.
+
+\begin{definition}[Left unitor]\label{def:left-unitor}
+For a container $F$, the \textbf{left unitor} is the isomorphism of containers
+\begin{equation}
+  \lambda_F \;:\; I\compop F \;\cong\; F
+\end{equation}
+with
+\begin{enumerate}
+  \item forward shape map $\langle\ast,\,f\rangle\mapsto f(\ast)$, and
+        forward position map $p\mapsto\langle\ast,\,p\rangle$;
+  \item backward shape map $s\mapsto\langle\ast,\,\text{constant at }s\rangle$,
+        and backward position map $\langle\ast,\,p\rangle\mapsto p$.
+\end{enumerate}
+\end{definition}
+
+\begin{theorem}[Left unitor is an isomorphism]\label{thm:left-unitor}
+The morphisms of Definition~\ref{def:left-unitor} are mutually inverse:
+\begin{equation}
+  \lambda_F^{-1}\circ\lambda_F \;=\; \id_{I\compop F},
+  \qquad
+  \lambda_F\circ\lambda_F^{-1} \;=\; \id_F.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{The right unitor}
+%======================================================================
+
+A shape of $F\compop I$ is a pair $\langle s,\,g\rangle$ with
+$g:\Pos(F)(s)\to 1$; the first projection is a bijection with $\Shape(F)$,
+since there is a unique map to $1$. Positions
+$\sum_{p\,:\,\Pos(F)(s)}1$ collapse to $\Pos(F)(s)$.
+
+\begin{definition}[Right unitor]\label{def:right-unitor}
+For a container $F$, the \textbf{right unitor} is the isomorphism of containers
+\begin{equation}
+  \rho_F \;:\; F\compop I \;\cong\; F
+\end{equation}
+with
+\begin{enumerate}
+  \item forward shape map $\langle s,\,g\rangle\mapsto s$, and
+        forward position map $p\mapsto\langle p,\,\ast\rangle$;
+  \item backward shape map $s\mapsto\langle s,\,\text{unique map to }1\rangle$,
+        and backward position map $\langle p,\,\ast\rangle\mapsto p$.
+\end{enumerate}
+\end{definition}
+
+\begin{theorem}[Right unitor is an isomorphism]\label{thm:right-unitor}
+The morphisms of Definition~\ref{def:right-unitor} are mutually inverse:
+\begin{equation}
+  \rho_F^{-1}\circ\rho_F \;=\; \id_{F\compop I},
+  \qquad
+  \rho_F\circ\rho_F^{-1} \;=\; \id_F.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{The associator}
+%======================================================================
+
+The heart of the monoidal structure is the reassociation of nested
+compositions.
+
+\begin{definition}[Associator]\label{def:associator}
+Let $H$, $G$, and $F$ be containers. The \textbf{associator} is the
+isomorphism of containers
+\begin{equation}
+  \alpha_{H,G,F} \;:\;
+  (H\compop G)\compop F
+  \;\cong\;
+  H\compop(G\compop F)
+\end{equation}
+described as follows.
+
+\paragraph{Shapes.}
+A shape of the left side is
+$\bigl\langle\langle a,\,g\rangle,\,k\bigr\rangle$ with
+$g:\Pos(H)(a)\to\Shape(G)$ and
+$k:\bigl(\sum_{u\,:\,\Pos(H)(a)}\Pos(G)(g(u))\bigr)\to\Shape(F)$.
+A shape of the right side is $\langle a,\,m\rangle$ with
+$m:\Pos(H)(a)\to\sum_{b\,:\,\Shape(G)}\bigl(\Pos(G)(b)\to\Shape(F)\bigr)$.
+The forward map \emph{curries}:
+\[
+  m(u) \;=\; \bigl\langle g(u),\; v\mapsto k\langle u,\,v\rangle\bigr\rangle;
+\]
+the backward map uncurries:
+\[
+  g(u)=(m(u))_1,\qquad
+  k\langle u,\,v\rangle=(m(u))_2(v).
+\]
+
+\paragraph{Positions.}
+On positions the isomorphism is the reassociation of a nested dependent sum:
+\begin{equation}
+  \bigl\langle\langle u,\,v\rangle,\,p\bigr\rangle
+  \;\longleftrightarrow\;
+  \bigl\langle u,\;\langle v,\,p\rangle\bigr\rangle.
+\end{equation}
+\end{definition}
+
+\begin{remark}[Definitional agreement of fibres]
+The fibre $\Pos(F)\bigl((m(u))_2(v)\bigr)$ on the right is
+\emph{definitionally} $\Pos(F)\bigl(k\langle u,\,v\rangle\bigr)$ on the left.
+No transport is needed; the round trips close by case analysis on the nested
+pairs.
+\end{remark}
+
+\begin{theorem}[Associator is an isomorphism]\label{thm:associator}
+The morphisms of Definition~\ref{def:associator} are mutually inverse:
+\begin{equation}
+  \alpha^{-1}\circ\alpha \;=\; \id_{(H\compop G)\compop F},
+  \qquad
+  \alpha\circ\alpha^{-1} \;=\; \id_{H\compop(G\compop F)}.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{Discussion}
+%======================================================================
+
+\paragraph{What has been established.}
+The composition product $G\compop F$ is a well-defined operation on containers
+whose extension is functor composition. The identity container is a two-sided
+unit up to isomorphism, and composition is associative up to isomorphism. All
+three coherences are transport-free isomorphisms of containers.
+
+\paragraph{Monoidal structure.}
+Taken together, $(\Cont,\,\compop,\,I)$ with the unitors $\lambda$, $\rho$ and
+associator $\alpha$ is a monoidal category (the remaining coherence diagrams---
+triangle and pentagon---are not formalised in the source development and are
+not claimed here). The isomorphisms themselves are fully constructed and
+verified.
+
+\paragraph{Directed containers as comonoids.}
+A $\compop$-comonoid in $\Cont$---a container $C$ with a counit
+$C\Rightarrow I$ and a comultiplication $C\Rightarrow C\compop C$ satisfying
+the comonoid laws---is exactly a directed container (equivalently, a comonad
+on types whose underlying functor is a container). Unfolding the comonoid laws
+recovers the directed-container axioms D1--D5. This identifies
+$(\Cont,\,\compop,\,I)$ as the home of directed containers as the comonoids of
+container composition. The equivalence is the organising principle of the
+broader development; the present note supplies the monoidal substrate.
+
+\paragraph{Machine checking.}
+Every definition and theorem statement above corresponds to a declaration in a
+machine-checked formalisation. The phrase ``by lean'' indicates that the proof
+has been verified by a proof assistant.
+
+%======================================================================
+\section*{Acknowledgements}
+%======================================================================
+
+The mathematical content follows the theory of containers of Abbott,
+Altenkirch, and Ghani, and the directed-container programme of Ahman, Chapman,
+and Uustalu. The presentation here is a prose rendering of a formal
+development intended for human review of the theorem statements.
+
+\begin{thebibliography}{9}
+
+\bibitem{abbott2003}
+M.~Abbott, T.~Altenkirch, and N.~Ghani.
+\newblock Categories of containers.
+\newblock In \emph{FoSSaCS}, volume~2620 of \emph{LNCS}, pages 23--38.
+\newblock Springer, 2003.
+
+\bibitem{abbott2005}
+M.~Abbott, T.~Altenkirch, and N.~Ghani.
+\newblock Containers: constructing strictly positive types.
+\newblock \emph{Theoretical Computer Science}, 342(1):3--27, 2005.
+
+\bibitem{ahman2012}
+D.~Ahman, J.~Chapman, and T.~Uustalu.
+\newblock When is a container a comonad?
+\newblock In \emph{FoSSaCS}, volume~7213 of \emph{LNCS}, pages 74--88.
+\newblock Springer, 2012.
+
+\bibitem{ahman2014}
+D.~Ahman, J.~Chapman, and T.~Uustalu.
+\newblock When is a container a comonad?
+\newblock \emph{Logical Methods in Computer Science}, 10(3), 2014.
+
+\end{thebibliography}
+
+\end{document}

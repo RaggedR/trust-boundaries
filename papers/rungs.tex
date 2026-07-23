@@ -1,0 +1,337 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath,amsthm,mathtools}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{parskip}
+\usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
+
+% Theorem environments (arXiv / journal style)
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{remark}[theorem]{Remark}
+
+% Notation
+\newcommand{\Shape}{\mathrm{Shape}}
+\newcommand{\Pos}{\mathrm{Pos}}
+\newcommand{\Type}{\mathbf{Type}}
+\newcommand{\id}{\mathrm{id}}
+\newcommand{\src}{\mathrm{src}}
+\newcommand{\tgt}{\mathrm{tgt}}
+\newcommand{\rootpos}{\mathrm{root}}
+\newcommand{\sub}{\mathrm{sub}}
+\newcommand{\shift}{\mathrm{shift}}
+\newcommand{\N}{\mathbb{N}}
+
+\title{The DAG and Graph Rungs:\\
+  Failure of Thinness and Finiteness}
+\author{Extracted from a machine-checked development}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+The network directed container of a polytree is thin and has finite position
+sets whenever the underlying graph is finite and acyclic. Both conclusions
+fail as soon as one leaves the polytree rung of the structural ladder. We
+exhibit two elementary counterexamples. First, extending a wine-shipping
+graph by a Singapore transshipment produces a directed acyclic graph with two
+distinct routes between the same ports, so the network is not thin. Second, a
+two-node scrap-metal cycle yields infinitely many positions at a single node
+(one per number of laps) and a nontrivial endomorphism. The proofs of all
+stated results have been machine-checked; we record only the mathematical
+content.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%======================================================================
+\section{Introduction}
+%======================================================================
+
+Directed containers of shipping networks sit on a ladder of structural
+hypotheses. At the polytree rung, paths between nodes are unique and position
+sets of finite graphs are finite. Climbing the ladder---first to directed
+acyclic graphs that are not polytrees, then to graphs with directed
+cycles---destroys these properties in turn.
+
+The present note records two negative results that mark those rungs.
+\begin{enumerate}
+  \item \textbf{DAG rung.} On a directed acyclic graph obtained by adding a
+        Singapore transshipment alternative to a direct Melbourne--Thailand sea
+        leg, there are two distinct paths between the same endpoints. Hence
+        $\mathrm{network}(G)$ is not thin.
+  \item \textbf{Graph rung.} On a two-node directed cycle modelling a scrap
+        loop between a rolling mill and a melt shop, the set of positions at
+        the rolling mill is infinite: the map sending $n \in \N$ to the path
+        that traverses the cycle $n$ times is injective. The one-lap path is a
+        nontrivial endomorphism (distinct from the root).
+\end{enumerate}
+
+The development works throughout in a single universe of types. Proofs are
+indicated by the phrase ``by lean,'' meaning they have been checked by a proof
+assistant rather than written out in prose.
+
+\paragraph{What this note claims.}
+In ordinary mathematical language: acyclicity alone does not imply unique
+paths, and the presence of a directed cycle yields infinitely many endomorphisms
+at a node of the free category. Both phenomena are witnessed by fully explicit
+finite graphs and fully explicit paths.
+
+%======================================================================
+\section{Preliminaries}
+%======================================================================
+
+We work with directed graphs and their path types as in the network
+development: nodes~$V$, edges~$E$, endpoint maps $\src$ and $\tgt$, and
+inductively defined finite directed paths with concatenation. The network
+directed container $\mathrm{network}(G)$ has shapes $V$ and positions at~$v$
+given by endpoint--path pairs $\sum_w \mathrm{Path}_G(v,w)$.
+
+\begin{definition}[Path length]\label{def:path-len}
+The \textbf{length} $\lvert p\rvert$ of a path~$p$ is the number of edges it
+contains: $\lvert\mathrm{nil}(v)\rvert = 0$ and
+$\lvert\mathrm{cons}(e,p)\rvert = \lvert p\rvert + 1$.
+\end{definition}
+
+Length is a convenient invariant for distinguishing paths without comparing
+them edge by edge.
+
+%======================================================================
+\section{The DAG rung: two routes via Singapore}
+%======================================================================
+
+We extend the eleven-facility Sawasdee Cellars shipping graph by a Singapore
+transshipment option between Melbourne Port and Thai Port.
+
+\begin{definition}[Extended Sawasdee graph]\label{def:G-prime}
+Let $G'$ be the directed graph whose nodes are the original eleven facilities
+together with an additional node $\mathrm{singapore}$, and whose edges are the
+original ten shipping legs together with two new legs
+\begin{align*}
+  \mathrm{sing}_1 &\;:\; \mathrm{melbournePort} \to \mathrm{singapore}, \\
+  \mathrm{sing}_2 &\;:\; \mathrm{singapore} \to \mathrm{thaiPort}.
+\end{align*}
+The original direct sea leg
+$\mathrm{sea} : \mathrm{melbournePort} \to \mathrm{thaiPort}$ is retained. The
+graph $G'$ is acyclic (it remains a DAG) but is no longer a polytree: the two
+outgoing edges $\mathrm{sea}$ and $\mathrm{sing}_1$ from Melbourne Port reconverge
+at Thai Port.
+\end{definition}
+
+\begin{definition}[Two paths]\label{def:two-paths}
+Define paths in $G'$ from $\mathrm{melbournePort}$ to $\mathrm{thaiPort}$ by
+\begin{align}
+  \rho_{\mathrm{direct}}
+  &\;=\;
+  \mathrm{cons}\bigl(\mathrm{sea},\, \mathrm{nil}(\mathrm{thaiPort})\bigr),
+  \\[4pt]
+  \rho_{\mathrm{transship}}
+  &\;=\;
+  \mathrm{cons}\bigl(\mathrm{sing}_1,\,
+    \mathrm{cons}\bigl(\mathrm{sing}_2,\,
+      \mathrm{nil}(\mathrm{thaiPort})\bigr)\bigr).
+\end{align}
+\end{definition}
+
+\begin{proposition}[Lengths]\label{prop:dag-lengths}
+One has $\lvert\rho_{\mathrm{direct}}\rvert = 1$ and
+$\lvert\rho_{\mathrm{transship}}\rvert = 2$.
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[DAG rung: failure of thinness]\label{thm:dag-rung}
+The type $\mathrm{Path}_{G'}(\mathrm{melbournePort},\, \mathrm{thaiPort})$ is
+not a subsingleton. In particular, $\mathrm{network}(G')$ is not thin at
+$\mathrm{melbournePort}$.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+If the two paths were equal, they would have equal length, contradicting
+Proposition~\ref{prop:dag-lengths}. Thus distinct shipping alternatives between
+the same ports---a commonplace in real logistics---immediately leave the thin
+rung of the ladder.
+\end{remark}
+
+%======================================================================
+\section{The graph rung: an infinite scrap loop}
+%======================================================================
+
+\begin{definition}[Scrap-loop digraph]\label{def:scrap}
+Let $G_{\mathrm{scrap}}$ be the directed graph with two nodes
+$\{\mathrm{rollingMill},\, \mathrm{meltShop}\}$ and two edges
+\begin{align*}
+  \mathrm{rm2ms} &\;:\; \mathrm{rollingMill} \to \mathrm{meltShop}, \\
+  \mathrm{ms2rm} &\;:\; \mathrm{meltShop} \to \mathrm{rollingMill}.
+\end{align*}
+\end{definition}
+
+\begin{proposition}[Length of a concatenation]\label{prop:len-append}
+For paths $p : \mathrm{Path}_{G_{\mathrm{scrap}}}(v,w)$ and
+$q : \mathrm{Path}_{G_{\mathrm{scrap}}}(w,u)$,
+\[
+  \lvert p \mathbin{{+}{+}} q\rvert \;=\; \lvert p\rvert + \lvert q\rvert.
+\]
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{definition}[Laps]\label{def:laps}
+Write
+\begin{equation}
+  \lambda
+  \;=\;
+  \mathrm{cons}\bigl(\mathrm{rm2ms},\,
+    \mathrm{cons}\bigl(\mathrm{ms2rm},\,
+      \mathrm{nil}(\mathrm{rollingMill})\bigr)\bigr)
+\end{equation}
+for one full lap of the cycle (length~$2$). Define
+$\mathrm{laps} : \N \to \mathrm{Path}_{G_{\mathrm{scrap}}}
+(\mathrm{rollingMill},\, \mathrm{rollingMill})$ by
+\begin{equation}
+  \mathrm{laps}(0) \;=\; \mathrm{nil}(\mathrm{rollingMill}),
+  \qquad
+  \mathrm{laps}(n+1) \;=\; \mathrm{laps}(n) \mathbin{{+}{+}} \lambda.
+\end{equation}
+\end{definition}
+
+\begin{proposition}[Length of $n$ laps]\label{prop:laps-len}
+For every $n \in \N$,
+\[
+  \lvert\mathrm{laps}(n)\rvert \;=\; 2n.
+\]
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{proposition}[Injectivity of laps]\label{prop:laps-inj}
+The map $\mathrm{laps}$ is injective: if $\mathrm{laps}(m) = \mathrm{laps}(n)$,
+then $m = n$.
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{definition}[Infinite type]\label{def:infinite}
+A type $\alpha$ is \textbf{infinite} when there exists an injection
+$\N \hookrightarrow \alpha$.
+\end{definition}
+
+\begin{theorem}[Graph rung: infinite positions]\label{thm:graph-rung}
+The position set of $\mathrm{network}(G_{\mathrm{scrap}})$ at
+$\mathrm{rollingMill}$ is infinite. Concretely, the map
+\begin{equation}
+  n \;\longmapsto\;
+  \bigl\langle \mathrm{rollingMill},\, \mathrm{laps}(n) \bigr\rangle
+\end{equation}
+is an injection
+$\N \hookrightarrow
+\sum_w \mathrm{Path}_{G_{\mathrm{scrap}}}(\mathrm{rollingMill},\, w)$.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{definition}[Nontrivial endomorphism]\label{def:nontrivial-endo}
+Let
+\begin{equation}
+  \eta
+  \;=\;
+  \bigl\langle \mathrm{rollingMill},\, \lambda \bigr\rangle
+  \;\in\;
+  \Pos\bigl(\mathrm{network}(G_{\mathrm{scrap}})\bigr)
+    (\mathrm{rollingMill})
+\end{equation}
+be the one-lap position at the rolling mill.
+\end{definition}
+
+\begin{theorem}[Nontrivial endomorphism]\label{thm:nontrivial-endo}
+The position $\eta$ is distinct from the root position at
+$\mathrm{rollingMill}$.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+Length distinguishes them: $\lvert\lambda\rvert = 2$ while the empty path has
+length~$0$. In the free category on $G_{\mathrm{scrap}}$, $\eta$ is a
+non-identity endomorphism of the rolling-mill object; iterating it produces the
+infinite family of Theorem~\ref{thm:graph-rung}.
+\end{remark}
+
+%======================================================================
+\section{Discussion}
+%======================================================================
+
+\paragraph{What has been established.}
+Two concrete witnesses separate the rungs of the structural ladder for network
+directed containers.
+\begin{itemize}
+  \item On a DAG that is not a polytree, multiple paths between the same
+        endpoints exist, so thinness fails.
+  \item On a graph with a directed cycle, the position set at a node on the
+        cycle is infinite, and nontrivial endomorphisms exist.
+\end{itemize}
+Both conclusions are elementary path-counting facts; their role is to mark
+sharp boundaries for the positive theorems available on the polytree rung.
+
+\paragraph{Scope.}
+The development does not classify all DAGs or all cyclic graphs, nor does it
+quantify the growth of position sets beyond the injection from~$\N$. The
+examples are minimal by design.
+
+\paragraph{Machine checking.}
+Every definition and theorem statement above corresponds to a declaration in a
+machine-checked formalisation. The phrase ``by lean'' indicates that the proof
+has been verified by a proof assistant.
+
+%======================================================================
+\section*{Acknowledgements}
+%======================================================================
+
+The mathematical content follows the DAG and graph rungs of the supply-chain
+development that motivated this note. The presentation is a prose rendering of
+a formal development intended for human review of the theorem statements.
+
+\begin{thebibliography}{9}
+
+\bibitem{abbott2005}
+M.~Abbott, T.~Altenkirch, and N.~Ghani.
+\newblock Containers: constructing strictly positive types.
+\newblock \emph{Theoretical Computer Science}, 342(1):3--27, 2005.
+
+\bibitem{ahman2014}
+D.~Ahman and T.~Uustalu.
+\newblock Coalgebraic update lenses.
+\newblock In \emph{MFPS}, volume~308 of \emph{ENTCS}, pages 25--48, 2014.
+
+\end{thebibliography}
+
+\end{document}

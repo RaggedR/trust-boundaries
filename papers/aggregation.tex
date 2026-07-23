@@ -1,0 +1,400 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath,amsthm,mathtools}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{parskip}
+\usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
+
+% Theorem environments (arXiv / journal style)
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{remark}[theorem]{Remark}
+
+% Notation
+\newcommand{\Shape}{\mathrm{Shape}}
+\newcommand{\Pos}{\mathrm{Pos}}
+\newcommand{\Type}{\mathbf{Type}}
+\newcommand{\id}{\mathrm{id}}
+\newcommand{\src}{\mathrm{src}}
+\newcommand{\tgt}{\mathrm{tgt}}
+\newcommand{\rootpos}{\mathrm{root}}
+\newcommand{\sub}{\mathrm{sub}}
+\newcommand{\shift}{\mathrm{shift}}
+
+\title{Aggregation as a Routing Cofunctor}
+\author{Extracted from a machine-checked development}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We construct a routing policy from the concrete eleven-facility Sawasdee
+Cellars wine network to a two-node aggregate network (Australia to Thailand)
+and verify that it is a morphism of directed containers. The shape map sends
+each facility to its geographic region; the position map lifts each aggregate
+route to a canonical concrete route out of the given facility. Shape
+compatibility, root preservation, and shift compatibility are established by
+finite case analysis. The proofs of all stated results have been
+machine-checked; we record only the mathematical content.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%======================================================================
+\section{Introduction}
+%======================================================================
+
+Aggregation in logistics replaces a fine-grained network of facilities by a
+coarse network of regions, while retaining enough route structure that
+policies expressed at the regional level can be interpreted concretely. In the
+language of directed containers, such a policy is a morphism from the concrete
+network to the aggregate network: a map on shapes (facilities to regions)
+together with a \emph{lift} of aggregate positions to concrete positions,
+compatible with roots, sub-shapes, and shifts.
+
+The present note isolates one fully explicit instance. Starting from the
+Sawasdee Cellars wine network $\mathcal{N}_{\mathrm{wine}}$ (eleven facilities,
+ten shipping legs), we form a two-node aggregate digraph $G_{\mathrm{agg}}$
+with regions $\{\mathrm{australia},\, \mathrm{thailand}\}$ and a single
+aggregate leg. A routing policy
+\[
+  \varphi \;:\;
+  \mathcal{N}_{\mathrm{wine}}
+  \;\Longrightarrow\;
+  \mathrm{network}(G_{\mathrm{agg}})
+\]
+is defined by sending each facility to its region and lifting the aggregate
+stay-put and Australia-to-Thailand routes to canonical concrete routes. The
+three morphism laws are checked by exhaustive case analysis on the finite set
+of facilities.
+
+The development works throughout in a single universe of types. Proofs are
+indicated by the phrase ``by lean,'' meaning they have been checked by a proof
+assistant rather than written out in prose.
+
+\paragraph{What this note claims.}
+In ordinary mathematical language: coarsening the wine network to two
+geographic regions extends to a directed-container morphism. Regional route
+data lift canonically to facility-level routes, and the lift preserves the
+algebraic structure of roots and path concatenation.
+
+%======================================================================
+\section{Directed-container morphisms}
+%======================================================================
+
+We recall the data of a morphism of directed containers in the form used
+below. Let $\mathcal{C}$ and $\mathcal{D}$ be directed containers, with shape
+types $S_{\mathcal{C}}$ and $S_{\mathcal{D}}$, position families $P_{\mathcal{C}}$
+and $P_{\mathcal{D}}$, and structure maps $\rootpos$, $\sub$, $\shift$.
+
+\begin{definition}[Directed-container morphism]\label{def:dc-morphism}
+A \textbf{morphism of directed containers}
+$\varphi : \mathcal{C} \Rightarrow \mathcal{D}$ consists of
+\begin{enumerate}
+  \item a map on shapes $u : S_{\mathcal{C}} \to S_{\mathcal{D}}$, and
+  \item for each shape $s \in S_{\mathcal{C}}$, a map on positions
+        \[
+          \ell_s \;:\;
+          P_{\mathcal{D}}\bigl(u(s)\bigr)
+          \;\longrightarrow\;
+          P_{\mathcal{C}}(s)
+        \]
+        (a \emph{lift} of $\mathcal{D}$-positions to $\mathcal{C}$-positions),
+\end{enumerate}
+subject to three laws:
+\begin{enumerate}
+  \item[\textbf{(M0)}] \emph{Shape compatibility.} For every $s$ and every
+        position $\alpha \in P_{\mathcal{D}}\bigl(u(s)\bigr)$,
+        \[
+          u\Bigl(\sub_{\mathcal{C}}\bigl(s,\, \ell_s(\alpha)\bigr)\Bigr)
+          \;=\;
+          \sub_{\mathcal{D}}\bigl(u(s),\, \alpha\bigr).
+        \]
+  \item[\textbf{(M1)}] \emph{Root preservation.} For every~$s$,
+        \[
+          \ell_s\bigl(\rootpos_{\mathcal{D}}(u(s))\bigr)
+          \;=\;
+          \rootpos_{\mathcal{C}}(s).
+        \]
+  \item[\textbf{(M2)}] \emph{Shift compatibility.} For every~$s$, every
+        $\alpha \in P_{\mathcal{D}}\bigl(u(s)\bigr)$, and every
+        $\kappa \in P_{\mathcal{D}}\bigl(
+          \sub_{\mathcal{D}}(u(s),\alpha)\bigr)$,
+        \[
+          \ell_s\bigl(
+            \shift_{\mathcal{D}}\bigl(u(s),\, \alpha,\, \kappa\bigr)
+          \bigr)
+          \;=\;
+          \shift_{\mathcal{C}}\Bigl(
+            s,\;
+            \ell_s(\alpha),\;
+            \ell_{\sub_{\mathcal{C}}(s,\ell_s(\alpha))}
+              \bigl(\kappa'\bigr)
+          \Bigr),
+        \]
+        where $\kappa'$ is $\kappa$ transported along the equality~(M0).
+\end{enumerate}
+\end{definition}
+
+\begin{remark}
+The variance on positions is covariant for directed-container morphisms in this
+formulation (lifts of target positions to source positions), matching the
+cofunctorial reading of aggregation: coarse routes are refined to fine routes.
+\end{remark}
+
+%======================================================================
+\section{The aggregate network}
+%======================================================================
+
+\begin{definition}[Aggregate digraph]\label{def:gagg}
+Let $G_{\mathrm{agg}}$ be the directed graph with
+\begin{enumerate}
+  \item nodes $\{\mathrm{australia},\, \mathrm{thailand}\}$, and
+  \item a single edge $\mathrm{au2th} : \mathrm{australia} \to
+        \mathrm{thailand}$.
+\end{enumerate}
+Write $\mathcal{N}_{\mathrm{agg}} := \mathrm{network}(G_{\mathrm{agg}})$ for the
+associated directed container.
+\end{definition}
+
+\begin{remark}[Aggregate positions]
+The positions of $\mathcal{N}_{\mathrm{agg}}$ are elementary:
+\begin{itemize}
+  \item at $\mathrm{australia}$: the empty route
+        $\langle\mathrm{australia},\, \mathrm{nil}\rangle$ and the single-leg
+        route $\langle\mathrm{thailand},\, \mathrm{cons}(\mathrm{au2th},\,
+        \mathrm{nil})\rangle$;
+  \item at $\mathrm{thailand}$: only the empty route
+        $\langle\mathrm{thailand},\, \mathrm{nil}\rangle$.
+\end{itemize}
+\end{remark}
+
+%======================================================================
+\section{The concrete wine network and the region map}
+%======================================================================
+
+Recall the Sawasdee Cellars network $\mathcal{N}_{\mathrm{wine}} =
+\mathrm{network}(G_{\mathrm{wine}})$: eleven facilities and ten shipping legs
+from vineyards in South Australia through an export agency and sea freight to
+Thai distributors and retail shops.
+
+\begin{definition}[Region assignment]\label{def:region}
+Define a map $\mathrm{region} : \mathrm{Facility} \to
+\{\mathrm{australia},\, \mathrm{thailand}\}$ by
+\begin{align*}
+  \mathrm{region}(\mathrm{vineyard}_i)
+  &\;=\; \mathrm{australia}
+    &&(i=1,2,3), \\
+  \mathrm{region}(\mathrm{sawasdee})
+  &\;=\; \mathrm{australia}, \\
+  \mathrm{region}(\mathrm{melbournePort})
+  &\;=\; \mathrm{australia}, \\
+  \mathrm{region}(\mathrm{thaiPort})
+  &\;=\; \mathrm{thailand}, \\
+  \mathrm{region}(\mathrm{distributor}_j)
+  &\;=\; \mathrm{thailand}
+    &&(j=1,2), \\
+  \mathrm{region}(\mathrm{retail}_k)
+  &\;=\; \mathrm{thailand}
+    &&(k=1,2,3).
+\end{align*}
+\end{definition}
+
+Thus the five Australian-side facilities map to $\mathrm{australia}$ and the
+six Thai-side facilities map to $\mathrm{thailand}$. The sea leg of the
+concrete network is the unique edge that crosses the regional boundary.
+
+%======================================================================
+\section{Lifting aggregate routes}
+%======================================================================
+
+Write $\mathrm{AgPos}(r)$ for $\Pos(\mathcal{N}_{\mathrm{agg}})(r)$ and
+$\mathrm{Route}(f)$ for $\Pos(\mathcal{N}_{\mathrm{wine}})(f)$.
+
+\begin{definition}[Position lift]\label{def:lift}
+Define, for each facility~$f$, a map
+\begin{equation}
+  \ell_f \;:\;
+  \mathrm{AgPos}\bigl(\mathrm{region}(f)\bigr)
+  \;\longrightarrow\;
+  \mathrm{Route}(f)
+\end{equation}
+by the following canonical choices.
+\begin{enumerate}
+  \item \textbf{Australian facilities.} If $f$ is Australian and the aggregate
+        route is the empty route at $\mathrm{australia}$, lift to the empty
+        concrete route at~$f$. If the aggregate route ends in
+        $\mathrm{thailand}$, lift to the unique canonical concrete route from
+        $f$ to $\mathrm{thaiPort}$ along the spine
+        \[
+          f \;\to\; \cdots \;\to\;
+          \mathrm{melbournePort} \;\xrightarrow{\mathrm{sea}}\;
+          \mathrm{thaiPort}
+        \]
+        (prefixing the legs $v_is$, $smp$, and/or $\mathrm{sea}$ as required by
+        the facility). Concretely:
+        \begin{itemize}
+          \item from $\mathrm{vineyard}_i$: legs $v_is$, $smp$, $\mathrm{sea}$;
+          \item from $\mathrm{sawasdee}$: legs $smp$, $\mathrm{sea}$;
+          \item from $\mathrm{melbournePort}$: leg $\mathrm{sea}$.
+        \end{itemize}
+  \item \textbf{Thai facilities.} If $f$ is Thai, the only aggregate position
+        is the empty route at $\mathrm{thailand}$; lift it to the empty
+        concrete route at~$f$.
+\end{enumerate}
+\end{definition}
+
+\begin{remark}
+Because $G_{\mathrm{wine}}$ is a polytree along the Australia-to-Thailand spine
+used here, the ``canonical'' concrete route from each Australian facility to
+Thai Port is unambiguous. The lift does not attempt to choose among downstream
+distributor or retail alternatives; those live entirely within the Thai region
+and are invisible to the two-node aggregate.
+\end{remark}
+
+%======================================================================
+\section{The morphism laws}
+%======================================================================
+
+\begin{proposition}[Shape compatibility, M0]\label{prop:m0}
+For every facility~$f$ and every aggregate position
+$\alpha \in \mathrm{AgPos}\bigl(\mathrm{region}(f)\bigr)$,
+\begin{equation}
+  \mathrm{region}\Bigl(
+    \sub_{\mathcal{N}_{\mathrm{wine}}}\bigl(f,\, \ell_f(\alpha)\bigr)
+  \Bigr)
+  \;=\;
+  \sub_{\mathcal{N}_{\mathrm{agg}}}\bigl(\mathrm{region}(f),\, \alpha\bigr).
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{proposition}[Root preservation, M1]\label{prop:m1}
+For every facility~$f$,
+\begin{equation}
+  \ell_f\bigl(
+    \rootpos_{\mathcal{N}_{\mathrm{agg}}}\bigl(\mathrm{region}(f)\bigr)
+  \bigr)
+  \;=\;
+  \rootpos_{\mathcal{N}_{\mathrm{wine}}}(f).
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{proposition}[Shift compatibility, M2]\label{prop:m2}
+For every facility~$f$, every aggregate position
+$\alpha \in \mathrm{AgPos}\bigl(\mathrm{region}(f)\bigr)$, and every aggregate
+continuation
+$\kappa \in \mathrm{AgPos}\bigl(
+  \sub_{\mathcal{N}_{\mathrm{agg}}}(\mathrm{region}(f),\alpha)\bigr)$,
+the lift of the aggregate shift equals the concrete shift of the lifted
+positions (with the continuation transported along Proposition~\ref{prop:m0}).
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}[Idea of the case analysis]
+All three laws are proved by matching on the finite type of facilities and on
+the (at most two) aggregate positions at the image region. Representative
+situations:
+\begin{itemize}
+  \item Empty aggregate route at an Australian facility: sub-shape stays
+        Australian; lifting the root is the concrete root; shifting by a
+        further Australia-to-Thailand leg reproduces the canonical concrete
+        crossing.
+  \item Australia-to-Thailand aggregate route: sub-shape is Thailand; the
+        concrete lift ends at Thai Port; further aggregate continuations are
+        necessarily the Thai empty route, and concatenating the empty suffix
+        leaves the concrete route unchanged.
+  \item Thai facilities: only empty routes appear, and all structure maps are
+        trivial.
+\end{itemize}
+\end{remark}
+
+\begin{theorem}[Routing policy]\label{thm:routing-policy}
+The pair $\bigl(\mathrm{region},\, \ell\bigr)$ is a morphism of directed
+containers
+\begin{equation}
+  \varphi \;:\;
+  \mathcal{N}_{\mathrm{wine}}
+  \;\Longrightarrow\;
+  \mathcal{N}_{\mathrm{agg}}.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{Discussion}
+%======================================================================
+
+\paragraph{What has been established.}
+Geographic aggregation of the Sawasdee Cellars network to two regions extends
+to a directed-container morphism. The construction supplies a fully checked
+instance of aggregation-as-cofunctor: coarse route algebra is interpreted by
+lifting to fine routes along a fixed regional policy.
+
+\paragraph{On canonicity.}
+The position lift chooses, for each Australian facility, a single spine route
+to Thai Port. Alternative concrete realisations (e.g.\ different downstream
+branching inside Thailand) are invisible at the two-node aggregate level; a
+finer aggregate would require a richer lift.
+
+\paragraph{Scope.}
+The development treats one concrete pair of networks and does not develop a
+general theory of aggregation morphisms for arbitrary partitions of nodes. It
+also does not address the interaction of routing policies with compositional
+trackings (e.g.\ whether monoid-valued data descends along~$\varphi$).
+
+\paragraph{Machine checking.}
+Every definition and theorem statement above corresponds to a declaration in a
+machine-checked formalisation. The phrase ``by lean'' indicates that the proof
+has been verified by a proof assistant.
+
+%======================================================================
+\section*{Acknowledgements}
+%======================================================================
+
+The mathematical content follows the aggregation construction in the
+supply-chain development that motivated this note. The presentation is a prose
+rendering of a formal development intended for human review of the theorem
+statements.
+
+\begin{thebibliography}{9}
+
+\bibitem{abbott2005}
+M.~Abbott, T.~Altenkirch, and N.~Ghani.
+\newblock Containers: constructing strictly positive types.
+\newblock \emph{Theoretical Computer Science}, 342(1):3--27, 2005.
+
+\bibitem{ahman2014}
+D.~Ahman and T.~Uustalu.
+\newblock Coalgebraic update lenses.
+\newblock In \emph{MFPS}, volume~308 of \emph{ENTCS}, pages 25--48, 2014.
+
+\end{thebibliography}
+
+\end{document}

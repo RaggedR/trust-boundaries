@@ -1,0 +1,479 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath,amsthm,mathtools}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{parskip}
+\usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
+
+% Theorem environments (arXiv / journal style)
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{remark}[theorem]{Remark}
+
+% Notation
+\newcommand{\Type}{\mathbf{Type}}
+\newcommand{\id}{\mathrm{id}}
+\newcommand{\Bom}{\mathsf{Bom}}
+\newcommand{\bom}{\mathsf{bom}}
+\newcommand{\Occ}{\mathsf{Occ}}
+\newcommand{\site}{\mathsf{site}}
+\newcommand{\op}{\mathrm{op}}
+
+\title{Sourcing as a Functor of Directed Containers:\\
+  Routed Bills of Materials}
+\author{Extracted from a machine-checked development}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We formalise the sourcing assignment of a bill of materials (BOM) as a
+covariant functor of directed containers. The domain is the directed
+container of \emph{routed} BOMs: finite product-labelled rooted trees whose
+edges carry inbound shipping routes. The codomain is the shipping network
+read in the opposite direction---positions at a facility are inbound paths
+ending there. On shapes, the functor reads off the facility producing the
+root product; on positions, an occurrence is sent to the inbound route
+composed leg-by-leg through intermediate producers. Functoriality is
+\emph{consolidation}: the empty occurrence is sourced by the empty route,
+and nested occurrences concatenate their routes. The proofs of all stated
+results have been machine-checked; we record only the mathematical content.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%======================================================================
+\section{Introduction}
+%======================================================================
+
+A bill of materials is a tree of products: the finished good at the root,
+direct components as children, raw materials at the leaves. In a physical
+supply chain each product is made at some facility, and each component
+travels an inbound route to the point of use of its parent. The assignment
+of sites and inbound routes is the \emph{sourcing} data of the BOM.
+
+Abstractly, both the family of BOMs and the shipping network may be
+presented as directed containers. Sourcing then becomes a morphism of that
+structure---more precisely, a covariant functor of directed containers
+from the BOM container to the opposite shipping network. The content of
+this note is to make that functor precise, and to record the
+formalisation choice that makes it total.
+
+\paragraph{The formalisation hypothesis.}
+If the shapes of the BOM container were merely product-labelled trees,
+with no route data, a functor to the opposite network would have to
+produce an inbound path for every tree edge---including perverse trees
+whose edges run against the shipping graph. No such path need exist, so
+the data cannot extend to a total functor on all trees.
+
+The remedy adopted here is to place the routing choices on the shapes
+themselves. A \emph{routed BOM} is a product-labelled rooted tree indexed
+by the facility producing its root, in which every edge already carries
+an inbound route. On this domain the sourcing functor is canonical: no
+side data, and the functoriality equations hold definitionally (or by a
+single path induction for consolidation). The paper's informal data---a
+site per product and one leg per BOM edge---is exactly what builds a
+concrete routed BOM.
+
+\paragraph{What this note claims.}
+In ordinary mathematical language: routed BOMs form a directed container
+whose positions are occurrences (descending paths from the root). The
+shipping digraph~$G$, read oppositely, forms a directed container whose
+positions at a vertex are inbound routes. Sourcing is the functor that
+sends a routed BOM to its root facility and an occurrence to the
+composite inbound route of that component. Functoriality is consolidation
+of multi-level routes. The UAE steel rebar example of the companion paper
+is a concrete instance, with the three-leg ore-to-rolling-mill route
+checked by computation.
+
+We work throughout in a single universe of types, writing $\Type$ for that
+universe. Proofs are indicated by the phrase ``by lean,'' meaning they
+have been checked by a proof assistant rather than written out in prose.
+
+%======================================================================
+\section{Background: digraphs, paths, and opposite networks}
+%======================================================================
+
+\begin{definition}[Digraph]\label{def:digraph}
+A \textbf{digraph} $G$ consists of a type $V_G$ of vertices, a type $E_G$
+of edges, and source and target maps
+\[
+  \mathsf{src}_G,\;\mathsf{tgt}_G \;:\; E_G \;\longrightarrow\; V_G.
+\]
+\end{definition}
+
+\begin{definition}[Path]\label{def:path}
+A \textbf{path} in~$G$ from $u$ to $v$ is a finite walk of edges with
+matching endpoints. Paths form a category: there is an empty path
+$\mathsf{nil}_u$ at each vertex, and concatenation
+\[
+  \mathsf{append} \;:\;
+  \mathsf{Path}_G(u,v) \times \mathsf{Path}_G(v,w)
+  \;\longrightarrow\;
+  \mathsf{Path}_G(u,w)
+\]
+is associative, with $\mathsf{nil}$ as two-sided unit.
+\end{definition}
+
+\begin{definition}[Opposite digraph]\label{def:op}
+The \textbf{opposite digraph} $G^\op$ has the same vertices and edges as
+$G$, with source and target swapped:
+\[
+  \mathsf{src}_{G^\op} = \mathsf{tgt}_G,\qquad
+  \mathsf{tgt}_{G^\op} = \mathsf{src}_G.
+\]
+Consequently a path of $G^\op$ from $v$ to $u$ is an \emph{inbound route}
+of~$G$ ending at~$v$ and originating at~$u$.
+\end{definition}
+
+\begin{remark}
+The opposite network is taken on the graph, not as a general dual of
+directed containers: one forms the directed container associated to
+$G^\op$ in the usual way (shapes are vertices; positions at~$v$ are paths
+of $G^\op$ starting at~$v$). Positions at a facility are therefore inbound
+routes to that facility, read backwards from the point of use.
+\end{remark}
+
+%======================================================================
+\section{Routed bills of materials}
+%======================================================================
+
+Fix a type $P$ of products and a digraph $G$ of shipping facilities and
+legs.
+
+\begin{definition}[Routed BOM]\label{def:bom}
+A \textbf{routed BOM} over $P$ and $G$, indexed by a facility
+$v \in V_G$, is a finite tree
+\[
+  t \;=\; \mathsf{node}\bigl(
+    \mathit{prod},\; v,\; n,\;
+    (v_i)_{i < n},\;
+    (\rho_i)_{i < n},\;
+    (t_i)_{i < n}
+  \bigr)
+\]
+where
+\begin{enumerate}
+  \item $\mathit{prod} \in P$ is the product label of the root,
+  \item $n \in \mathbb{N}$ is the number of direct components,
+  \item $v_i \in V_G$ is the facility producing the $i$-th component,
+  \item $\rho_i$ is a path of $G^\op$ from $v$ to $v_i$ (the inbound route
+        of that component into the root facility),
+  \item $t_i$ is a routed BOM at $v_i$ (the component's own BOM).
+\end{enumerate}
+Raw materials are nodes with $n = 0$. We write $\Bom(P,G)(v)$ for the
+type of routed BOMs at~$v$.
+\end{definition}
+
+Thus a routed BOM is a product-labelled rooted tree whose every edge
+already carries its sourcing route. The routes live on the shapes so that
+the sourcing functor below is total.
+
+\begin{definition}[Occurrence]\label{def:occ}
+An \textbf{occurrence} in a routed BOM $t$ is a descending path from the
+root, including the empty path:
+\begin{itemize}
+  \item $\mathsf{here}$ is the empty occurrence (the root itself);
+  \item if $i < n$ and $p$ is an occurrence in the $i$-th child, then
+        $\mathsf{inside}(i,p)$ is an occurrence in the parent.
+\end{itemize}
+We write $\Occ(t)$ for the type of occurrences in~$t$. Labels, sites, and
+routes play no role in the navigation.
+\end{definition}
+
+\begin{definition}[Sub-BOM and shift]\label{def:sub-shift}
+\begin{enumerate}
+  \item The \textbf{sub-BOM} at an occurrence $p \in \Occ(t)$ is the
+        subtree $t.\mathsf{sub}\,p$, together with the facility
+        producing it.
+  \item The \textbf{shift} (occurrence concatenation)
+        \[
+          t.\mathsf{shift} \;:\;
+          (p : \Occ(t)) \;\longrightarrow\;
+          \Occ(t.\mathsf{sub}\,p) \;\longrightarrow\;
+          \Occ(t)
+        \]
+        views an occurrence inside a component as an occurrence of the
+        finished product.
+\end{enumerate}
+\end{definition}
+
+\begin{proposition}[Navigation laws]\label{prop:nav}
+For every routed BOM $t$ and occurrences $p$, $q$, $r$ of the appropriate
+types:
+\begin{enumerate}
+  \item[\textup{(D3)}] $t.\mathsf{shift}\,p\,\mathsf{here} = p$;
+  \item[\textup{(D4)}] $t.\mathsf{sub}\,(t.\mathsf{shift}\,p\,q)
+        = (t.\mathsf{sub}\,p).\mathsf{sub}\,q$;
+  \item[\textup{(D5)}] shift is associative along the transport of
+        \textup{(D4)}.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+Law~(D4) is the slogan of multi-level BOM explosion: sub-BOMs nest along
+the shift, so multi-level costing is coherent. Law~(D5) is the
+associativity of that nesting.
+\end{remark}
+
+%======================================================================
+\section{The directed container of routed BOMs}
+%======================================================================
+
+\begin{definition}[BOM container]\label{def:bom-dc}
+The \textbf{directed container of routed BOMs} $\bom(P,G)$ has
+\begin{enumerate}
+  \item shapes $(v,t)$ with $v \in V_G$ and $t \in \Bom(P,G)(v)$;
+  \item positions of $(v,t)$ equal to $\Occ(t)$;
+  \item root position $\mathsf{here}$;
+  \item sub-shape and shift as in Definition~\ref{def:sub-shift}.
+\end{enumerate}
+The five directed-container axioms hold by the navigation laws of
+Proposition~\ref{prop:nav} (together with the definitional equalities for
+root).
+\end{definition}
+
+\begin{remark}
+Labels, sites, and routes ride along on the shapes without disturbing the
+navigation laws. The combinatorial skeleton is that of rooted trees; the
+supply-chain decoration is passive data.
+\end{remark}
+
+%======================================================================
+\section{The sourcing functor}
+%======================================================================
+
+\begin{definition}[Inbound route of an occurrence]\label{def:routeOf}
+Let $t$ be a routed BOM at facility~$v$. The \textbf{inbound route} of an
+occurrence $p \in \Occ(t)$ is the path of $G^\op$ from $v$ to the facility
+producing the sub-BOM at~$p$, defined by induction on~$p$:
+\begin{align}
+  t.\mathsf{routeOf}(\mathsf{here})
+  &\;=\;
+  \mathsf{nil}_v, \\
+  t.\mathsf{routeOf}\bigl(\mathsf{inside}(i,p)\bigr)
+  &\;=\;
+  \rho_i \mathbin{+\mkern-6mu+}
+  \bigl((t_i).\mathsf{routeOf}\,p\bigr),
+\end{align}
+where $\rho_i$ is the inbound leg stored on the $i$-th edge and
+$+\mkern-6mu+$ denotes path concatenation. Thus the empty occurrence is
+sourced by the empty route, and a nested occurrence composes leg-by-leg
+through intermediate producers.
+\end{definition}
+
+\begin{theorem}[Consolidation]\label{thm:consolidation}
+For every routed BOM $t$ and occurrences $p$, $q$ of the appropriate
+types, the route of a concatenated occurrence is the concatenation of the
+routes:
+\begin{equation}
+  \bigl\langle
+    (t.\mathsf{sub}\,(t.\mathsf{shift}\,p\,q)).1,\;
+    t.\mathsf{routeOf}\,(t.\mathsf{shift}\,p\,q)
+  \bigr\rangle
+  \;=\;
+  \bigl\langle
+    ((t.\mathsf{sub}\,p).\mathsf{sub}\,q).1,\;
+    (t.\mathsf{routeOf}\,p)
+    \mathbin{+\mkern-6mu+}
+    ((t.\mathsf{sub}\,p).\mathsf{routeOf}\,q)
+  \bigr\rangle,
+\end{equation}
+as positions of the opposite network (endpoint paired with route).
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+The two endpoints agree by~(D4), but not definitionally; packaging them
+with their routes as dependent pairs lets the equality be stated without
+transport. Consolidation is the position-level form of multi-level
+sourcing: ore reaches the rolling mill only via the reduction plant and
+the melt shop.
+\end{remark}
+
+\begin{definition}[Sourcing functor]\label{def:sourcing}
+The \textbf{sourcing functor}
+\[
+  \site_{P,G}
+  \;:\;
+  \bom(P,G)
+  \;\longrightarrow\;
+  \mathsf{network}(G^\op)
+\]
+is the covariant functor of directed containers given by
+\begin{enumerate}
+  \item on shapes: $(v,t) \mapsto v$ (the facility producing the root
+        product);
+  \item on positions: $p \mapsto
+        \bigl\langle
+          (t.\mathsf{sub}\,p).1,\;
+          t.\mathsf{routeOf}\,p
+        \bigr\rangle$
+        (the inbound route of the occurrence, ending at the component's
+        own producing facility).
+\end{enumerate}
+\end{definition}
+
+\begin{theorem}[Functoriality]\label{thm:functor}
+The maps of Definition~\ref{def:sourcing} satisfy the three axioms of a
+covariant functor of directed containers:
+\begin{enumerate}
+  \item[\textup{(F0)}] sub-shapes are preserved (the network's sub is
+        endpoint projection);
+  \item[\textup{(F1)}] the root occurrence is sent to the empty route;
+  \item[\textup{(F2)}] shift is preserved --- this is consolidation
+        (Theorem~\ref{thm:consolidation}).
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+Axioms~(F0) and~(F1) hold definitionally. Axiom~(F2) is the single
+non-trivial content; its transport vanishes because~(F0) is
+definitional. There is no side data: once a BOM is routed, sourcing is
+canonical.
+\end{remark}
+
+%======================================================================
+\section{Example: UAE steel rebar}
+%======================================================================
+
+We record the concrete instance that motivates the construction: a
+gas-based mini-mill making rebar for export.
+
+\begin{example}[Steel network and BOM]\label{ex:steel}
+The shipping graph is the directed path of four facilities
+\[
+  \text{ore berth}
+  \;\longrightarrow\;
+  \text{reduction plant}
+  \;\longrightarrow\;
+  \text{melt shop}
+  \;\longrightarrow\;
+  \text{rolling mill},
+\]
+with three legs $\ell_{\mathrm{ob}\to\mathrm{rp}}$,
+$\ell_{\mathrm{rp}\to\mathrm{ms}}$,
+$\ell_{\mathrm{ms}\to\mathrm{rm}}$.
+
+The products are ore pellets, DRI, scrap, billet, and rebar. The routed
+BOM at the rolling mill is:
+\begin{itemize}
+  \item rebar at the rolling mill, with billets inbound along
+        $\ell_{\mathrm{ms}\to\mathrm{rm}}$;
+  \item billets at the melt shop, with DRI inbound along
+        $\ell_{\mathrm{rp}\to\mathrm{ms}}$ and scrap already on site
+        (empty inbound route);
+  \item DRI at the reduction plant, with ore pellets inbound along
+        $\ell_{\mathrm{ob}\to\mathrm{rp}}$;
+  \item ore pellets at the ore berth, and scrap at the melt shop, as
+        leaves.
+\end{itemize}
+\end{example}
+
+\begin{proposition}[Sourcing on the steel instance]\label{prop:steel}
+Let $t$ be the rebar BOM of Example~\ref{ex:steel}, viewed as a shape of
+$\bom(P,G)$.
+\begin{enumerate}
+  \item On shapes, $\site(t)$ is the rolling mill.
+  \item The ore-pellet occurrence is sourced by the three-leg inbound
+        route
+        \[
+          \text{rolling mill}
+          \;\leftarrow\;
+          \text{melt shop}
+          \;\leftarrow\;
+          \text{reduction plant}
+          \;\leftarrow\;
+          \text{ore berth}.
+        \]
+  \item The scrap occurrence is sourced by the one-leg route ending at
+        the melt shop.
+  \item Consolidation holds on the instance: sourcing the concatenated
+        occurrence ``billet then ore'' equals shifting the billet's route
+        by the ore's route in the opposite network.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{Discussion}
+%======================================================================
+
+\paragraph{What has been established.}
+Routed BOMs form a directed container; the opposite shipping network is a
+directed container; sourcing is a covariant functor between them whose
+position action is multi-level route composition. The UAE steel example
+confirms the equations by direct computation.
+
+\paragraph{Why routes live on shapes.}
+The informal sourcing data of a companion development---a site per
+product and one inbound leg per BOM edge---cannot extend to a total
+functor on \emph{all} product-labelled trees, because some trees demand
+routes that do not exist in~$G$. Equipping each shape with its routing
+choices restores totality and yields a canonical functor. An alternative
+(restricting to trees compatible with a fixed component relation) makes
+shape equalities propositional and reintroduces transports throughout.
+
+\paragraph{Scope.}
+The development treats a single universe of types and does not address
+costing, lot sizes, or capacity constraints. Directed-container structure
+records only the combinatorial skeleton of navigation and sourcing; the
+economic content rides along as passive data on shapes and positions.
+
+\paragraph{Machine checking.}
+Every definition and theorem statement above corresponds to a declaration
+in a machine-checked formalisation. The phrase ``by lean'' indicates that
+the proof has been verified by a proof assistant; we have not reproduced
+the formal proof scripts here.
+
+%======================================================================
+\section*{Acknowledgements}
+%======================================================================
+
+The mathematical content follows the theory of directed containers and
+the supply-chain reading developed in the companion notes on supply chains
+as directed containers. The presentation here is a prose rendering of a
+formal development intended for human review of the theorem statements.
+
+\begin{thebibliography}{9}
+
+\bibitem{ahman2016}
+D.~Ahman and T.~Uustalu.
+\newblock Directed containers as categories.
+\newblock In \emph{MSFP}, volume~207 of \emph{EPTCS}, pages 89--98, 2016.
+
+\bibitem{abbott2005}
+M.~Abbott, T.~Altenkirch, and N.~Ghani.
+\newblock Containers: constructing strictly positive types.
+\newblock \emph{Theoretical Computer Science}, 342(1):3--27, 2005.
+
+\end{thebibliography}
+
+\end{document}

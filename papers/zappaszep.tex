@@ -1,0 +1,325 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath,amsthm,mathtools}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{parskip}
+\usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
+
+% Theorem environments (arXiv / journal style)
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{remark}[theorem]{Remark}
+
+% Notation
+\newcommand{\Type}{\mathbf{Type}}
+\newcommand{\id}{\mathrm{id}}
+
+\title{Associativity of the Zappa--Sz\'{e}p Product\\
+  and the Four Cocycle Axioms}
+\author{Extracted from a machine-checked development}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We formalise the algebraic equivalence between associativity of the
+Zappa--Sz\'{e}p product of two monoids and the four Brin/Zappa--Sz\'{e}p
+cocycle axioms. Given monoids $L$ and $G$ with a left action
+$\triangleright : G \to L \to L$ and a restriction
+$\triangleleft : G \to L \to G$, subject to unit-compatibility conditions that
+make $(1_L, 1_G)$ a two-sided unit, the product
+\[
+  (a,g) * (b,h)
+  \;=\;
+  \bigl( a \cdot (g \triangleright b),\;
+         (g \triangleleft b) \cdot h \bigr)
+\]
+on $L \times G$ is associative if and only if the four cocycle axioms ZS1--ZS4
+hold. The proofs of all stated results have been machine-checked; we record
+only the mathematical content.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%======================================================================
+\section{Introduction}
+%======================================================================
+
+The Zappa--Sz\'{e}p product is a generalisation of the semidirect product in
+which both factors act on each other. Algebraically, one is given two monoids
+$L$ and $G$, a left action of $G$ on $L$, and a restriction of $G$ along
+elements of~$L$; the product monoid structure on the cartesian product
+$L \times G$ is then defined by a mixed formula that uses both operations. For
+this product to be associative, the actions must satisfy four cocycle
+identities, often called the Brin or Zappa--Sz\'{e}p axioms.
+
+This note records a pure equational proof that, once unit-compatibility is
+assumed (so that $(1_L, 1_G)$ is a two-sided unit), associativity of the
+product is equivalent to the four cocycle axioms. The forward direction uses
+no unit laws. The converse recovers each axiom by specialising associativity
+at units and reading off one coordinate: the $L$-coordinate yields ZS1 and
+ZS2; the $G$-coordinate yields ZS3 and ZS4.
+
+We work with types as carriers and ordinary functions as operations. Proofs
+are indicated by the phrase ``by lean.''
+
+\paragraph{What this note claims.}
+For a matched pair of monoids (two monoids, two mutual actions, and four unit
+compatibilities),
+\[
+  \text{ZS1} \wedge \text{ZS2} \wedge \text{ZS3} \wedge \text{ZS4}
+  \;\Longleftrightarrow\;
+  \text{associativity of the Zappa--Sz\'{e}p product}.
+\]
+There is nothing more to the associativity law than these four cocycles, and
+conversely each cocycle is an instance of associativity.
+
+%======================================================================
+\section{Matched pairs of monoids}
+%======================================================================
+
+\begin{definition}[Matched pair]\label{def:matched-pair}
+A \textbf{matched pair} of monoids consists of:
+\begin{enumerate}
+  \item monoids $(L, \cdot_L, 1_L)$ and $(G, \cdot_G, 1_G)$, each associative
+        and unital;
+  \item a left action $\triangleright : G \to L \to L$;
+  \item a restriction $\triangleleft : G \to L \to G$;
+  \item the four \textbf{unit-compatibility} conditions
+        \begin{align}
+          \tag{U1a}
+          1_G \triangleright a &\;=\; a, \\
+          \tag{U1b}
+          1_G \triangleleft a &\;=\; 1_G, \\
+          \tag{U2a}
+          g \triangleright 1_L &\;=\; 1_L, \\
+          \tag{U2b}
+          g \triangleleft 1_L &\;=\; g,
+        \end{align}
+        for all $a \in L$ and $g \in G$.
+\end{enumerate}
+No cocycle axiom is assumed as part of this definition; ZS1--ZS4 are stated
+separately below.
+\end{definition}
+
+\begin{remark}
+The unit-compatibility conditions are exactly what make $(1_L, 1_G)$ a
+two-sided unit for the product operation of the next section.
+\end{remark}
+
+\begin{definition}[Zappa--Sz\'{e}p product]\label{def:zs-product}
+Let $P$ be a matched pair. The \textbf{Zappa--Sz\'{e}p product} is the binary
+operation on $L \times G$ defined by
+\begin{equation}
+  (a,g) * (b,h)
+  \;=\;
+  \bigl(
+    a \cdot_L (g \triangleright b),\;
+    (g \triangleleft b) \cdot_G h
+  \bigr).
+\end{equation}
+\end{definition}
+
+%======================================================================
+\section{The four cocycle axioms}
+%======================================================================
+
+\begin{definition}[Cocycle axioms]\label{def:cocycles}
+Let $P$ be a matched pair. The four \textbf{Brin/Zappa--Sz\'{e}p cocycle
+axioms} are the following predicates on~$P$.
+\begin{align}
+  \tag{ZS1}
+  g \triangleright (a \cdot_L b)
+  &\;=\;
+  (g \triangleright a)
+    \cdot_L
+  \bigl((g \triangleleft a) \triangleright b\bigr),
+  \\[6pt]
+  \tag{ZS2}
+  (g \cdot_G h) \triangleright a
+  &\;=\;
+  g \triangleright (h \triangleright a),
+  \\[6pt]
+  \tag{ZS3}
+  (g \cdot_G h) \triangleleft a
+  &\;=\;
+  \bigl(g \triangleleft (h \triangleright a)\bigr)
+    \cdot_G
+  (h \triangleleft a),
+  \\[6pt]
+  \tag{ZS4}
+  g \triangleleft (a \cdot_L b)
+  &\;=\;
+  (g \triangleleft a) \triangleleft b.
+\end{align}
+In words: ZS1 says that $\triangleright$ is a crossed homomorphism in its
+$L$-argument; ZS2 says that $\triangleright$ is a left action of~$G$; ZS3
+says that $\triangleleft$ is a crossed homomorphism in its $G$-argument; ZS4
+says that $\triangleleft$ is a right action of~$L$.
+\end{definition}
+
+\begin{definition}[Associativity]\label{def:assoc}
+The product of Definition~\ref{def:zs-product} is \textbf{associative} when
+\begin{equation}
+  \bigl((x * y) * z\bigr) \;=\; \bigl(x * (y * z)\bigr)
+\end{equation}
+for all $x,y,z \in L \times G$.
+\end{definition}
+
+%======================================================================
+\section{Cocycles imply associativity}
+%======================================================================
+
+\begin{theorem}[Forward direction]\label{thm:assoc-of-zs}
+Let $P$ be a matched pair. If ZS1--ZS4 all hold, then the Zappa--Sz\'{e}p
+product is associative.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}[Idea of the argument]
+Expand both sides of the associativity equation at a general triple
+$((a,g),(b,h),(c,k))$. The $L$-coordinate of the resulting equality follows
+from reassociating $\cdot_L$, then ZS1 (to distribute the action over a
+product) and ZS2 (the action law). The $G$-coordinate follows from ZS3, then
+reassociating $\cdot_G$, then ZS4. No unit law is used.
+\end{remark}
+
+%======================================================================
+\section{Associativity implies the cocycles}
+%======================================================================
+
+\begin{theorem}[Converse direction]\label{thm:zs-of-assoc}
+Let $P$ be a matched pair. If the Zappa--Sz\'{e}p product is associative, then
+ZS1, ZS2, ZS3, and ZS4 all hold.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}[How each axiom is recovered]
+Each cocycle is an instance of associativity at units.
+\begin{enumerate}
+  \item \textbf{ZS1.} Specialise at
+        $x = (1_L, g)$, $y = (a, 1_G)$, $z = (b, 1_G)$ and read the
+        $L$-coordinate; unit laws collapse the remaining factors.
+  \item \textbf{ZS2.} Specialise at
+        $x = (1_L, g)$, $y = (1_L, h)$, $z = (a, 1_G)$ and read the
+        $L$-coordinate.
+  \item \textbf{ZS3.} The same triple as for ZS2, reading the $G$-coordinate.
+  \item \textbf{ZS4.} The same triple as for ZS1, reading the $G$-coordinate.
+\end{enumerate}
+The unit-compatibility fields of the matched pair are exactly what make these
+specialisations yield the bare cocycle equations.
+\end{remark}
+
+%======================================================================
+\section{The equivalence}
+%======================================================================
+
+\begin{theorem}[Main theorem]\label{thm:zs-iff-assoc}
+For any matched pair of monoids, the Zappa--Sz\'{e}p product is associative if
+and only if the four cocycle axioms ZS1--ZS4 hold:
+\begin{equation}
+  \bigl(\mathrm{ZS1} \wedge \mathrm{ZS2}
+        \wedge \mathrm{ZS3} \wedge \mathrm{ZS4}\bigr)
+  \;\Longleftrightarrow\;
+  \mathrm{Assoc}.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{An example: the direct product}
+%======================================================================
+
+\begin{example}[Trivial actions on $(\mathbb{N}, +, 0)$]\label{ex:nat-direct}
+Take $L = G = \mathbb{N}$ with addition as multiplication and $0$ as unit, and
+define the trivial actions
+\begin{equation}
+  g \triangleright a \;=\; a,
+  \qquad
+  g \triangleleft a \;=\; g.
+\end{equation}
+These satisfy the four unit-compatibility conditions, so one obtains a matched
+pair. All four cocycle axioms hold (both sides of each equation reduce to the
+same expression by the definitions of the actions). Consequently, by
+Theorem~\ref{thm:zs-iff-assoc}, the Zappa--Sz\'{e}p product is associative. In
+this case the product is simply the direct product monoid
+$(\mathbb{N} \times \mathbb{N},\, +,\, (0,0))$.
+\end{example}
+
+\begin{remark}
+The example serves as a sanity check that the matched-pair structure is
+inhabited and that ZS1--ZS4 are satisfiable.
+\end{remark}
+
+%======================================================================
+\section{Discussion}
+%======================================================================
+
+\paragraph{What has been established.}
+Associativity of the Zappa--Sz\'{e}p product on a matched pair is equivalent to
+four equational cocycle axioms. The proof is purely equational: the forward
+direction is a direct expansion; the converse is specialisation at units.
+Nothing beyond monoid laws, unit compatibility, and the two mutual actions is
+used.
+
+\paragraph{Scope.}
+The development treats monoids (not necessarily groups). It does not construct
+the free or universal matched pair, nor does it address topological, ordered,
+or higher-categorical refinements of the Zappa--Sz\'{e}p product. The unit
+laws of the product monoid are not stated as separate theorems; they are the
+content of the unit-compatibility package built into
+Definition~\ref{def:matched-pair}.
+
+\paragraph{Machine checking.}
+Every definition and theorem statement above corresponds to a declaration in a
+machine-checked formalisation. The phrase ``by lean'' indicates that the proof
+has been verified by a proof assistant.
+
+%======================================================================
+\section*{Acknowledgements}
+%======================================================================
+
+The mathematical content follows the classical theory of Zappa--Sz\'{e}p
+products of monoids and the Brin cocycle presentation of the associativity
+criteria. The presentation here is a prose rendering of a formal development
+intended for human review of the theorem statements.
+
+\begin{thebibliography}{9}
+
+\bibitem{brin2005}
+M.~G.~Brin.
+\newblock On the Zappa--Sz\'{e}p product.
+\newblock \emph{Communications in Algebra}, 33(1):293--304, 2005.
+
+\bibitem{zappa1942}
+G.~Zappa.
+\newblock Sulla costruzione dei gruppi prodotto di due dati sottogruppi
+  permutabili tra loro.
+\newblock In \emph{Atti del Secondo Congresso dell'Unione Matematica
+  Italiana}, pages 119--125, 1942.
+
+\end{thebibliography}
+
+\end{document}

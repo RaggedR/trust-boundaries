@@ -1,0 +1,472 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath,amsthm,mathtools}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{parskip}
+\usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
+
+% Theorem environments (arXiv / journal style)
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{remark}[theorem]{Remark}
+
+% Notation
+\newcommand{\Type}{\mathbf{Type}}
+\newcommand{\id}{\mathrm{id}}
+\newcommand{\Cont}{\mathbf{Cont}}
+\newcommand{\Shape}{\mathrm{Shape}}
+\newcommand{\Pos}{\mathrm{Pos}}
+\newcommand{\Ext}{\mathrm{Ext}}
+\newcommand{\seq}{\mathbin{\triangleleft}}
+
+\title{Four Monoidal Structures on Containers:\\
+  Coproduct, Product, and Extension Comparisons}
+\author{Extracted from a machine-checked development}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+The category $\Cont$ of containers carries (at least) four monoidal
+structures of interest: the coproduct~$+$, the categorical product~$\times$,
+the Dirichlet tensor~$\otimes$, and the sequential operator~$\seq$. We
+complete the account of the first two: bifunctoriality, structural
+isomorphisms, naturality, and the pentagon and triangle coherence laws.
+We further prove the comparison isomorphisms that make the extension
+functor $\Ext(-)$ strong monoidal for the coproduct and the product,
+\begin{align*}
+  \Ext(C+D)\,X &\;\cong\; \Ext\,C\,X \;\oplus\; \Ext\,D\,X, \\
+  \Ext(C \times D)\,X &\;\cong\; \Ext\,C\,X \;\times\; \Ext\,D\,X,
+\end{align*}
+together with the unit comparisons and the shared identity comparison
+$\Ext\,y\,X \cong X$. The product/Dirichlet contrast is emphasised:
+product and Dirichlet share shapes $S \times T$ and differ only in
+positions ($P(s)\oplus Q(t)$ versus $P(s)\times Q(t)$), yet the extension
+of the product is the pointwise product of functors by the exponential
+law $X^{A+B} \cong X^A \times X^B$. The proofs of all stated results have
+been machine-checked; we record only the mathematical content.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%======================================================================
+\section{Introduction}
+%======================================================================
+
+Containers present polynomial endofunctors. The category $\Cont$ of
+containers and their morphisms admits several tensors, each with a
+different reading on extensions:
+\begin{center}
+\begin{tabular}{llll}
+structure & tensor of $(S,P)$, $(T,Q)$ & unit & $\Ext$ pointwise? \\
+\hline
+coproduct $+$ & $(S \oplus T,\; \mathsf{elim}(P,Q))$ & $0$ & yes \\
+product $\times$ & $(S \times T,\; (s,t) \mapsto P(s)\oplus Q(t))$ & $1$ & yes \\
+Dirichlet $\otimes$ & $(S \times T,\; (s,t) \mapsto P(s)\times Q(t))$ & $y$ & no \\
+sequential $\seq$ &
+  $\bigl(\sum_s (P(s)\to T),\; \ldots\bigr)$ & $I{=}y$ & no
+\end{tabular}
+\end{center}
+The sequential and Dirichlet structures are treated in companion notes.
+Here we supply the monoidal data for~$+$ and~$\times$, and the extension
+comparisons that make $\Ext(-)$ strong monoidal for both.
+
+\paragraph{The product/Dirichlet contrast.}
+Product and Dirichlet have the same shapes $S \times T$. They differ only
+in positions: a sum versus a product. Yet the \emph{extensions} invert
+the reading. The container whose positions are a sum has extension the
+pointwise product of functors, because a labelling of $P(s)\oplus Q(t)$
+\emph{is} a pair of labellings. The Dirichlet positions $P(s)\times Q(t)$
+admit no such splitting, and $\Ext(C \otimes D)$ is not any pointwise
+combination of $\Ext\,C$ and $\Ext\,D$.
+
+\paragraph{What this note claims.}
+\begin{enumerate}
+  \item $(\Cont, +, 0)$ is monoidal.
+  \item $(\Cont, \times, 1)$ is monoidal.
+  \item $\Ext(C+D)\,X \cong \Ext\,C\,X \oplus \Ext\,D\,X$ and
+        $\Ext\,0\,X \cong \emptyset$.
+  \item $\Ext(C \times D)\,X \cong \Ext\,C\,X \times \Ext\,D\,X$ and
+        $\Ext\,1\,X \cong 1$.
+  \item $\Ext\,y\,X \cong X$ (shared unit comparison for $\otimes$
+        and~$\seq$).
+\end{enumerate}
+None of the comparison maps is an identity: each is a genuine
+isomorphism, which is exactly what ``strong, not strict'' means.
+
+We work throughout in a single universe of types. Proofs are indicated by
+the phrase ``by lean.''
+
+%======================================================================
+\section{Background and units}
+%======================================================================
+
+\begin{definition}[Container and extension]\label{def:container}
+A \textbf{container} $C = (S,P)$ consists of a shape type~$S$ and a
+position family~$P$. Its \textbf{extension} at a type~$X$ is
+\begin{equation}
+  \Ext\,C\,X \;=\; \sum_{s \,:\, S} \bigl(P(s) \to X\bigr).
+\end{equation}
+Morphisms of containers are shape maps with contravariant position maps;
+we write $\Cont$ for the category.
+\end{definition}
+
+\begin{definition}[Empty and unit containers]\label{def:zero-one}
+\begin{enumerate}
+  \item The \textbf{empty container} $0$ has shape type $\emptyset$
+        (and, vacuously, no positions). Its extension is the constantly
+        empty functor. It is the unit for the coproduct and the initial
+        object of~$\Cont$.
+  \item The \textbf{one-shape, no-position container} $1$ has shape type
+        $1$ (a singleton) and empty position set. Its extension is the
+        constantly-one functor---the polynomial $y^0$. It is the unit for
+        the categorical product and the terminal object of~$\Cont$.
+\end{enumerate}
+Note that $1 = y^0$ and $y = y^1$: the former is the unit for~$\times$,
+the latter for~$\otimes$ and~$\seq$.
+\end{definition}
+
+We take as given the coproduct $C + D$ and product $C \times D$ of
+containers (with their universal properties): shapes of the coproduct are
+$S \oplus T$ with positions $\mathsf{elim}(P,Q)$; shapes of the product
+are $S \times T$ with positions $P(s) \oplus Q(t)$.
+
+%======================================================================
+\section{The coproduct monoidal structure}
+%======================================================================
+
+\begin{definition}[Action on morphisms]\label{def:coprod2}
+Given morphisms $\mu : C \to C'$ and $\nu : D \to D'$, the
+\textbf{coproduct action}
+\[
+  \mu +_2 \nu \;:\; C + D \;\longrightarrow\; C' + D'
+\]
+is obtained from the coproduct's universal property: it is the copairing
+of $\mu$ then the left injection and $\nu$ then the right injection.
+\end{definition}
+
+\begin{proposition}[Functor laws for $+$]\label{prop:coprod2-laws}
+\begin{enumerate}
+  \item $\id_C +_2 \id_D = \id_{C+D}$;
+  \item $(\mu \mathbin{;}\mu') +_2 (\nu \mathbin{;}\nu')
+        = (\mu +_2 \nu) \mathbin{;} (\mu' +_2 \nu')$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{definition}[Structural isomorphisms for $+$]\label{def:coprod-struct}
+\begin{enumerate}
+  \item The \textbf{associator}
+        $(C+D)+E \xrightarrow{\sim} C+(D+E)$ is $\oplus$-reassociation
+        on shapes and the identity on positions in every branch (the
+        positions of an injected shape \emph{are} the positions of the
+        summand).
+  \item The \textbf{left unitor} $0 + C \xrightarrow{\sim} C$ and
+        \textbf{right unitor} $C + 0 \xrightarrow{\sim} C$ collapse the
+        empty summand.
+\end{enumerate}
+\end{definition}
+
+\begin{proposition}[Naturality for $+$]\label{prop:coprod-nat}
+The associator and both unitors of the coproduct are natural in all
+arguments.
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[Coherence for $+$]\label{thm:coprod-coherence}
+The pentagon and triangle identities hold for the coproduct tensor.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[$(\Cont, +, 0)$ is monoidal]\label{thm:coprod-monoidal}
+The category of containers, equipped with the coproduct as tensor and the
+empty container as unit, is a monoidal category.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+In a formal development that admits only one canonical monoidal instance
+on~$\Cont$, the sequential structure is preferred and the coproduct is
+packaged as named data rather than a global instance. Mathematically
+there is no conflict: four monoidal structures on one category is the
+point.
+\end{remark}
+
+%======================================================================
+\section{The product monoidal structure}
+%======================================================================
+
+\begin{definition}[Action on morphisms]\label{def:prod2}
+Given morphisms $\mu : C \to C'$ and $\nu : D \to D'$, the
+\textbf{product action}
+\[
+  \mu \times_2 \nu \;:\; C \times D \;\longrightarrow\; C' \times D'
+\]
+is obtained from the product's universal property: it is the pairing of
+the first projection then~$\mu$ with the second projection then~$\nu$.
+\end{definition}
+
+\begin{proposition}[Functor laws for $\times$]\label{prop:prod2-laws}
+\begin{enumerate}
+  \item $\id_C \times_2 \id_D = \id_{C \times D}$;
+  \item $(\mu \mathbin{;}\mu') \times_2 (\nu \mathbin{;}\nu')
+        = (\mu \times_2 \nu) \mathbin{;} (\mu' \times_2 \nu')$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{definition}[Structural isomorphisms for $\times$]\label{def:prod-struct}
+\begin{enumerate}
+  \item The \textbf{associator}
+        $(C \times D) \times E \xrightarrow{\sim} C \times (D \times E)$
+        is product reassociation on shapes and (backward) sum
+        reassociation on positions: positions of the product are sums,
+        so the associator must reassociate those sums in the opposite
+        direction from the shapes.
+  \item The \textbf{left unitor} $1 \times C \xrightarrow{\sim} C$ and
+        \textbf{right unitor} $C \times 1 \xrightarrow{\sim} C$: the
+        unit shape contributes no positions, so positions of the product
+        are just those of~$C$ (injected into the appropriate summand).
+\end{enumerate}
+\end{definition}
+
+\begin{proposition}[Naturality for $\times$]\label{prop:prod-nat}
+The associator and both unitors of the product are natural in all
+arguments.
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[Coherence for $\times$]\label{thm:prod-coherence}
+The pentagon and triangle identities hold for the product tensor.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[$(\Cont, \times, 1)$ is monoidal]\label{thm:prod-monoidal}
+The category of containers, equipped with the categorical product as
+tensor and the one-shape no-position container as unit, is a monoidal
+category.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+Shapes multiply, but positions add. That is the subtlety of the product
+tensor, and the reason its extension comparison (Section~\ref{sec:ext})
+is the exponential law rather than a mere unpacking of definitions.
+\end{remark}
+
+%======================================================================
+\section{Extension as a monoidal functor}
+\label{sec:ext}
+%======================================================================
+
+For a monoidal functor one needs, for each monoidal structure on the
+source, a tensor on the target (endofunctors of $\Type$) and comparison
+maps. Here:
+\begin{itemize}
+  \item $+$ maps to the pointwise coproduct of functors, $0$ to the
+        constantly empty functor;
+  \item $\times$ maps to the pointwise product of functors, $1$ to the
+        constantly-one functor;
+  \item $\seq$ maps to composition of functors (companion note);
+  \item $\otimes$ admits \emph{no} pointwise tensor on the target
+        (companion note on the Dirichlet structure).
+\end{itemize}
+Each comparison below is a genuine isomorphism of types.
+
+\subsection{Coproduct comparisons}
+
+\begin{definition}[Coproduct extension comparison]\label{def:coprod-ext}
+The forward and backward maps
+\begin{align}
+  \Ext(C+D)\,X
+  &\;\longrightarrow\;
+  \Ext\,C\,X \;\oplus\; \Ext\,D\,X, \\
+  \Ext\,C\,X \;\oplus\; \Ext\,D\,X
+  &\;\longrightarrow\;
+  \Ext(C+D)\,X
+\end{align}
+send a structure whose shape is a left (resp.\ right) injection to the
+corresponding summand, and conversely re-inject. The unit comparison
+$\Ext\,0\,X \to \emptyset$ is elimination of the empty shape.
+\end{definition}
+
+\begin{theorem}[Coproduct comparisons are inverse]\label{thm:coprod-ext}
+The maps of Definition~\ref{def:coprod-ext} are mutually inverse. In
+particular
+\begin{equation}
+  \Ext(C+D)\,X \;\cong\; \Ext\,C\,X \;\oplus\; \Ext\,D\,X,
+  \qquad
+  \Ext\,0\,X \;\cong\; \emptyset.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\subsection{Product comparisons}
+
+\begin{definition}[Product extension comparison]\label{def:prod-ext}
+The forward map
+\[
+  \Ext(C \times D)\,X
+  \;\longrightarrow\;
+  \Ext\,C\,X \;\times\; \Ext\,D\,X
+\]
+splits a labelling of $P(s) \oplus Q(t)$ along the two injections. The
+backward map pairs the shapes and combines the labellings by case
+analysis on the sum of positions.
+\end{definition}
+
+\begin{theorem}[Product comparisons are inverse]\label{thm:prod-ext}
+The maps of Definition~\ref{def:prod-ext} are mutually inverse. In
+particular
+\begin{equation}
+  \Ext(C \times D)\,X \;\cong\; \Ext\,C\,X \;\times\; \Ext\,D\,X,
+  \qquad
+  \Ext\,1\,X \;\cong\; 1.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}[The exponential law]
+This is the pleasing cross-check. The product container's positions are a
+\emph{sum}, yet its extension is the pointwise \emph{product} of the
+extensions. The reason is
+\begin{equation}
+  X^{A+B} \;\cong\; X^A \times X^B:
+\end{equation}
+a labelling $P(s) \oplus Q(t) \to X$ \emph{is} a pair of labellings. Currying
+the sum turns the position-level $\oplus$ into a functor-level $\times$.
+\end{remark}
+
+\subsection{The shared unit $y$}
+
+\begin{definition}[Identity container as representable]\label{def:y}
+Write $y$ for the container with one shape and one position (also called
+$I$ when viewed as the unit of~$\seq$). Its extension is the identity
+functor.
+\end{definition}
+
+\begin{theorem}[Unit comparison for $y$]\label{thm:y-ext}
+The maps
+\begin{equation}
+  \Ext\,y\,X \;\longrightarrow\; X,
+  \qquad
+  X \;\longrightarrow\; \Ext\,y\,X
+\end{equation}
+---read the label at the unique position, and place a value at the unique
+position---are mutually inverse. Thus $\Ext\,y\,X \cong X$. This is the
+unit comparison for both $\otimes$ and~$\seq$.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{Discussion}
+%======================================================================
+
+\paragraph{What has been established.}
+The coproduct and product are monoidal structures on~$\Cont$. The
+extension functor is strong monoidal for both, via genuine (not identity)
+comparison isomorphisms. The product/Dirichlet contrast is explained by
+the exponential law: sum of positions yields product of extensions;
+product of positions does not split.
+
+\paragraph{Taxonomy of the four structures.}
+\begin{center}
+\begin{tabular}{llll}
+structure & Day convolution of & unit & $\Ext$ pointwise? \\
+\hline
+product $\times$ & $(\mathbf{Set}, +, 0)$ & $1 = y^0$ & yes \\
+Dirichlet $\otimes$ & $(\mathbf{Set}, \times, 1)$ & $y = y^1$ & no \\
+coproduct $+$ & not a Day convolution & $0$ & yes \\
+sequential $\seq$ & not a Day convolution & $I = y$ & no
+\end{tabular}
+\end{center}
+(The Day-convolution reading of $\times$ and $\otimes$ follows Niu--Spivak;
+the coproduct fails to preserve the initial object in each variable, and
+$\seq$ is not cocontinuous in the right variable.)
+
+\paragraph{Machine checking.}
+Every definition and theorem statement above corresponds to a declaration
+in a machine-checked formalisation. The phrase ``by lean'' indicates that
+the proof has been verified by a proof assistant.
+
+%======================================================================
+\section*{Acknowledgements}
+%======================================================================
+
+The mathematical content follows the theory of containers of Abbott,
+Altenkirch, and Ghani, and the monoidal taxonomy of polynomial functors.
+The presentation here is a prose rendering of a formal development
+intended for human review of the theorem statements.
+
+\begin{thebibliography}{9}
+
+\bibitem{abbott2005}
+M.~Abbott, T.~Altenkirch, and N.~Ghani.
+\newblock Containers: constructing strictly positive types.
+\newblock \emph{Theoretical Computer Science}, 342(1):3--27, 2005.
+
+\bibitem{abbott2003}
+M.~Abbott, T.~Altenkirch, and N.~Ghani.
+\newblock Categories of containers.
+\newblock In \emph{FoSSaCS}, volume~2620 of \emph{LNCS}, pages 23--38.
+\newblock Springer, 2003.
+
+\bibitem{niu-spivak2023}
+N.~Niu and D.~I.~Spivak.
+\newblock Polynomial functors: a mathematical theory of interaction.
+\newblock arXiv:2312.00990, 2023.
+
+\bibitem{maclane1971}
+S.~Mac~Lane.
+\newblock \emph{Categories for the Working Mathematician}.
+\newblock Springer, 1971.
+
+\end{thebibliography}
+
+\end{document}

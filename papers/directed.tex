@@ -1,0 +1,398 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath,amsthm,mathtools}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{parskip}
+\usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
+
+% Theorem environments (arXiv / journal style)
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{remark}[theorem]{Remark}
+
+% Notation
+\newcommand{\Ext}{\mathrm{Ext}}
+\newcommand{\Shape}{\mathrm{Shape}}
+\newcommand{\Pos}{\mathrm{Pos}}
+\newcommand{\Type}{\mathbf{Type}}
+\newcommand{\id}{\mathrm{id}}
+\newcommand{\rootpos}{\mathsf{o}}
+\newcommand{\sub}{\mathbin{\downarrow}}
+\newcommand{\shift}{\oplus}
+
+\title{Directed Containers and the Induced Comonad}
+\author{Extracted from a machine-checked development}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We equip containers with a directed structure---a root position, a
+sub-shape operation, and a shift combining positions along sub-shapes---subject
+to five equational laws (D1--D5). The extension of a directed container carries
+a comonad structure whose counit reads the label at the root and whose
+comultiplication re-indexes labels along sub-shapes and shifts. Each of the
+three comonad laws is deduced from a corresponding directed-container law (or
+pair of laws). The proofs of all stated results have been machine-checked; we
+record only the mathematical content.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%======================================================================
+\section{Introduction}
+%======================================================================
+
+A container $(S,P)$ determines a polynomial endofunctor
+$\Ext\,C\,X = \sum_{s\,:\,S}\,(P(s)\to X)$ on types. Many such functors arising
+in practice---streams, non-empty lists, tree zippers, the store comonad---are
+not merely functors but \emph{comonads}. The combinatorial data needed to equip
+$\Ext\,C$ with a comonad structure can be isolated at the level of the container
+itself: this is the notion of a \emph{directed container}, introduced by Ahman,
+Chapman, and Uustalu.
+
+Concretely, a directed container adds to $(S,P)$ a distinguished root position
+$\rootpos(s)\in P(s)$, a sub-shape $s\sub p\in S$ sitting under each position
+$p$, and a shift $p\shift q\in P(s)$ combining a position of $s$ with a
+position of the sub-shape. Five laws govern how roots, sub-shapes, and shifts
+interact; two of them involve transport of positions along shape equalities,
+because positions live in dependent fibres.
+
+The counit and comultiplication on $\Ext\,C$ are then written purely in terms
+of this combinatorial data, and the three comonad identities follow one-for-one
+from the directed laws. The dependent bookkeeping is packaged once and for all
+in an extensionality principle for elements of an extension.
+
+\paragraph{What this note claims.}
+In ordinary mathematical language: if a container carries a root, a sub-shape
+operation, and a shift satisfying D1--D5, then its extension is a comonad on
+types, with
+\[
+  \varepsilon\langle s,v\rangle \;=\; v\bigl(\rootpos(s)\bigr),
+  \qquad
+  \delta\langle s,v\rangle \;=\;
+  \Bigl\langle s,\;
+    p\mapsto\bigl\langle s\sub p,\;
+      q\mapsto v(p\shift q)\bigr\rangle
+  \Bigr\rangle,
+\]
+and conversely each comonad law is the image of a directed-container law under
+this translation. There is no further data.
+
+%======================================================================
+\section{Preliminaries}
+%======================================================================
+
+We work in a single universe $\Type$ of types. A \textbf{container} $C$
+consists of a type $\Shape(C)$ of shapes and, for each shape $s$, a type
+$\Pos(C)(s)$ of positions. The \textbf{extension} at a type $X$ is
+\begin{equation}
+  \Ext\,C\,X \;=\; \sum_{s\,:\,\Shape(C)}\bigl(\Pos(C)(s)\to X\bigr).
+\end{equation}
+We write elements as pairs $\langle s,\,v\rangle$. The functorial action on a
+function $f:X\to Y$ is
+$\Ext\,C\,f\,\langle s,v\rangle = \langle s,\, f\circ v\rangle$.
+
+Because several directed-container laws equate shapes and then require
+positions in different fibres to be compared, we record an extensionality
+principle for elements of an extension.
+
+\begin{lemma}[Dependent extensionality for extensions]\label{lem:ext-eq}
+Let $C$ be a container, $X$ a type, and $s_1,s_2\in\Shape(C)$ with
+$h:s_1=s_2$. Given labellings $v_1:\Pos(C)(s_1)\to X$ and
+$v_2:\Pos(C)(s_2)\to X$, if
+\[
+  \forall\, q\in\Pos(C)(s_1).\;
+  v_1(q) \;=\; v_2\bigl(h\cdot q\bigr)
+\]
+(where $h\cdot q$ denotes transport of the position $q$ along $h$), then
+\[
+  \langle s_1,\,v_1\rangle \;=\; \langle s_2,\,v_2\rangle
+  \qquad\text{in }\;\Ext\,C\,X.
+\]
+\end{lemma}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{Directed containers}
+%======================================================================
+
+\begin{definition}[Directed container]\label{def:directed}
+A \textbf{directed container} $D$ consists of an underlying container
+$C=(\Shape(D),\Pos(D))$ together with three operations
+\begin{enumerate}
+  \item a \textbf{root} $\rootpos:\forall s.\;\Pos(D)(s)$,
+  \item a \textbf{sub-shape} $({\sub}):\forall s.\;\Pos(D)(s)\to\Shape(D)$,
+  \item a \textbf{shift}
+        $({\shift}):\forall s.\;\forall p\in\Pos(D)(s).\;
+        \Pos(D)(s\sub p)\to\Pos(D)(s)$,
+\end{enumerate}
+subject to the five laws below. We write $S$ and $P$ for the shape and
+position components when no confusion arises.
+\end{definition}
+
+\begin{definition}[Directed-container laws]\label{def:d-laws}
+Let $D$ be as in Definition~\ref{def:directed}. The laws are:
+\begin{enumerate}
+  \item[\textbf{D1.}] Sub-shape under the root is the shape itself:
+        \[
+          \forall s.\; s\sub\rootpos(s) \;=\; s.
+        \]
+  \item[\textbf{D4.}] Sub-shapes nest along the shift:
+        \[
+          \forall s.\;\forall p\in P(s).\;\forall q\in P(s\sub p).\;
+          s\sub(p\shift q) \;=\; (s\sub p)\sub q.
+        \]
+  \item[\textbf{D2.}] Shifting by the root is the identity, transported along
+        D1:
+        \[
+          \forall s.\;\forall q\in P\bigl(s\sub\rootpos(s)\bigr).\;
+          \rootpos(s)\shift q \;=\; (\mathrm{D1}_s)\cdot q.
+        \]
+  \item[\textbf{D3.}] Shifting by the root of the sub-shape is the identity:
+        \[
+          \forall s.\;\forall p\in P(s).\;
+          p\shift\rootpos(s\sub p) \;=\; p.
+        \]
+  \item[\textbf{D5.}] The shift is associative, with the right argument
+        transported along D4:
+        \begin{align*}
+          &\forall s.\;\forall p\in P(s).\;\forall q\in P(s\sub p).\;
+          \forall q'\in P\bigl((s\sub p)\sub q\bigr).\\
+          &\qquad
+          (p\shift q)\shift\bigl((\mathrm{D4}_{s,p,q})^{-1}\cdot q'\bigr)
+          \;=\;
+          p\shift\bigl(q\shift q'\bigr).
+        \end{align*}
+\end{enumerate}
+\end{definition}
+
+\begin{remark}
+Laws D1 and D4 are equalities of \emph{shapes}. Laws D2 and D5 equate
+\emph{positions} living in fibres that are identified only up to those shape
+equalities, so the statements necessarily involve transport. Law D3 needs no
+transport: both sides inhabit $P(s)$ directly. The numbering D1--D5 follows
+the literature; the logical dependencies are that D2 refers to D1 and D5
+refers to D4.
+\end{remark}
+
+\begin{example}
+\begin{enumerate}
+  \item \textbf{Non-empty lists / the store comonad on finite positions.}
+        Shapes are non-zero natural numbers; positions of $n$ are
+        $\{0,\ldots,n-1\}$; the root is $0$; the sub-shape under $p$ is
+        $n-p$; the shift is addition (truncated to the remaining length).
+  \item \textbf{Streams.} A single shape, positions $\mathbb{N}$, root $0$,
+        sub-shape always the unique shape, shift ordinary addition.
+  \item \textbf{Tree zippers.} Shapes are trees; positions are paths from
+        the root; the root position is the empty path; sub-shape is the
+        subtree at a path; shift is path concatenation.
+\end{enumerate}
+\end{example}
+
+%======================================================================
+\section{The induced comonad}
+%======================================================================
+
+Fix a directed container $D$ with underlying container $C$, and write
+$\Ext\,C$ for its extension.
+
+\begin{definition}[Counit]\label{def:counit}
+The \textbf{counit} of the comonad is the family of maps
+\begin{equation}
+  \varepsilon_X \;:\; \Ext\,C\,X \;\longrightarrow\; X,
+  \qquad
+  \varepsilon_X\langle s,\,v\rangle \;=\; v\bigl(\rootpos(s)\bigr).
+\end{equation}
+It reads the payload at the root position of the shape.
+\end{definition}
+
+\begin{definition}[Comultiplication]\label{def:comult}
+The \textbf{comultiplication} is the family of maps
+\begin{equation}
+  \delta_X \;:\;
+  \Ext\,C\,X \;\longrightarrow\; \Ext\,C\bigl(\Ext\,C\,X\bigr)
+\end{equation}
+defined by
+\begin{equation}
+  \delta_X\langle s,\,v\rangle
+  \;=\;
+  \Bigl\langle
+    s,\;
+    p \;\mapsto\;
+    \bigl\langle
+      s\sub p,\;
+      q \;\mapsto\; v(p\shift q)
+    \bigr\rangle
+  \Bigr\rangle.
+\end{equation}
+The outer shape is unchanged. At each position $p$ of $s$ one places the
+element of $\Ext\,C\,X$ whose shape is the sub-shape under $p$ and whose
+labelling is $v$ reindexed by shifting from $p$.
+\end{definition}
+
+%======================================================================
+\section{Comonad laws}
+%======================================================================
+
+\begin{theorem}[Left counit]\label{thm:left-counit}
+For every type $X$,
+\begin{equation}
+  \varepsilon_{\Ext\,C\,X}\;\circ\;\delta_X
+  \;=\;
+  \id_{\Ext\,C\,X}.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}[Idea of the argument]
+Evaluating the composite on $\langle s,v\rangle$ yields
+\[
+  \bigl\langle
+    s\sub\rootpos(s),\;
+    r\mapsto v\bigl(\rootpos(s)\shift r\bigr)
+  \bigr\rangle.
+\]
+Law D1 equates the shape $s\sub\rootpos(s)$ with $s$. Law D2 equates
+$\rootpos(s)\shift r$ with the transport of $r$ along D1, so the labelling
+agrees with $v$ after transport. Lemma~\ref{lem:ext-eq} concludes.
+\end{remark}
+
+\begin{theorem}[Right counit]\label{thm:right-counit}
+For every type $X$,
+\begin{equation}
+  \Ext\,C\,\varepsilon_X\;\circ\;\delta_X
+  \;=\;
+  \id_{\Ext\,C\,X}.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}[Idea of the argument]
+The composite sends $\langle s,v\rangle$ to
+\[
+  \bigl\langle s,\;
+    q\mapsto v\bigl(q\shift\rootpos(s\sub q)\bigr)
+  \bigr\rangle.
+\]
+Shapes are unchanged. Law D3 says $q\shift\rootpos(s\sub q)=q$, so the
+labelling is $v$.
+\end{remark}
+
+\begin{theorem}[Coassociativity]\label{thm:coassoc}
+For every type $X$,
+\begin{equation}
+  \Ext\,C\,\delta_X\;\circ\;\delta_X
+  \;=\;
+  \delta_{\Ext\,C\,X}\;\circ\;\delta_X.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}[Idea of the argument]
+Both sides produce, from $\langle s,v\rangle$, a thrice-nested element of
+the extension. The outermost shapes agree. At an outer position $p$ and an
+inner position $q$, the two sides place shapes
+$(s\sub p)\sub q$ and $s\sub(p\shift q)$ respectively; these are identified
+by D4 (up to symmetry). At the deepest level the labellings are
+$v\bigl(p\shift(q\shift r)\bigr)$ and
+$v\bigl((p\shift q)\shift r\bigr)$ (with $r$ transported along D4 on one
+side); these agree by D5. Applying Lemma~\ref{lem:ext-eq} thrice yields the
+result.
+\end{remark}
+
+\begin{corollary}[Comonad structure]\label{cor:comonad}
+If $D$ is a directed container with underlying container $C$, then
+$(\Ext\,C,\,\varepsilon,\,\delta)$ is a comonad on~$\Type$.
+\end{corollary}
+
+\begin{proof}
+By lean. (The three laws are Theorems~\ref{thm:left-counit},
+\ref{thm:right-counit}, and~\ref{thm:coassoc}.)
+\end{proof}
+
+%======================================================================
+\section{Discussion}
+%======================================================================
+
+\paragraph{What has been established.}
+Directed structure on a container is precisely the data needed to make the
+extension a comonad. The correspondence is tight: each comonad law is the
+direct image of one or two directed laws, and the only non-trivial
+bookkeeping is transport of positions along shape equalities (isolated in
+Lemma~\ref{lem:ext-eq}).
+
+\paragraph{Dependence and transport.}
+The laws D2 and D5 are the places where dependent type theory is essential:
+positions of a sub-shape of a sub-shape are not definitionally positions of a
+shifted sub-shape, so associativity of shift must be stated with an explicit
+transport along D4. In set-theoretic presentations this transport is
+invisible; in a formal development it is the content of the calculation.
+
+\paragraph{Scope.}
+This note treats a single directed container and the comonad on its
+extension. Morphisms of directed containers, their identification with
+cofunctors of the presented categories, and the monoidal structure on the
+category of containers of which directed containers are the comonoids, belong
+to companion developments.
+
+\paragraph{Machine checking.}
+Every definition and theorem statement above corresponds to a declaration in a
+machine-checked formalisation. The phrase ``by lean'' indicates that the proof
+has been verified by a proof assistant; we have not reproduced the formal
+proof scripts here.
+
+%======================================================================
+\section*{Acknowledgements}
+%======================================================================
+
+The mathematical content follows the theory of directed containers of Ahman,
+Chapman, and Uustalu. The presentation here is a prose rendering of a formal
+development intended for human review of the theorem statements.
+
+\begin{thebibliography}{9}
+
+\bibitem{ahman2012}
+D.~Ahman, J.~Chapman, and T.~Uustalu.
+\newblock When is a container a comonad?
+\newblock In \emph{FoSSaCS}, volume~7213 of \emph{LNCS}, pages 74--88.
+\newblock Springer, 2012.
+
+\bibitem{ahman2014}
+D.~Ahman, J.~Chapman, and T.~Uustalu.
+\newblock When is a container a comonad?
+\newblock \emph{Logical Methods in Computer Science}, 10(3), 2014.
+
+\bibitem{abbott2005}
+M.~Abbott, T.~Altenkirch, and N.~Ghani.
+\newblock Containers: constructing strictly positive types.
+\newblock \emph{Theoretical Computer Science}, 342(1):3--27, 2005.
+
+\end{thebibliography}
+
+\end{document}

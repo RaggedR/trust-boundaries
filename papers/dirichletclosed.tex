@@ -1,0 +1,556 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath,amsthm,mathtools}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{parskip}
+\usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
+
+% Theorem environments (arXiv / journal style)
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{remark}[theorem]{Remark}
+
+% Notation
+\newcommand{\Ext}{\mathrm{Ext}}
+\newcommand{\Shape}{\mathrm{Shape}}
+\newcommand{\Pos}{\mathrm{Pos}}
+\newcommand{\Type}{\mathbf{Type}}
+\newcommand{\id}{\mathrm{id}}
+\newcommand{\Ihom}{\mathrm{Ihom}}
+\newcommand{\Cont}{\mathbf{Cont}}
+\newcommand{\Hom}{\mathrm{Hom}}
+
+\title{Closure of the Dirichlet Tensor on Containers}
+\author{Extracted from a machine-checked development}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We prove that the Dirichlet tensor $\otimes$ on the category $\Cont$ of
+containers is \emph{closed}: for every container $q$ the functor
+$- \otimes q$ has a right adjoint $\Ihom(q,-)$. The internal hom is itself
+a container, whose shapes are the container morphisms $q \Rightarrow r$ and
+whose positions over a morphism $(u,g)$ are pairs consisting of a $q$-shape
+and an $r$-position over its image. The adjunction is exhibited by an
+explicit currying bijection of hom-sets, with both round trips and both
+naturalities holding by pure rearrangement of dependent products. The proofs
+of all stated results have been machine-checked; we record only the
+mathematical content.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%======================================================================
+\section{Introduction}
+%======================================================================
+
+Containers form a category $\Cont$ whose morphisms are pairs of a forward
+map on shapes and a backward map on positions. Among the monoidal structures
+on $\Cont$ is the \emph{Dirichlet tensor}: for containers $C = (S,P)$ and
+$D = (T,Q)$,
+\begin{equation}
+  C \otimes D \;=\; \bigl(S \times T,\; (s,t) \mapsto P(s) \times Q(t)\bigr).
+\end{equation}
+Shapes are paired; positions are products. This is dual in spirit to the
+categorical product of containers, which uses the same shape product but
+coproducts of positions.
+
+A monoidal category is closed when each functor $- \otimes q$ admits a
+right adjoint. In the polynomial-functor presentation this is classical
+(Niu--Spivak); the present note records the corresponding statement in the
+container presentation, with fully explicit currying and uncurrying maps
+and with naturality in both variables.
+
+The material is elementary and self-contained. We work throughout in a
+single universe of types, writing $\Type$ for that universe. Morphisms of
+containers and the Dirichlet tensor are assumed as in the prior notes on
+containers and monoidal structure; we recall only what is needed. Proofs
+are indicated by the phrase ``by lean,'' meaning they have been checked by
+a proof assistant rather than written out in prose.
+
+\paragraph{What this note claims.}
+In ordinary mathematical language, the claim is: the Dirichlet monoidal
+structure $(\Cont, \otimes, y)$ is closed. The internal hom
+$\Ihom(q,r)$ is the container whose shape type is literally the set of
+container morphisms $q \Rightarrow r$, and the currying bijection
+\begin{equation}
+  \Hom(p \otimes q,\, r)
+  \;\cong\;
+  \Hom\bigl(p,\, \Ihom(q,r)\bigr)
+\end{equation}
+is pure currying of dependent products---split across the two components of
+the backward position map of a morphism $p \otimes q \Rightarrow r$. There
+is no extra data, no transport, and no exotic naturality constraint beyond
+what the container presentation already forces.
+
+%======================================================================
+\section{Recollections}
+%======================================================================
+
+\begin{definition}[Container and morphism]
+A \textbf{container} $C$ consists of a type $\Shape(C)$ of shapes and, for
+each shape $s$, a type $\Pos(C)(s)$ of positions. A \textbf{morphism}
+$\varphi : C \Rightarrow D$ consists of a shape map
+$u : \Shape(C) \to \Shape(D)$ and, for each $s$, a position map
+$g_s : \Pos(D)(u(s)) \to \Pos(C)(s)$ (contravariant on positions). We write
+$\Hom(C,D)$ for the type of such morphisms.
+\end{definition}
+
+\begin{definition}[Dirichlet tensor]\label{def:dirichlet}
+Let $C = (S,P)$ and $D = (T,Q)$ be containers. Their \textbf{Dirichlet
+tensor} is the container
+\begin{equation}
+  C \otimes D \;=\;
+  \bigl(
+    S \times T,\;
+    (s,t) \mapsto P(s) \times Q(t)
+  \bigr).
+\end{equation}
+The unit $y$ is the one-shape, one-position container (the same object that
+serves as unit for sequential composition of containers).
+\end{definition}
+
+\begin{definition}[Bifunctorial action]\label{def:dir2}
+Given morphisms $\mu : C \Rightarrow C'$ and $\nu : D \Rightarrow D'$, the
+\textbf{tensor of morphisms}
+$\mu \otimes \nu : C \otimes D \Rightarrow C' \otimes D'$ acts
+componentwise:
+\begin{align}
+  (\mu \otimes \nu)\text{ on shapes:}
+  &\quad (s,t) \mapsto \bigl(u_\mu(s),\, u_\nu(t)\bigr), \\
+  (\mu \otimes \nu)\text{ on positions:}
+  &\quad (p,q) \mapsto \bigl(g_\mu(p),\, g_\nu(q)\bigr).
+\end{align}
+\end{definition}
+
+%======================================================================
+\section{The internal hom}
+%======================================================================
+
+The internal hom for $\otimes$ is a container whose shapes \emph{are}
+morphisms. That is not a notational convenience: it is the content of the
+closed structure (cf.\ Niu--Spivak, Eq.~(4.79), transported to containers).
+
+\begin{definition}[Internal hom]\label{def:ihom}
+Let $q$ and $r$ be containers. The \textbf{internal hom}
+$\Ihom(q,r)$ is the container defined by
+\begin{align}
+  \Shape\bigl(\Ihom(q,r)\bigr)
+  &\;=\;
+  \Hom(q,r), \\[4pt]
+  \Pos\bigl(\Ihom(q,r)\bigr)(f)
+  &\;=\;
+  \sum_{t \,:\, \Shape(q)}\;
+  \Pos(r)\bigl(u_f(t)\bigr),
+\end{align}
+where $f = (u_f, g_f) : q \Rightarrow r$. Thus a shape of $\Ihom(q,r)$ is a
+container morphism $q \Rightarrow r$, and a position over such a shape is a
+pair $\langle t,\, i \rangle$ consisting of a $q$-shape $t$ and an
+$r$-position $i$ over the image shape $u_f(t)$.
+\end{definition}
+
+\begin{proposition}[Shapes are morphisms]\label{prop:ihom-shape}
+For all containers $q$ and $r$,
+\begin{equation}
+  \Shape\bigl(\Ihom(q,r)\bigr) \;=\; \Hom(q,r)
+\end{equation}
+definitionally.
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{proposition}[Positions of the internal hom]\label{prop:ihom-pos}
+For every morphism $f : q \Rightarrow r$,
+\begin{equation}
+  \Pos\bigl(\Ihom(q,r)\bigr)(f)
+  \;=\;
+  \sum_{t \,:\, \Shape(q)}\; \Pos(r)\bigl(u_f(t)\bigr)
+\end{equation}
+definitionally.
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+That the shape type is the hom-set of $\Cont$ is what makes the adjunction
+\emph{internal}: the internal hom is a container, not merely a set of
+morphisms. The extra data---the position family---is precisely what is
+needed for the currying bijection of the next section to be a bijection of
+container morphisms rather than of bare functions.
+\end{remark}
+
+%======================================================================
+\section{Currying and uncurrying}
+%======================================================================
+
+Unfolded, a morphism $F : p \otimes q \Rightarrow r$ consists of
+\begin{itemize}
+  \item a shape map $u_F : \Shape(p) \times \Shape(q) \to \Shape(r)$, and
+  \item a position map
+        $g_F : (s,t) \to \Pos(r)\bigl(u_F(s,t)\bigr)
+        \to \Pos(p)(s) \times \Pos(q)(t)$.
+\end{itemize}
+A morphism $G : p \Rightarrow \Ihom(q,r)$ consists of
+\begin{itemize}
+  \item a shape map $u_G : \Shape(p) \to \Hom(q,r)$, sending each $s$ to a
+        pair $(u_s, \varphi_s)$, and
+  \item a position map
+        $g_G : (s : \Shape(p)) \to
+        \bigl(\sum_t \Pos(r)(u_s(t))\bigr) \to \Pos(p)(s)$.
+\end{itemize}
+The bijection is pure currying, \emph{split across the two components of
+$g_F$}: the $\Pos(q)(t)$ component of $g_F$ becomes the backward position
+map $\varphi_s$ of the shape $u_G(s)$, and the $\Pos(p)(s)$ component
+becomes $g_G$. That split is the whole content---it is why the positions
+of $\Ihom(q,r)$ are $\sum_t \Pos(r)(u(t))$ and not something else.
+
+\begin{definition}[Currying]\label{def:curry}
+Let $F : p \otimes q \Rightarrow r$ be a container morphism. The
+\textbf{curried morphism}
+\begin{equation}
+  \mathrm{curry}(F) \;:\; p \;\Rightarrow\; \Ihom(q,r)
+\end{equation}
+is defined by
+\begin{align}
+  u_{\mathrm{curry}(F)}(s)
+  &\;=\;
+  \bigl(
+    t \mapsto u_F(s,t),\;
+    (t,i) \mapsto \pi_2\bigl(g_F(s,t)(i)\bigr)
+  \bigr), \\[4pt]
+  g_{\mathrm{curry}(F)}\bigl(s,\, \langle t, i \rangle\bigr)
+  &\;=\;
+  \pi_1\bigl(g_F(s,t)(i)\bigr).
+\end{align}
+Thus the $q$-component of $F$'s backward position map is packaged
+\emph{into the shape} of the internal hom, while the $p$-component becomes
+the backward position map of the curried morphism.
+\end{definition}
+
+\begin{definition}[Uncurrying]\label{def:uncurry}
+Let $G : p \Rightarrow \Ihom(q,r)$ be a container morphism. The
+\textbf{uncurried morphism}
+\begin{equation}
+  \mathrm{uncurry}(G) \;:\; p \otimes q \;\Rightarrow\; r
+\end{equation}
+is defined by
+\begin{align}
+  u_{\mathrm{uncurry}(G)}(s,t)
+  &\;=\;
+  u_{u_G(s)}(t), \\[4pt]
+  g_{\mathrm{uncurry}(G)}\bigl((s,t),\, i\bigr)
+  &\;=\;
+  \Bigl(
+    g_G\bigl(s,\, \langle t, i \rangle\bigr),\;
+    g_{u_G(s)}(t,i)
+  \Bigr).
+\end{align}
+Read the shape map of $G$ at $s$ as a morphism $q \Rightarrow r$; its shape
+map supplies the $r$-shape, and its backward position map supplies the
+$\Pos(q)(t)$ component. The $\Pos(p)(s)$ component is $G$'s own backward
+position map applied to the position $\langle t, i \rangle$.
+\end{definition}
+
+\begin{theorem}[Uncurry after curry]\label{thm:uncurry-curry}
+For every morphism $F : p \otimes q \Rightarrow r$,
+\begin{equation}
+  \mathrm{uncurry}\bigl(\mathrm{curry}(F)\bigr) \;=\; F.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[Curry after uncurry]\label{thm:curry-uncurry}
+For every morphism $G : p \Rightarrow \Ihom(q,r)$,
+\begin{equation}
+  \mathrm{curry}\bigl(\mathrm{uncurry}(G)\bigr) \;=\; G.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}[Why both round trips are immediate]
+Both identities are rearrangements of a $\Sigma$/$\times$ telescope. The only
+ingredients are $\eta$ for products (rebuilding a pair from its projections),
+$\eta$ for dependent sums (rebuilding $\langle t, i \rangle$), and $\eta$
+for the structure of a container morphism (rebuilding a morphism from its
+shape and position components). No transport of paths, no function
+extensionality beyond definitional $\eta$, and no appeal to naturality are
+required. The same definitional character holds for the monoidal coherences
+of $\otimes$ itself: the Dirichlet tensor is well behaved at the level of
+definitional equality in a way that sequential composition and the directed
+container comonad laws are not.
+\end{remark}
+
+%======================================================================
+\section{The closure theorem}
+%======================================================================
+
+\begin{definition}[Type equivalence]
+A \textbf{type equivalence} $A \simeq B$ is a pair of maps
+$f : A \to B$ and $g : B \to A$ together with proofs that $g \circ f = \id_A$
+and $f \circ g = \id_B$.
+\end{definition}
+
+\begin{theorem}[Dirichlet closure]\label{thm:closure}
+For all containers $p$, $q$, and $r$ there is a type equivalence
+\begin{equation}
+  \Hom(p \otimes q,\, r)
+  \;\simeq\;
+  \Hom\bigl(p,\, \Ihom(q,r)\bigr),
+\end{equation}
+with forward map $\mathrm{curry}$ and inverse $\mathrm{uncurry}$. The two
+round-trip identities are Theorems~\ref{thm:uncurry-curry}
+and~\ref{thm:curry-uncurry}. Equivalently,
+\begin{equation}
+  - \otimes q \;\dashv\; \Ihom(q,-).
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+Together with the monoidal structure $(\Cont, \otimes, y)$---associator,
+unitors, pentagon, and triangle---this makes $(\Cont, \otimes, y)$ a
+\textbf{closed monoidal category}, with internal hom $\Ihom$.
+\end{remark}
+
+%======================================================================
+\section{Functoriality of the internal hom and naturality}
+%======================================================================
+
+The currying bijection is natural in $p$ (contravariantly, by
+precomposition) and in $r$ (covariantly, by postcomposition). Naturality in
+$r$ requires the action of $\Ihom(q,-)$ on morphisms, which we record first.
+
+\begin{definition}[Action on morphisms]\label{def:ihom-map}
+Let $\psi : r \Rightarrow r'$ be a container morphism. The induced morphism
+\begin{equation}
+  \Ihom(q,\psi) \;:\; \Ihom(q,r) \;\Rightarrow\; \Ihom(q,r')
+\end{equation}
+is defined by
+\begin{align}
+  \text{on shapes:}
+  &\quad f \mapsto f \circ \psi
+  \qquad\text{(postcomposition)}, \\[4pt]
+  \text{on positions:}
+  &\quad
+  \langle t,\, i \rangle
+  \mapsto
+  \bigl\langle t,\;
+    g_\psi\bigl(u_f(t)\bigr)(i)
+  \bigr\rangle.
+\end{align}
+A position $\langle t, i \rangle$ of $\Ihom(q,r')$ over the shape
+$f \circ \psi$ has $i$ an $r'$-position over $\psi$'s image of $u_f(t)$;
+pulling $i$ back through $g_\psi$ yields an $r$-position, hence a position
+of $\Ihom(q,r)$.
+\end{definition}
+
+\begin{proposition}[Functoriality of $\Ihom(q,-)$]\label{prop:ihom-func}
+For every container $q$ and every container $r$,
+\begin{equation}
+  \Ihom(q, \id_r) \;=\; \id_{\Ihom(q,r)}.
+\end{equation}
+For morphisms $\psi : r \Rightarrow r'$ and $\psi' : r' \Rightarrow r''$,
+\begin{equation}
+  \Ihom(q,\, \psi \circ \psi')
+  \;=\;
+  \Ihom(q,\psi) \circ \Ihom(q,\psi').
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[Naturality in $p$]\label{thm:nat-left}
+Let $h : p' \Rightarrow p$ and $F : p \otimes q \Rightarrow r$. Then
+\begin{equation}
+  \mathrm{curry}\bigl((h \otimes \id_q) \circ F\bigr)
+  \;=\;
+  h \circ \mathrm{curry}(F).
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[Naturality in $r$]\label{thm:nat-right}
+Let $F : p \otimes q \Rightarrow r$ and $\psi : r \Rightarrow r'$. Then
+\begin{equation}
+  \mathrm{curry}(F \circ \psi)
+  \;=\;
+  \mathrm{curry}(F) \circ \Ihom(q,\psi).
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{proposition}[Naturality of uncurry in $p$]\label{prop:uncurry-nat}
+Let $h : p' \Rightarrow p$ and $G : p \Rightarrow \Ihom(q,r)$. Then
+\begin{equation}
+  \mathrm{uncurry}(h \circ G)
+  \;=\;
+  (h \otimes \id_q) \circ \mathrm{uncurry}(G).
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{The counit: evaluation}
+%======================================================================
+
+Every adjunction has a counit. For Dirichlet closure the counit is
+evaluation: applying a morphism stored as a shape of the internal hom.
+
+\begin{definition}[Evaluation]\label{def:eval}
+The \textbf{evaluation morphism}
+\begin{equation}
+  \mathrm{ev}_{q,r}
+  \;:\;
+  \Ihom(q,r) \otimes q \;\Rightarrow\; r
+\end{equation}
+is obtained by uncurrying the identity on $\Ihom(q,r)$:
+\begin{equation}
+  \mathrm{ev}_{q,r}
+  \;=\;
+  \mathrm{uncurry}\bigl(\id_{\Ihom(q,r)}\bigr).
+\end{equation}
+Unfolded, it sends the shape $(f,t)$ to $u_f(t)$---that is, it
+\emph{applies} the morphism stored in the shape---and its backward position
+map splits an $r$-position $i$ into the $\Ihom(q,r)$-position
+$\langle t, i \rangle$ and the $q$-position $g_f(t,i)$.
+\end{definition}
+
+\begin{theorem}[Triangle identity / universal property]\label{thm:triangle}
+For every morphism $F : p \otimes q \Rightarrow r$,
+\begin{equation}
+  \bigl(\mathrm{curry}(F) \otimes \id_q\bigr) \circ \mathrm{ev}_{q,r}
+  \;=\;
+  F.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[Uniqueness of the curried mate]\label{thm:unique}
+Let $F : p \otimes q \Rightarrow r$ and
+$G : p \Rightarrow \Ihom(q,r)$. If
+\begin{equation}
+  (G \otimes \id_q) \circ \mathrm{ev}_{q,r} \;=\; F,
+\end{equation}
+then $G = \mathrm{curry}(F)$.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+Existence (Theorem~\ref{thm:triangle}) is the statement that
+$\mathrm{curry}(F)$ is a mate for $F$ under evaluation. Uniqueness
+(Theorem~\ref{thm:unique}) is the observation that any $G$ satisfying the
+triangle is recovered as $\mathrm{curry}$ of its composite with evaluation,
+which is definitionally $\mathrm{uncurry}(G)$, so the claim reduces to the
+round trip of Theorem~\ref{thm:curry-uncurry}.
+\end{remark}
+
+%======================================================================
+\section{Discussion}
+%======================================================================
+
+\paragraph{What has been established.}
+The Dirichlet tensor on containers is closed. The internal hom has shapes
+equal to container morphisms and positions equal to pairs of a source shape
+with a target position over its image. Currying is a pure split of the
+backward position map of a morphism out of a tensor. Both round trips, both
+naturalities, functoriality of $\Ihom(q,-)$, and the evaluation triangle
+hold by definitional rearrangement.
+
+\paragraph{Relation to the polynomial presentation.}
+In the polynomial-functor (``Poly'') presentation of Niu--Spivak, the same
+adjunction is Eq.~(4.79) of \emph{Polynomial Functors}. The container
+presentation makes the split of position data completely explicit: one sees
+exactly which component of the tensor's position product becomes shape data
+of the internal hom and which becomes its position data.
+
+\paragraph{Definitional character.}
+Every proof in the development is by reflexivity of equality after unfolding
+definitions. This is a feature of the Dirichlet tensor and of container
+morphisms: both are built from products and dependent sums in a way that
+definitional $\eta$ identifies the relevant telescopes. By contrast,
+sequential composition of containers and the directed-container comonad laws
+require genuine transports.
+
+\paragraph{Scope.}
+The development treats a single universe of types and does not address size
+issues or universe polymorphism. It assumes the monoidal structure of
+$\otimes$ (associator, unitors, coherences) from the companion note on the
+Dirichlet tensor; those coherences are likewise definitional.
+
+\paragraph{Machine checking.}
+Every definition and theorem statement above corresponds to a declaration in
+a machine-checked formalisation. The phrase ``by lean'' indicates that the
+proof has been verified by a proof assistant; we have not reproduced the
+formal proof scripts here. A mathematician reading this note need only
+verify that the English statements match the intended mathematics; the
+formal system is responsible for the derivations.
+
+%======================================================================
+\section*{Acknowledgements}
+%======================================================================
+
+The mathematical content follows the theory of polynomial functors and their
+Dirichlet monoidal structure as developed by Niu and Spivak, transported to
+the container presentation of Abbott, Altenkirch, and Ghani. The presentation
+here is a prose rendering of a formal development intended for human review
+of the theorem statements.
+
+\begin{thebibliography}{9}
+
+\bibitem{abbott2005}
+M.~Abbott, T.~Altenkirch, and N.~Ghani.
+\newblock Containers: constructing strictly positive types.
+\newblock \emph{Theoretical Computer Science}, 342(1):3--27, 2005.
+
+\bibitem{niu-spivak}
+N.~Niu and D.~I.~Spivak.
+\newblock Polynomial functors: a mathematical theory of interaction.
+\newblock arXiv:2312.00990, 2023.
+
+\end{thebibliography}
+
+\end{document}

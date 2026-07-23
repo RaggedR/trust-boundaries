@@ -1,0 +1,381 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath,amsthm,mathtools}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{parskip}
+\usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
+
+% Theorem environments (arXiv / journal style)
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{remark}[theorem]{Remark}
+
+% Notation
+\newcommand{\Ext}{\mathrm{Ext}}
+\newcommand{\Shape}{\mathrm{Shape}}
+\newcommand{\Pos}{\mathrm{Pos}}
+\newcommand{\Type}{\mathbf{Type}}
+\newcommand{\id}{\mathrm{id}}
+\newcommand{\rootp}{\mathrm{o}}
+
+\title{CoKleisli Structure and Strength\\
+  for Directed Container Comonads}
+\author{Extracted from a machine-checked development}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We equip the comonad arising from a directed container with its coKleisli
+operations and its canonical strength. Given a directed container, the
+extension functor carries a comonad structure; we define coKleisli extension
+and composition, prove the unit and associativity laws of the coKleisli
+category, and construct the strength
+$\sigma : W(A \times B) \to A \times W(B)$ together with its naturality and
+counit laws. The proofs of all stated results have been machine-checked; we
+record only the mathematical content.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%======================================================================
+\section{Introduction}
+%======================================================================
+
+A directed container, in the sense of Ahman, Chapman, and Uustalu, is a
+container equipped with a root choice, a sub-shape operation, and a shift on
+positions, subject to five equational axioms (D1--D5). These data induce a
+comonad on the extension of the underlying container. The coKleisli category
+of that comonad is the natural home for ``contextual'' morphisms
+$W(X) \to Y$, and the coKleisli extension operation is the unique lift of such
+a morphism to an endomorphism of~$W$.
+
+This note isolates the coKleisli layer and the canonical strength of the
+comonad. We work throughout with a fixed directed container~$D$, writing $W$
+for the extension of its underlying container, $\varepsilon$ for the counit
+(extract at the root), and $\delta$ for the comultiplication (duplicate via
+sub-shapes and shifts). No special categorical machinery beyond the notions of
+comonad, coKleisli category, and strength is required. Proofs are indicated by
+the phrase ``by lean,'' meaning they have been checked by a proof assistant
+rather than written out in prose.
+
+\paragraph{What this note claims.}
+In ordinary mathematical language: for any directed container, coKleisli
+extension satisfies the three standard laws
+\[
+  \mathrm{extend}\,\varepsilon = \id,\qquad
+  \varepsilon \circ \mathrm{extend}\,f = f,\qquad
+  \mathrm{extend}\,(g \circ \mathrm{extend}\,f)
+    = \mathrm{extend}\,g \circ \mathrm{extend}\,f,
+\]
+and coKleisli composition is therefore a unital associative operation on
+maps of the form $W(X) \to Y$. Moreover the strength
+\[
+  \sigma\langle s,\, v\rangle
+  \;=\;
+  \bigl( \pi_1\bigl(v(\rootp s)\bigr),\;
+         \langle s,\, \pi_2 \circ v\rangle \bigr)
+\]
+is natural in both variables and satisfies $(\id \times \varepsilon) \circ \sigma
+= \varepsilon$. All of this is formal content of the directed-container
+comonad; nothing further is required.
+
+%======================================================================
+\section{Background: directed containers and their comonads}
+%======================================================================
+
+We recall only the data used below. A \emph{container} is a pair $(S,P)$
+consisting of a type of shapes and a family of position types. Its
+\emph{extension} at a type~$X$ is
+\[
+  \Ext\,C\,X \;=\; \sum_{s \,:\, S}\; \bigl(P(s) \to X\bigr).
+\]
+A \emph{directed container} equips a container with operations
+\begin{align*}
+  \rootp &\;:\; (s : S) \to P(s), \\
+  \downarrow &\;:\; (s : S) \to P(s) \to S, \\
+  \oplus &\;:\; (s : S) \to (p : P(s)) \to P(s \downarrow p) \to P(s),
+\end{align*}
+subject to five axioms D1--D5 (root-sub, root-shift, sub-root, nesting of
+subs, and associativity of shift). These induce a comonad on $\Ext\,C$:
+\begin{align*}
+  \varepsilon\langle s,\, v\rangle &\;=\; v\bigl(\rootp s\bigr), \\
+  \delta\langle s,\, v\rangle
+  &\;=\;
+  \bigl\langle s,\;
+    \lambda p.\,
+      \bigl\langle s \downarrow p,\;
+        \lambda q.\, v(p \oplus q)\bigr\rangle
+  \bigr\rangle.
+\end{align*}
+We write $W$ for this comonad (i.e.\ $W(X) = \Ext\,C\,X$) when the directed
+container is fixed.
+
+%======================================================================
+\section{CoKleisli extension}
+%======================================================================
+
+\begin{definition}[CoKleisli extension]\label{def:extend}
+Let $D$ be a directed container and let $f : W(X) \to Y$ be a function. The
+\textbf{coKleisli extension} of~$f$ is the map
+\begin{equation}
+  \mathrm{extend}\,f \;:\; W(X) \;\longrightarrow\; W(Y)
+\end{equation}
+defined by
+\begin{equation}
+  \mathrm{extend}\,f\,\bigl\langle s,\, v \bigr\rangle
+  \;=\;
+  \bigl\langle s,\;
+    \lambda p.\,
+      f\bigl\langle
+        s \downarrow p,\;
+        \lambda q.\, v(p \oplus q)
+      \bigr\rangle
+  \bigr\rangle.
+\end{equation}
+\end{definition}
+
+\begin{remark}
+Definitionally, $\mathrm{extend}\,f = W(f) \circ \delta$: one first duplicates
+the context and then applies~$f$ at every position. This is the standard
+coKleisli extension of a comonad.
+\end{remark}
+
+\begin{proposition}[Extension of the counit]\label{prop:extend-counit}
+For every type~$X$,
+\begin{equation}
+  \mathrm{extend}\,\varepsilon \;=\; \id_{W(X)}.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+Evaluating at $\langle s, v\rangle$ yields
+$\langle s,\, \lambda p.\, v\bigl(p \oplus \rootp(s \downarrow p)\bigr)\rangle$,
+which equals $\langle s, v\rangle$ by D3.
+\end{remark}
+
+\begin{proposition}[Counit after extension]\label{prop:counit-extend}
+For every $f : W(X) \to Y$,
+\begin{equation}
+  \varepsilon \circ \mathrm{extend}\,f \;=\; f.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+This is the left unit law of the coKleisli category, and it characterises
+$\mathrm{extend}\,f$ as the unique map $h$ with $\varepsilon \circ h = f$
+compatible with the comultiplication in the usual way. The proof uses D1 and
+D2: extracting after extension probes at the root sub-shape, which is the
+original shape.
+\end{remark}
+
+\begin{proposition}[Extension respects composition]\label{prop:extend-extend}
+For $f : W(X) \to Y$ and $g : W(Y) \to Z$,
+\begin{equation}
+  \mathrm{extend}\,(g \circ \mathrm{extend}\,f)
+  \;=\;
+  \mathrm{extend}\,g \circ \mathrm{extend}\,f.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+Both sides send $\langle s, v\rangle$ to a tree whose value at position~$p$ is
+$g$ applied to a context built by nesting sub-shapes and shifts. Equality of
+shapes uses D4; equality of values uses D5. This is the associativity law of
+the coKleisli category, derived from coassociativity of~$\delta$.
+\end{remark}
+
+%======================================================================
+\section{CoKleisli composition}
+%======================================================================
+
+\begin{definition}[CoKleisli composition]\label{def:cokleisli-comp}
+Given coKleisli morphisms $f : W(X) \to Y$ and $g : W(Y) \to Z$, their
+\textbf{coKleisli composite} is
+\begin{equation}
+  g \mathbin{\cdot_c} f \;:=\; g \circ \mathrm{extend}\,f
+  \;:\; W(X) \;\longrightarrow\; Z.
+\end{equation}
+\end{definition}
+
+\begin{proposition}[Right unit]\label{prop:cokleisli-right-unit}
+For every $f : W(X) \to Y$,
+\begin{equation}
+  f \mathbin{\cdot_c} \varepsilon \;=\; f.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{proposition}[Left unit]\label{prop:cokleisli-left-unit}
+For every $f : W(X) \to Y$,
+\begin{equation}
+  \varepsilon \mathbin{\cdot_c} f \;=\; f.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{proposition}[Associativity]\label{prop:cokleisli-assoc}
+For $f : W(X) \to Y$, $g : W(Y) \to Z$, and $h : W(Z) \to U$,
+\begin{equation}
+  \bigl(h \mathbin{\cdot_c} g\bigr) \mathbin{\cdot_c} f
+  \;=\;
+  h \mathbin{\cdot_c} \bigl(g \mathbin{\cdot_c} f\bigr).
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+Taken together, Propositions~\ref{prop:cokleisli-right-unit}--\ref{prop:cokleisli-assoc}
+say that coKleisli morphisms form a category with identities given by the
+components of~$\varepsilon$.
+
+%======================================================================
+\section{Canonical strength}
+%======================================================================
+
+Every comonad on a cartesian category is canonically strong. For a directed
+container comonad the strength admits a direct combinatorial description.
+
+\begin{definition}[Strength]\label{def:strength}
+The \textbf{canonical strength} of the directed container comonad is the
+family of maps
+\begin{equation}
+  \sigma_{A,B} \;:\; W(A \times B) \;\longrightarrow\; A \times W(B)
+\end{equation}
+defined by
+\begin{equation}
+  \sigma_{A,B}\,\bigl\langle s,\, v \bigr\rangle
+  \;=\;
+  \Bigl(
+    \pi_1\bigl(v(\rootp s)\bigr),\;
+    \bigl\langle s,\; \pi_2 \circ v \bigr\rangle
+  \Bigr).
+\end{equation}
+The first component extracts the $A$-part at the root; the second retains the
+shape and projects every label to its $B$-part.
+\end{definition}
+
+\begin{proposition}[Naturality in the left variable]\label{prop:strength-nat-left}
+For every $f : A \to A'$,
+\begin{equation}
+  (f \times \id) \circ \sigma_{A,B}
+  \;=\;
+  \sigma_{A',B} \circ W(f \times \id).
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{proposition}[Naturality in the right variable]\label{prop:strength-nat-right}
+For every $g : B \to B'$,
+\begin{equation}
+  (\id \times W(g)) \circ \sigma_{A,B}
+  \;=\;
+  \sigma_{A,B'} \circ W(\id \times g).
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{proposition}[Strength and counit]\label{prop:strength-counit}
+\begin{equation}
+  (\id \times \varepsilon) \circ \sigma_{A,B}
+  \;=\;
+  \varepsilon_{A \times B}.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+Extracting the $B$-component of the strength is the same as extracting
+directly from the $A \times B$-labelled tree: both pick the $B$-part of the
+label at the root.
+\end{remark}
+
+%======================================================================
+\section{Discussion}
+%======================================================================
+
+\paragraph{What has been established.}
+The coKleisli category of a directed container comonad has been constructed
+explicitly from root, sub, and shift. The unit laws rest on D1--D3; the
+associativity law rests on D4--D5. The strength is the standard one for a
+comonad on a cartesian category, written out in container coordinates.
+
+\paragraph{Scope.}
+The development treats a fixed directed container and does not re-derive the
+comonad laws themselves (those belong to the underlying directed-container
+theory). Strength is stated only with the counit interaction recorded above;
+further strength axioms (e.g.\ interaction with comultiplication) are not
+listed separately here.
+
+\paragraph{Machine checking.}
+Every definition and theorem statement above corresponds to a declaration in a
+machine-checked formalisation. The phrase ``by lean'' indicates that the proof
+has been verified by a proof assistant; we have not reproduced the formal
+proof scripts here.
+
+%======================================================================
+\section*{Acknowledgements}
+%======================================================================
+
+The mathematical content follows the theory of directed containers of Ahman,
+Chapman, and Uustalu, and standard coKleisli calculus for comonads. The
+presentation here is a prose rendering of a formal development intended for
+human review of the theorem statements.
+
+\begin{thebibliography}{9}
+
+\bibitem{ahman2014}
+D.~Ahman, J.~Chapman, and T.~Uustalu.
+\newblock When is a container a comonad?
+\newblock \emph{Logical Methods in Computer Science}, 10(3), 2014.
+
+\bibitem{abbott2005}
+M.~Abbott, T.~Altenkirch, and N.~Ghani.
+\newblock Containers: constructing strictly positive types.
+\newblock \emph{Theoretical Computer Science}, 342(1):3--27, 2005.
+
+\end{thebibliography}
+
+\end{document}

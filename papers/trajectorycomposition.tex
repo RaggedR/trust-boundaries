@@ -1,0 +1,359 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath,amsthm,mathtools}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{parskip}
+\usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
+
+% Theorem environments (arXiv / journal style)
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{remark}[theorem]{Remark}
+
+% Notation
+\newcommand{\Type}{\mathbf{Type}}
+\newcommand{\tauu}{\tau}
+
+\title{Composing Trajectory Evaluation with Trust Evaluation}
+\author{Extracted from a machine-checked development}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Trajectory systems and trust systems grade claims in different chains. We
+define a seven-level trust chain and a monotone map $\psi$ from the
+five-level trajectory chain into it, sending bottoms to bottoms. Composing
+$\psi$ with canonical trust on the circular and honest trajectories yields
+concrete transport results: circular evaluation maps entirely to
+$\mathsf{unchecked}$, while honest evaluation maps the verify event to
+$\mathsf{proved}$ and the claim event to $\mathsf{computed}$. The proofs of
+all stated results have been machine-checked; we record only the mathematical
+content.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%======================================================================
+\section{Introduction}
+%======================================================================
+
+A trajectory system grades agent actions in a five-level chain specialised
+to verification workflows. A trust system grades mathematical claims in a
+(typically longer) chain of check strengths used by research agents. To
+compose the two evaluations---to read a trajectory grade as a trust
+grade---one needs a map of chains that preserves order and bottom.
+
+In the general theory of trust systems, morphisms transport canonical trust
+laxly: if $\phi$ is a monotone map of chains with $\phi(\bot) = \bot$, and
+$F$ maps claims and steps coherently, then
+\begin{equation}
+  \phi\bigl(\tauu(x)\bigr) \;\le\; \tauu'\bigl(F(x)\bigr).
+\end{equation}
+The present note does not re-prove that abstract transport lemma. Instead it
+exhibits a concrete chain map $\psi$ from trajectory levels to trust levels
+and evaluates $\psi \circ \tauu$ on the two running examples of the companion
+note on trajectories: the circular trajectory (where $\tauu \equiv \bot$)
+and the honest trajectory (where $\tauu$ attains independent grades along
+sound paths).
+
+The material is elementary. Proofs are indicated by the phrase ``by lean,''
+meaning they have been checked by a proof assistant rather than written out
+in prose.
+
+\paragraph{What this note claims.}
+In ordinary mathematical language, the claim is: there is a bottom-preserving
+monotone map $\psi$ from the trajectory chain to the seven-level trust chain
+such that
+\begin{itemize}
+  \item every event of the circular trajectory evaluates, after $\psi$, to
+        $\mathsf{unchecked}$;
+  \item the honest verify event evaluates to $\mathsf{proved}$, and the
+        honest claim event to $\mathsf{computed}$.
+\end{itemize}
+Trajectory evaluation therefore composes with trust evaluation by pure
+postcomposition of grades; the numerical content of transport is completely
+explicit on the examples.
+
+%======================================================================
+\section{Recollections}
+%======================================================================
+
+We recall the trajectory chain and the two systems from the companion note;
+full definitions of trust systems and canonical trust appear there and in
+the note on trust systems.
+
+\begin{definition}[Trajectory chain]
+The \textbf{trajectory chain} $T_{\mathrm{traj}}$ is
+\begin{equation}
+  \mathsf{unsupported}
+  \;<\;
+  \mathsf{shallow}
+  \;<\;
+  \mathsf{independent}
+  \;<\;
+  \mathsf{crossVerified}
+  \;<\;
+  \mathsf{mechChecked},
+\end{equation}
+with bottom $\mathsf{unsupported}$.
+\end{definition}
+
+\begin{definition}[Events and systems]
+Let $E = \{e_0, e_1, e_2, e_3, e_4\}$. The \textbf{circular trajectory}
+$\mathcal{S}_{\mathrm{circ}}$ and the \textbf{honest trajectory}
+$\mathcal{S}_{\mathrm{hon}}$ are trust systems on $E$ graded in
+$T_{\mathrm{traj}}$, sharing the dependency topology
+\begin{equation}
+  e_0 \to e_1 \to e_2 \to e_3,
+  \qquad
+  e_2 \to e_4,
+\end{equation}
+and differing only in grades. Writing $\tauu_{\mathrm{circ}}$ and
+$\tauu_{\mathrm{hon}}$ for their canonical trusts, the companion note
+establishes
+\begin{align}
+  \tauu_{\mathrm{circ}}(e) &\;=\; \mathsf{unsupported}
+  \quad\text{for all } e \in E, \\
+  \tauu_{\mathrm{hon}}(e_3) &\;=\; \mathsf{shallow}, \\
+  \tauu_{\mathrm{hon}}(e_4) &\;=\; \mathsf{independent}.
+\end{align}
+(Along the honest spine $e_0, e_1, e_2$ one likewise has
+$\tauu_{\mathrm{hon}} = \mathsf{independent}$.)
+\end{definition}
+
+%======================================================================
+\section{The trust chain}
+%======================================================================
+
+\begin{definition}[Trust levels]\label{def:trustlevel}
+The \textbf{trust chain} $T_{\mathrm{trust}}$ is the seven-element chain
+\begin{equation}
+\begin{aligned}
+  &\mathsf{unchecked}
+  \;<\;
+  \mathsf{speculative}
+  \;<\;
+  \mathsf{computed}
+  \;<\;
+  \mathsf{proved} \\
+  &\qquad
+  \;<\;
+  \mathsf{peerReviewed}
+  \;<\;
+  \mathsf{published}
+  \;<\;
+  \mathsf{leanVerified},
+\end{aligned}
+\end{equation}
+with bottom $\bot = \mathsf{unchecked}$.
+\end{definition}
+
+\begin{proposition}[Chain structure]\label{prop:trust-chain}
+$T_{\mathrm{trust}}$ carries the structure of a bounded chain: $\le$ is a
+linear order, $\bot$ is least, and $\le$ is decidable.
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+Informally these levels grade mathematical claims in a research-agent
+deployment: from no check, through speculative and computed evidence, to
+proved, peer-reviewed, published, and machine-verified claims. The precise
+operational meaning of each level is not needed for the theorems below;
+only the order and the bottom element matter.
+\end{remark}
+
+%======================================================================
+\section{The trajectory--trust map}
+%======================================================================
+
+\begin{definition}[The map $\psi$]\label{def:psi}
+Define $\psi : T_{\mathrm{traj}} \to T_{\mathrm{trust}}$ by
+\begin{center}
+\begin{tabular}{ll}
+\hline
+Trajectory level & Trust level \\
+\hline
+$\mathsf{unsupported}$ & $\mathsf{unchecked}$ \\
+$\mathsf{shallow}$ & $\mathsf{computed}$ \\
+$\mathsf{independent}$ & $\mathsf{proved}$ \\
+$\mathsf{crossVerified}$ & $\mathsf{peerReviewed}$ \\
+$\mathsf{mechChecked}$ & $\mathsf{leanVerified}$ \\
+\hline
+\end{tabular}
+\end{center}
+\end{definition}
+
+\begin{remark}
+The map skips $\mathsf{speculative}$ and $\mathsf{published}$: trajectory
+levels are coarser than trust levels, and $\psi$ lands on the trust grades
+that best match the intended strength of each trajectory grade. In
+particular, independent trajectory checks are read as proved claims, and
+mechanically checked trajectory steps as lean-verified claims.
+\end{remark}
+
+\begin{theorem}[Bottom preservation]\label{thm:psi-bot}
+\begin{equation}
+  \psi(\bot_{T_{\mathrm{traj}}}) \;=\; \bot_{T_{\mathrm{trust}}}.
+\end{equation}
+Equivalently, $\psi(\mathsf{unsupported}) = \mathsf{unchecked}$.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[Monotonicity]\label{thm:psi-mono}
+For all $a, b \in T_{\mathrm{traj}}$,
+\begin{equation}
+  a \le b \;\Longrightarrow\; \psi(a) \le \psi(b).
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}[Chain-morphism requirements]
+In the abstract theory of morphisms of trust systems, a map of check-posets
+must be monotone and strict at bottom. Theorems~\ref{thm:psi-bot}
+and~\ref{thm:psi-mono} record exactly those two requirements for $\psi$.
+Together they make $\psi$ eligible as the grade component of a trust-system
+morphism from a trajectory system into a trust system graded in
+$T_{\mathrm{trust}}$.
+\end{remark}
+
+%======================================================================
+\section{Concrete transport}
+%======================================================================
+
+Composing $\psi$ with canonical trust on the two examples yields fully
+evaluated trust grades---no inequality, only equality.
+
+\begin{theorem}[Circular trajectory transports to unchecked]
+\label{thm:psi-circular}
+For every event $e \in E$,
+\begin{equation}
+  \psi\bigl(\tauu_{\mathrm{circ}}(e)\bigr)
+  \;=\;
+  \mathsf{unchecked}.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+This is immediate from circular collapse
+($\tauu_{\mathrm{circ}} \equiv \mathsf{unsupported}$) and bottom
+preservation of $\psi$. It is recorded as a theorem because it is the
+operational statement used by deployments: after transport, a circular
+trajectory contributes no trust above unchecked at any event.
+\end{remark}
+
+\begin{theorem}[Honest verify event]\label{thm:psi-honest-e4}
+\begin{equation}
+  \psi\bigl(\tauu_{\mathrm{hon}}(e_4)\bigr)
+  \;=\;
+  \mathsf{proved}.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[Honest claim event]\label{thm:psi-honest-e3}
+\begin{equation}
+  \psi\bigl(\tauu_{\mathrm{hon}}(e_3)\bigr)
+  \;=\;
+  \mathsf{computed}.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}[Reading the honest results]
+On the honest trajectory, $\tauu(e_4) = \mathsf{independent}$ and
+$\tauu(e_3) = \mathsf{shallow}$. Applying $\psi$ sends independent to proved
+and shallow to computed. Thus a sound verify branch is trusted at the proved
+level after composition, while a shallow claim branch is trusted only at the
+computed level---matching the intended gap between verification and
+assertion.
+\end{remark}
+
+%======================================================================
+\section{Discussion}
+%======================================================================
+
+\paragraph{What has been established.}
+Trajectory grades embed into trust grades via a bottom-preserving monotone
+map $\psi$. On the circular example the composite is constantly unchecked;
+on the honest example the verify and claim events map to proved and
+computed respectively. Composition of the two evaluations is therefore a
+matter of postcomposing the grade map---no further analysis of dependency
+structure is required once $\tauu$ is known.
+
+\paragraph{Relation to abstract transport.}
+The general transport lemma for morphisms of trust systems asserts a
+\emph{lax} inequality $\phi(\tauu(x)) \le \tauu'(F(x))$. The results here
+are stronger on the examples because they evaluate $\psi \circ \tauu$
+exactly, without constructing a target system $S'$ or a claim map $F$. They
+may be read as the grade half of a morphism, specialised to the case where
+one only needs the image of source canonical trust under $\psi$.
+
+\paragraph{Scope.}
+The development treats a single map of chains and two finite examples. It
+does not construct a full morphism of trust systems (claim and step
+components), nor does it address naturality of transport under composition
+of morphisms. Those belong to the general theory.
+
+\paragraph{Machine checking.}
+Every definition and theorem statement above corresponds to a declaration in
+a machine-checked formalisation. The phrase ``by lean'' indicates that the
+proof has been verified by a proof assistant; we have not reproduced the
+formal proof scripts here. A mathematician reading this note need only
+verify that the English statements match the intended mathematics; the
+formal system is responsible for the derivations.
+
+%======================================================================
+\section*{Acknowledgements}
+%======================================================================
+
+The mathematical content composes the trajectory systems of the companion
+note with the chain-morphism requirements of the theory of trust systems.
+The presentation here is a prose rendering of a formal development intended
+for human review of the theorem statements.
+
+\begin{thebibliography}{9}
+
+\bibitem{trust-systems}
+Trust systems: the certificate lemma and transport of trust.
+\newblock Companion formal development.
+
+\bibitem{trajectory}
+Trajectory systems: circular verification collapses canonical trust.
+\newblock Companion note.
+
+\end{thebibliography}
+
+\end{document}

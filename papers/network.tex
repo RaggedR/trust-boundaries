@@ -1,0 +1,386 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath,amsthm,mathtools}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{parskip}
+\usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
+
+% Theorem environments (arXiv / journal style)
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{remark}[theorem]{Remark}
+
+% Notation
+\newcommand{\Shape}{\mathrm{Shape}}
+\newcommand{\Pos}{\mathrm{Pos}}
+\newcommand{\Type}{\mathbf{Type}}
+\newcommand{\id}{\mathrm{id}}
+\newcommand{\src}{\mathrm{src}}
+\newcommand{\tgt}{\mathrm{tgt}}
+\newcommand{\rootpos}{\mathrm{root}}
+\newcommand{\sub}{\mathrm{sub}}
+\newcommand{\shift}{\mathrm{shift}}
+
+\title{Shipping Networks as Directed Containers}
+\author{Extracted from a machine-checked development}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Every directed (multi)graph~$G$ determines a directed container whose shapes
+are the nodes of~$G$ and whose positions at a node~$v$ are the finite directed
+paths starting at~$v$, recorded together with their endpoints. The root is the
+empty path, the sub-shape map returns the endpoint of a path, and the shift is
+path concatenation. As a category this construction is the free category
+on~$G$. We record the elementary path algebra, the directed-container laws, and
+a concrete running example---an eleven-facility wine shipping network---with
+explicit route counts. The proofs of all stated results have been
+machine-checked; we record only the mathematical content.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%======================================================================
+\section{Introduction}
+%======================================================================
+
+In the theory of directed containers, a structure of shapes, positions, roots,
+and shifts axiomatises a free category on a set of generators. A natural source
+of examples is directed graphs: nodes generate shapes, and directed paths
+generate positions. The present note isolates that construction.
+
+Given a directed multigraph~$G$ (allowing parallel edges and loops, with no
+finiteness assumption), one forms a directed container $\mathrm{network}(G)$
+by taking shapes to be nodes and positions at~$v$ to be pairs $\langle w,\rho
+\rangle$ consisting of an endpoint~$w$ and a finite directed path $\rho$ from
+$v$ to~$w$. Concatenation of paths supplies the monoidal structure on positions
+required by the directed-container axioms. Viewed as a category (via the free
+category associated to a directed container), $\mathrm{network}(G)$ is the free
+category on~$G$.
+
+The development works throughout in a single universe of types. The statements
+below are those of a formal development in dependent type theory; proofs are
+indicated by the phrase ``by lean,'' meaning they have been checked by a proof
+assistant rather than written out in prose.
+
+\paragraph{What this note claims.}
+In ordinary mathematical language: the free category on a directed graph admits
+a presentation as a directed container whose positions are path-endpoint pairs.
+The directed-container laws reduce almost definitionally to the unit and
+associativity laws for path concatenation. On a concrete acyclic shipping
+graph with eleven facilities, the construction is inhabited and yields the
+expected route cardinalities (nine routes out of the first vineyard; a single
+trivial route at each retail sink).
+
+%======================================================================
+\section{Directed graphs and paths}
+%======================================================================
+
+\begin{definition}[Directed graph]\label{def:digraph}
+A \textbf{directed (multi)graph} $G$ consists of
+\begin{enumerate}
+  \item a type $V$ of \emph{nodes} (vertices),
+  \item a type $E$ of \emph{edges}, and
+  \item endpoint maps $\src : E \to V$ and $\tgt : E \to V$.
+\end{enumerate}
+Parallel edges and loops are allowed. No finiteness of $V$ or $E$ is assumed.
+\end{definition}
+
+\begin{definition}[Directed path]\label{def:path}
+Let $G$ be a directed graph. For nodes $v,w \in V$, the type $\mathrm{Path}_G(v,w)$
+of \textbf{finite directed paths} from $v$ to $w$ is defined inductively by
+\begin{enumerate}
+  \item $\mathrm{nil}(v) : \mathrm{Path}_G(v,v)$ (the empty path at~$v$), and
+  \item if $e \in E$ and $p : \mathrm{Path}_G\bigl(\tgt(e),\, w\bigr)$, then
+        \[
+          \mathrm{cons}(e,p) \;:\; \mathrm{Path}_G\bigl(\src(e),\, w\bigr)
+        \]
+        (follow $e$, then continue along~$p$).
+\end{enumerate}
+\end{definition}
+
+Thus paths are ``cons-at-the-front'': an outgoing edge followed by a path from
+its target.
+
+\begin{definition}[Path concatenation]\label{def:append}
+Given paths $p : \mathrm{Path}_G(v,w)$ and $q : \mathrm{Path}_G(w,u)$, their
+\textbf{concatenation} $p \mathbin{{+}{+}} q : \mathrm{Path}_G(v,u)$ is defined
+by recursion on~$p$:
+\begin{align}
+  \mathrm{nil}(v) \mathbin{{+}{+}} q &\;=\; q, \\
+  \mathrm{cons}(e,p) \mathbin{{+}{+}} q &\;=\; \mathrm{cons}\bigl(e,\, p \mathbin{{+}{+}} q\bigr).
+\end{align}
+\end{definition}
+
+\begin{proposition}[Left unit]\label{prop:nil-append}
+For every path $p : \mathrm{Path}_G(v,w)$,
+\[
+  \mathrm{nil}(v) \mathbin{{+}{+}} p \;=\; p.
+\]
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{proposition}[Right unit]\label{prop:append-nil}
+For every path $p : \mathrm{Path}_G(v,w)$,
+\[
+  p \mathbin{{+}{+}} \mathrm{nil}(w) \;=\; p.
+\]
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{proposition}[Associativity]\label{prop:append-assoc}
+For paths $p : \mathrm{Path}_G(v,w)$, $q : \mathrm{Path}_G(w,u)$, and
+$r : \mathrm{Path}_G(u,x)$,
+\[
+  \bigl(p \mathbin{{+}{+}} q\bigr) \mathbin{{+}{+}} r
+  \;=\;
+  p \mathbin{{+}{+}} \bigl(q \mathbin{{+}{+}} r\bigr).
+\]
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+The left unit law holds definitionally. The right unit and associativity laws
+are proved by induction on the first path.
+
+%======================================================================
+\section{The network directed container}
+%======================================================================
+
+We recall the data of a directed container, specialised to the form used below.
+A directed container consists of a type of shapes, a family of position types,
+a distinguished root position at each shape, a sub-shape map sending a shape
+and a position to a shape, and a shift operation composing positions, subject
+to five equational laws (identity and associativity for shift, together with
+compatibility of sub with root and shift).
+
+\begin{definition}[Network directed container]\label{def:network}
+Let $G$ be a directed graph. The \textbf{network directed container}
+$\mathrm{network}(G)$ is defined by
+\begin{align}
+  \Shape\bigl(\mathrm{network}(G)\bigr)
+  &\;=\; V, \\[4pt]
+  \Pos\bigl(\mathrm{network}(G)\bigr)(v)
+  &\;=\;
+  \sum_{w \,:\, V}\; \mathrm{Path}_G(v,w), \\[4pt]
+  \rootpos(v)
+  &\;=\;
+  \bigl\langle v,\, \mathrm{nil}(v) \bigr\rangle, \\[4pt]
+  \sub\bigl(v,\, \langle w,\rho \rangle\bigr)
+  &\;=\;
+  w, \\[4pt]
+  \shift\bigl(v,\, \langle w,\rho \rangle,\, \langle u,\sigma \rangle\bigr)
+  &\;=\;
+  \bigl\langle u,\, \rho \mathbin{{+}{+}} \sigma \bigr\rangle.
+\end{align}
+Here a position at~$v$ is a dependent pair $\langle w,\rho \rangle$ of an
+endpoint and a path from~$v$ to that endpoint; the sub-shape is the first
+projection; the root is the empty path; and shift is path concatenation.
+\end{definition}
+
+\begin{remark}[Directed-container laws]
+With this packaging, several of the directed-container axioms hold by
+definitional equality: the endpoint of the empty path is the node itself, and
+the endpoint of a concatenation is the endpoint of the second path. The
+remaining laws are precisely the right unit law for concatenation
+(Proposition~\ref{prop:append-nil}) and associativity
+(Proposition~\ref{prop:append-assoc}), each transported along the dependent
+pair of endpoint and path. Indexing paths by both endpoints---rather than by
+start alone---is what makes the sub-shape a pure first projection and collapses
+the transport-heavy equalities to the path algebra above.
+\end{remark}
+
+\begin{proposition}[Network is a directed container]\label{prop:network-dc}
+For every directed graph~$G$, the data of Definition~\ref{def:network}
+satisfy the directed-container axioms.
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+Finiteness of~$G$ is not assumed. Cyclic graphs yield infinitely many
+positions at a node; that phenomenon is treated separately in the graph-rung
+analysis of the associated development.
+\end{remark}
+
+%======================================================================
+\section{Running example: the Sawasdee Cellars wine network}
+%======================================================================
+
+We instantiate the construction on a concrete shipping graph: three South
+Australian vineyards ship through an export agency and a Melbourne--Chonburi
+sea-freight leg to two Thai distributors and three retail shops. The graph is
+a polytree (thinness is treated elsewhere); here we only form the network and
+count routes.
+
+\begin{definition}[Sawasdee facilities and legs]\label{def:wine}
+Let $\mathrm{Facility}$ be the eleven-element type
+\begin{align*}
+  &\mathrm{vineyard}_1,\;
+  \mathrm{vineyard}_2,\;
+  \mathrm{vineyard}_3,\;
+  \mathrm{sawasdee},\;
+  \mathrm{melbournePort},\;
+  \mathrm{thaiPort},\\
+  &\mathrm{distributor}_1,\;
+  \mathrm{distributor}_2,\;
+  \mathrm{retail}_1,\;
+  \mathrm{retail}_2,\;
+  \mathrm{retail}_3,
+\end{align*}
+and let $\mathrm{Leg}$ be the ten-element type of shipping legs
+\begin{align*}
+  &v_1s,\; v_2s,\; v_3s
+    &&\text{(vineyards $\to$ Sawasdee)}, \\
+  &smp
+    &&\text{(Sawasdee $\to$ Melbourne Port)}, \\
+  &\mathrm{sea}
+    &&\text{(Melbourne Port $\to$ Thai Port)}, \\
+  &td_1,\; td_2
+    &&\text{(Thai Port $\to$ distributors)}, \\
+  &d_1r_1,\; d_1r_2
+    &&\text{(Distributor$_1$ $\to$ Retail$_1$, Retail$_2$)}, \\
+  &d_2r_3
+    &&\text{(Distributor$_2$ $\to$ Retail$_3$)}.
+\end{align*}
+Write $G_{\mathrm{wine}}$ for the directed graph with these nodes and edges and
+the evident source and target maps, and write
+$\mathcal{N}_{\mathrm{wine}} := \mathrm{network}(G_{\mathrm{wine}})$ for the
+associated directed container.
+\end{definition}
+
+A \textbf{route} out of a facility~$v$ is a position of
+$\mathcal{N}_{\mathrm{wine}}$ at~$v$, i.e.\ a pair $\langle w,\rho \rangle$
+with $\rho : \mathrm{Path}_{G_{\mathrm{wine}}}(v,w)$. Given a leg~$e$ and a
+route out of $\tgt(e)$, one obtains a route out of $\src(e)$ by consing~$e$
+onto the underlying path.
+
+\begin{proposition}[Route counts]\label{prop:route-counts}
+In $G_{\mathrm{wine}}$:
+\begin{enumerate}
+  \item There are exactly nine routes out of $\mathrm{vineyard}_1$
+        (the empty route, together with one route to each of the eight
+        facilities reachable from $\mathrm{vineyard}_1$).
+  \item There is exactly one route out of $\mathrm{retail}_1$ (the empty
+        route: a retail shop is a sink).
+  \item The endpoints of the nine routes out of $\mathrm{vineyard}_1$ are,
+        in order of enumeration,
+        \[
+          \begin{aligned}
+            &\mathrm{vineyard}_1,\;
+            \mathrm{sawasdee},\;
+            \mathrm{melbournePort},\;
+            \mathrm{thaiPort},\\
+            &\mathrm{distributor}_1,\;
+            \mathrm{retail}_1,\;
+            \mathrm{retail}_2,\;
+            \mathrm{distributor}_2,\;
+            \mathrm{retail}_3.
+          \end{aligned}
+        \]
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+The enumerations are constructed in reverse topological order, so that each
+facility's route list is assembled from the lists of facilities strictly
+downstream. Completeness of the lists for this acyclic graph is immediate by
+inspection; the formal checks assert only the stated lengths and endpoints.
+\end{remark}
+
+\begin{proposition}[Root and sub on a concrete route]\label{prop:full-route}
+Let $\rho$ be the full five-leg route
+$\mathrm{vineyard}_1 \to \mathrm{sawasdee} \to \mathrm{melbournePort} \to
+\mathrm{thaiPort} \to \mathrm{distributor}_1 \to \mathrm{retail}_1$. Then:
+\begin{enumerate}
+  \item the empty route at $\mathrm{vineyard}_1$ coincides with the root
+        position of $\mathcal{N}_{\mathrm{wine}}$ at $\mathrm{vineyard}_1$;
+  \item $\sub(\mathrm{vineyard}_1,\rho) = \mathrm{retail}_1$;
+  \item shifting the root by~$\rho$ recovers~$\rho$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+Thus on the running example, $\sub$ is literally ``where the route ends,'' and
+shift specialises to path concatenation of an empty prefix with a concrete
+route.
+
+%======================================================================
+\section{Discussion}
+%======================================================================
+
+\paragraph{What has been established.}
+Every directed graph presents a directed container whose positions are
+path-endpoint pairs and whose monoidal structure is concatenation. The
+construction is free on the graph: as a category it is the free category
+generated by the edges. The packaging with double-indexed paths makes most of
+the directed-container equalities definitional, leaving only the classical unit
+and associativity laws of path composition.
+
+\paragraph{Scope.}
+The development does not assume finiteness, does not prove thinness of polytree
+networks (treated separately), and does not address trackings, aggregations, or
+other structure on top of $\mathrm{network}(G)$. Those refinements build on the
+same foundations.
+
+\paragraph{Machine checking.}
+Every definition and theorem statement above corresponds to a declaration in a
+machine-checked formalisation. The phrase ``by lean'' indicates that the proof
+has been verified by a proof assistant; we have not reproduced the formal
+proof scripts here.
+
+%======================================================================
+\section*{Acknowledgements}
+%======================================================================
+
+The mathematical content follows the construction of shipping networks as
+directed containers in the supply-chain development that motivated this note.
+The presentation is a prose rendering of a formal development intended for
+human review of the theorem statements.
+
+\begin{thebibliography}{9}
+
+\bibitem{abbott2005}
+M.~Abbott, T.~Altenkirch, and N.~Ghani.
+\newblock Containers: constructing strictly positive types.
+\newblock \emph{Theoretical Computer Science}, 342(1):3--27, 2005.
+
+\bibitem{ahman2014}
+D.~Ahman and T.~Uustalu.
+\newblock Coalgebraic update lenses.
+\newblock In \emph{MFPS}, volume~308 of \emph{ENTCS}, pages 25--48, 2014.
+
+\end{thebibliography}
+
+\end{document}

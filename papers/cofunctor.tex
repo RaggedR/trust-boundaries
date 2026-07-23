@@ -1,0 +1,513 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath,amsthm,mathtools}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{parskip}
+\usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
+
+% Theorem environments (arXiv / journal style)
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{remark}[theorem]{Remark}
+
+% Notation
+\newcommand{\Ext}{\mathrm{Ext}}
+\newcommand{\Shape}{\mathrm{Shape}}
+\newcommand{\Pos}{\mathrm{Pos}}
+\newcommand{\Type}{\mathbf{Type}}
+\newcommand{\id}{\mathrm{id}}
+\newcommand{\rootpos}{\mathsf{o}}
+\newcommand{\sub}{\mathbin{\downarrow}}
+\newcommand{\shift}{\oplus}
+\newcommand{\cat}{\mathcal{C}}
+\newcommand{\DCont}{\mathbf{DCont}}
+\newcommand{\Cof}{\mathbf{Cof}}
+
+\title{Morphisms of Directed Containers\\
+  as Cofunctors}
+\author{Extracted from a machine-checked development}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+A directed container presents a small category whose objects are shapes and
+whose morphisms are positions. Morphisms of directed containers---shape maps
+forward, position maps \emph{backward}, compatible with root, sub-shape, and
+shift---are not functors of the presented categories: the variance on
+hom-sets is opposite. They are precisely \emph{cofunctors} (retrofunctors).
+We show that the two structures carry identical data, so there is a bijection
+on hom-sets between directed-container morphisms and cofunctors; that
+cofunctors form a strict category; and that the correspondence preserves
+identities and composition, yielding an isomorphism of categories
+$\DCont\cong\Cof$. The proofs of all stated results have been machine-checked;
+we record only the mathematical content.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%======================================================================
+\section{Introduction}
+%======================================================================
+
+A directed container equips a container $(S,P)$ with a root $\rootpos(s)$, a
+sub-shape $s\sub p$, and a shift $p\shift q$, subject to laws D1--D5. Reading
+these operations categorically, shapes are objects and positions out of a
+shape are morphisms; the root is the identity and the shift is composition.
+This is the object-level dictionary of Ahman--Uustalu: directed containers
+present small categories.
+
+At the morphism level a tension appears. A container morphism has a
+\emph{covariant} shape map and a \emph{contravariant} position map. A functor
+between the presented categories would act covariantly on hom-sets. The two
+variances are opposite, so a directed-container morphism cannot be a functor.
+With compatibility laws for root, sub-shape, and shift, it is exactly a
+\textbf{cofunctor}: an object map together with a backward lift of morphisms.
+
+\paragraph{What this note claims.}
+In ordinary mathematical language: the data of a directed-container morphism
+and the data of a cofunctor between the presented categories are the same
+data, under the dictionary that renames root/sub/shift to identity/codomain/
+composition. Consequently there is a hom-set bijection; cofunctors compose
+strictly; and the bijection is an isomorphism of categories
+$\DCont\cong\Cof$.
+
+%======================================================================
+\section{Directed containers and the presented category}
+%======================================================================
+
+We work in a single universe $\Type$. A \textbf{directed container} $D$ is a
+container $(\Shape(D),\Pos(D))$ with root, sub-shape, and shift operations
+satisfying the five directed laws D1--D5 (as in the companion note on directed
+containers and the induced comonad). We write $S$ and $P$ for shapes and
+positions when convenient.
+
+Through the categorical dictionary we introduce the following vocabulary.
+
+\begin{definition}[Dictionary]\label{def:dictionary}
+Let $D$ be a directed container.
+\begin{enumerate}
+  \item The \textbf{identity morphism} at a shape $s$ is the root:
+        $\id_s := \rootpos(s)\in P(s)$.
+  \item The \textbf{codomain} of a position $p\in P(s)$ is the sub-shape:
+        $\mathrm{cod}(s,p) := s\sub p\in S$.
+  \item The \textbf{composition} of $p\in P(s)$ with
+        $q\in P(s\sub p)$ is the shift:
+        $q\circ p := p\shift q\in P(s)$
+        (diagrammatic order: travel along $p$, then along $q$).
+\end{enumerate}
+\end{definition}
+
+\begin{remark}
+In this note we treat the presented category through this dictionary without
+re-deriving the category laws; those laws are D2/D3 (units) and D5
+(associativity), transported along D1 and D4, and are established in the
+companion development on directed containers as categories.
+\end{remark}
+
+%======================================================================
+\section{Morphisms of directed containers}
+%======================================================================
+
+\begin{definition}[Directed-container morphism]\label{def:dcont-morph}
+Let $C$ and $D$ be directed containers. A \textbf{morphism of directed
+containers} $\varphi:C\Rightarrow D$ consists of
+\begin{enumerate}
+  \item a map on shapes $f:\Shape(C)\to\Shape(D)$, and
+  \item for each $s\in\Shape(C)$, a function
+        $f^\sharp_s:\Pos(D)\bigl(f(s)\bigr)\to\Pos(C)(s)$
+        (contravariant on positions),
+\end{enumerate}
+subject to the three compatibility laws M0--M2 below.
+\end{definition}
+
+\begin{definition}[Laws M0--M2]\label{def:m-laws}
+Let $\varphi=(f,f^\sharp):C\Rightarrow D$ be as above.
+\begin{enumerate}
+  \item[\textbf{M0} (codomain).]
+        For all $s\in\Shape(C)$ and $h\in\Pos(D)\bigl(f(s)\bigr)$,
+        \[
+          f\bigl(s\sub f^\sharp_s(h)\bigr)
+          \;=\;
+          f(s)\sub h.
+        \]
+  \item[\textbf{M1} (unit).]
+        For all $s\in\Shape(C)$,
+        \[
+          f^\sharp_s\bigl(\rootpos(f(s))\bigr)
+          \;=\;
+          \rootpos(s).
+        \]
+  \item[\textbf{M2} (composition).]
+        For all $s\in\Shape(C)$, $h\in\Pos(D)\bigl(f(s)\bigr)$, and
+        $k\in\Pos(D)\bigl(f(s)\sub h\bigr)$,
+        \[
+          f^\sharp_s\bigl(h\shift k\bigr)
+          \;=\;
+          f^\sharp_s(h)
+          \;\shift\;
+          f^\sharp_{s\sub f^\sharp_s(h)}
+            \bigl((\mathrm{M0}_{s,h})^{-1}\cdot k\bigr),
+        \]
+        where the inner position $k$ is transported along M0 so that the shift
+        in $C$ is well-typed.
+\end{enumerate}
+\end{definition}
+
+\begin{remark}
+Law M2 transports along M0 exactly as the directed law D5 transports along
+D4: the right factor of the shift lives in a fibre identified only up to a
+shape equality.
+\end{remark}
+
+%======================================================================
+\section{Cofunctors}
+%======================================================================
+
+\begin{definition}[Cofunctor]\label{def:cofunctor}
+Let $C$ and $D$ be directed containers, and write $\cat(C)$ and $\cat(D)$ for
+the categories they present. A \textbf{cofunctor} $\phi:\cat(C)\to\cat(D)$
+consists of
+\begin{enumerate}
+  \item an object map $\mathrm{obj}:\Shape(C)\to\Shape(D)$, and
+  \item for each $s\in\Shape(C)$, a \textbf{lift}
+        $\mathrm{lift}_s:\Pos(D)\bigl(\mathrm{obj}(s)\bigr)\to\Pos(C)(s)$
+        sending a morphism out of $\mathrm{obj}(s)$ to a morphism out of $s$,
+\end{enumerate}
+subject to the three cofunctor laws C0--C2 below.
+\end{definition}
+
+\begin{definition}[Laws C0--C2]\label{def:c-laws}
+Let $\phi=(\mathrm{obj},\mathrm{lift})$ be as above.
+\begin{enumerate}
+  \item[\textbf{C0} (codomain).]
+        For all $s$ and $h\in\Pos(D)\bigl(\mathrm{obj}(s)\bigr)$,
+        \[
+          \mathrm{obj}\bigl(
+            \mathrm{cod}\bigl(s,\,\mathrm{lift}_s(h)\bigr)
+          \bigr)
+          \;=\;
+          \mathrm{cod}\bigl(\mathrm{obj}(s),\,h\bigr).
+        \]
+  \item[\textbf{C1} (unit).]
+        For all $s$,
+        \[
+          \mathrm{lift}_s\bigl(\id_{\mathrm{obj}(s)}\bigr)
+          \;=\;
+          \id_s.
+        \]
+  \item[\textbf{C2} (composition).]
+        For all $s$, $h$, and $k$ of the appropriate types,
+        \[
+          \mathrm{lift}_s\bigl(k\circ h\bigr)
+          \;=\;
+          \mathrm{lift}_s(h)
+          \;\circ\;
+          \mathrm{lift}_{
+            \mathrm{cod}(s,\mathrm{lift}_s(h))
+          }
+            \bigl((\mathrm{C0}_{s,h})^{-1}\cdot k\bigr),
+        \]
+        with transport of $k$ along C0 as in M2.
+\end{enumerate}
+\end{definition}
+
+\begin{remark}[Variance]
+A functor $\cat(C)\to\cat(D)$ would supply, for each $s$, a map
+$\Pos(C)(s)\to\Pos(D)\bigl(F(s)\bigr)$---covariant on hom-sets. A cofunctor
+supplies the opposite map. The object map still runs $C\to D$; only the action
+on morphisms is reversed. This is the variance forced by container morphisms.
+\end{remark}
+
+%======================================================================
+\section{The hom-set bijection}
+%======================================================================
+
+Under the dictionary of Definition~\ref{def:dictionary}, the data and laws of
+a directed-container morphism are literally those of a cofunctor: $f$ is
+$\mathrm{obj}$, $f^\sharp$ is $\mathrm{lift}$, and M0/M1/M2 are C0/C1/C2.
+
+\begin{definition}[From morphisms to cofunctors]\label{def:to-cof}
+Every directed-container morphism $\varphi=(f,f^\sharp):C\Rightarrow D$
+determines a cofunctor $\varphi^\wedge:\cat(C)\to\cat(D)$ with
+$\mathrm{obj}=f$ and $\mathrm{lift}=f^\sharp$.
+\end{definition}
+
+\begin{definition}[From cofunctors to morphisms]\label{def:to-dcont}
+Every cofunctor $\phi=(\mathrm{obj},\mathrm{lift})$ determines a
+directed-container morphism $\phi^\vee:C\Rightarrow D$ with shape map
+$\mathrm{obj}$ and position map $\mathrm{lift}$.
+\end{definition}
+
+\begin{theorem}[Round-trip, morphism side]\label{thm:rt-morph}
+For every directed-container morphism $\varphi$,
+\begin{equation}
+  \bigl(\varphi^\wedge\bigr)^\vee \;=\; \varphi.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[Round-trip, cofunctor side]\label{thm:rt-cof}
+For every cofunctor $\phi$,
+\begin{equation}
+  \bigl(\phi^\vee\bigr)^\wedge \;=\; \phi.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{corollary}[Hom-set bijection]\label{cor:hom-bij}
+For any directed containers $C$ and $D$, there is a bijection
+\begin{equation}
+  \bigl\{\,\text{directed-container morphisms } C\Rightarrow D\,\bigr\}
+  \;\cong\;
+  \bigl\{\,\text{cofunctors } \cat(C)\to\cat(D)\,\bigr\},
+\end{equation}
+implemented by $(\,\cdot\,)^\wedge$ and $(\,\cdot\,)^\vee$.
+\end{corollary}
+
+\begin{proof}
+By lean. (The two constructions are mutually inverse by
+Theorems~\ref{thm:rt-morph} and~\ref{thm:rt-cof}.)
+\end{proof}
+
+\begin{remark}
+Both round-trips are definitional: the two structures carry identical fields,
+and the laws are the same equalities under renaming. No computation is
+required beyond unfolding definitions.
+\end{remark}
+
+%======================================================================
+\section{The category of cofunctors}
+%======================================================================
+
+\begin{definition}[Identity cofunctor]\label{def:cof-id}
+The \textbf{identity cofunctor} on $\cat(C)$ has object map the identity on
+shapes and lift, at each shape, the identity on positions. The laws C0--C2
+hold strictly (transports along reflexivity vanish).
+\end{definition}
+
+\begin{definition}[Composition of cofunctors]\label{def:cof-comp}
+Let $\phi:\cat(C)\to\cat(D)$ and $\psi:\cat(D)\to\cat(E)$ be cofunctors.
+Their \textbf{composite} $\psi\circ\phi:\cat(C)\to\cat(E)$ has
+\begin{enumerate}
+  \item object map $\mathrm{obj}_\psi\circ\mathrm{obj}_\phi$, and
+  \item lift at $s$ given by
+        \[
+          m \;\mapsto\;
+          \mathrm{lift}_\phi\bigl(s,\,
+            \mathrm{lift}_\psi\bigl(\mathrm{obj}_\phi(s),\,m\bigr)
+          \bigr)
+        \]
+        (lifts compose backwards).
+\end{enumerate}
+The composite codomain law chains the two factors' C0 laws; the composite unit
+law chains the two C1 laws; the composite composition law uses the factors' C2
+laws together with a transport identity recorded next.
+\end{definition}
+
+\begin{lemma}[Composite transport]\label{lem:comp-transport}
+Let $\psi:\cat(D)\to\cat(E)$ be a cofunctor, let $x,y\in\Shape(D)$ with
+$e:y=x$, and let $z\in\Shape(E)$ with $e_2:\mathrm{obj}_\psi(x)=z$. For
+$k\in\Pos(E)(z)$,
+\begin{equation}
+  e^{-1}\cdot\bigl(
+    \mathrm{lift}_\psi\bigl(x,\, e_2^{-1}\cdot k\bigr)
+  \bigr)
+  \;=\;
+  \mathrm{lift}_\psi\bigl(
+    y,\,
+    \bigl((\mathrm{obj}_\psi\cdot e)\cdot e_2\bigr)^{-1}\cdot k
+  \bigr).
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+This is the one genuinely dependent step in the composition of cofunctors:
+the inner position, transported across both factors' C0 equalities in one hop,
+equals the two-hop transport. After substituting the shape equalities the
+identity is reflexivity.
+\end{remark}
+
+\begin{proposition}[Left unit for cofunctors]\label{prop:cof-id-comp}
+For every cofunctor $\phi:\cat(C)\to\cat(D)$,
+\begin{equation}
+  \phi \;\circ\; \id_{\cat(C)} \;=\; \phi.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{proposition}[Right unit for cofunctors]\label{prop:cof-comp-id}
+For every cofunctor $\phi:\cat(C)\to\cat(D)$,
+\begin{equation}
+  \id_{\cat(D)} \;\circ\; \phi \;=\; \phi.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{proposition}[Associativity for cofunctors]\label{prop:cof-assoc}
+Composition of cofunctors is associative:
+\begin{equation}
+  \chi \;\circ\; (\psi \;\circ\; \phi)
+  \;=\;
+  (\chi \;\circ\; \psi) \;\circ\; \phi.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[The category $\Cof$]\label{thm:cof-cat}
+Directed containers and cofunctors form a strict category $\Cof$: identities
+and composition as above, with unit and associativity laws holding on the
+nose.
+\end{theorem}
+
+\begin{proof}
+By lean. (Propositions~\ref{prop:cof-id-comp}, \ref{prop:cof-comp-id},
+and~\ref{prop:cof-assoc}.)
+\end{proof}
+
+%======================================================================
+\section{Isomorphism of categories}
+%======================================================================
+
+Transporting the identity cofunctor and cofunctor composition across the
+hom-set bijection yields identity and composition for directed-container
+morphisms.
+
+\begin{definition}[Identity and composition in $\DCont$]\label{def:dcont-ops}
+The \textbf{identity} directed-container morphism on $C$ is
+$(\id_{\cat(C)})^\vee$. The \textbf{composite} of morphisms
+$\varphi:C\Rightarrow D$ and $\psi:D\Rightarrow E$ is
+$\bigl(\psi^\wedge\circ\varphi^\wedge\bigr)^\vee$.
+\end{definition}
+
+\begin{proposition}[Preservation of identities]\label{prop:phi-id}
+The assignment $\Phi(\varphi)=\varphi^\wedge$ preserves identities:
+\begin{equation}
+  (\id_C)^\wedge \;=\; \id_{\cat(C)}.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{proposition}[Preservation of composition]\label{prop:phi-comp}
+The assignment $\Phi(\varphi)=\varphi^\wedge$ preserves composition:
+\begin{equation}
+  (\psi\circ\varphi)^\wedge
+  \;=\;
+  \psi^\wedge \;\circ\; \varphi^\wedge.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[Isomorphism of categories]\label{thm:iso-cats}
+The assignment $\Phi$ is an isomorphism of categories
+\begin{equation}
+  \DCont \;\cong\; \Cof.
+\end{equation}
+It is the identity on objects, bijective on every hom-set
+(Corollary~\ref{cor:hom-bij}), and functorial
+(Propositions~\ref{prop:phi-id} and~\ref{prop:phi-comp}).
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{Discussion}
+%======================================================================
+
+\paragraph{What has been established.}
+Directed-container morphisms and cofunctors of the presented categories are
+the same mathematical objects under a change of vocabulary. The category they
+form is strict, and the identification is an isomorphism of categories. In
+particular, there are no exotic directed-container morphisms beyond cofunctors,
+and no exotic cofunctors beyond directed-container morphisms.
+
+\paragraph{Why not functors?}
+The position component of a container morphism is contravariant by the
+semantics of extensions: positions of the target are pulled back to positions
+of the source so that labellings can be reindexed. Functors act covariantly on
+hom-sets. The mismatch is definitional, not accidental; cofunctors are the
+correct dual notion.
+
+\paragraph{Scope.}
+This note takes the object-level dictionary (directed containers as
+categories) as given and focuses on the morphism-level identification. The
+full round-trip at the object level---recovering a directed container from its
+presented category up to isomorphism of positions---belongs to the companion
+note on directed containers as categories.
+
+\paragraph{Machine checking.}
+Every definition and theorem statement above corresponds to a declaration in a
+machine-checked formalisation. The phrase ``by lean'' indicates that the proof
+has been verified by a proof assistant.
+
+%======================================================================
+\section*{Acknowledgements}
+%======================================================================
+
+The mathematical content follows the directed-container theory of Ahman,
+Chapman, and Uustalu, and the cofunctor perspective associated with the
+Shapiro--Spivak polynomial dictionary. The presentation here is a prose
+rendering of a formal development intended for human review of the theorem
+statements.
+
+\begin{thebibliography}{9}
+
+\bibitem{ahman2012}
+D.~Ahman, J.~Chapman, and T.~Uustalu.
+\newblock When is a container a comonad?
+\newblock In \emph{FoSSaCS}, volume~7213 of \emph{LNCS}, pages 74--88.
+\newblock Springer, 2012.
+
+\bibitem{ahman2016}
+D.~Ahman and T.~Uustalu.
+\newblock Directed containers as categories.
+\newblock In \emph{MSFP}, volume~207 of \emph{EPTCS}, pages 89--98, 2016.
+
+\bibitem{shapiro2023}
+B.~Shapiro and D.~I.~Spivak.
+\newblock Structures on categories of polynomials.
+\newblock Preprint, 2023.
+
+\end{thebibliography}
+
+\end{document}

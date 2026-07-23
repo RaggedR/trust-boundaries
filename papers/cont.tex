@@ -1,0 +1,454 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath,amsthm,mathtools}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{parskip}
+\usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
+
+% Theorem environments (arXiv / journal style)
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{remark}[theorem]{Remark}
+
+% Notation
+\newcommand{\Ext}{\mathrm{Ext}}
+\newcommand{\Shape}{\mathrm{Shape}}
+\newcommand{\Pos}{\mathrm{Pos}}
+\newcommand{\Type}{\mathbf{Type}}
+\newcommand{\id}{\mathrm{id}}
+\newcommand{\Cont}{\mathbf{Cont}}
+\newcommand{\Hom}{\mathrm{Hom}}
+
+\title{The Category of Containers:\\
+  Morphisms, Products, and Coproducts}
+\author{Extracted from a machine-checked development}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We equip containers and their morphisms with the structure of a category
+$\Cont$. Morphisms consist of a forward map on shapes and a \emph{contravariant}
+map on positions; with this variance, identity and composition laws hold
+strictly. We then construct binary coproducts and binary products in $\Cont$,
+exhibiting the universal properties in full (computation rules and uniqueness).
+The proofs of all stated results have been machine-checked; we record only the
+mathematical content.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%======================================================================
+\section{Introduction}
+%======================================================================
+
+Containers---pairs $(S,P)$ consisting of a shape type and a family of position
+types---classify a class of polynomial endofunctors on types via their
+extensions. Morphisms of containers are maps on shapes together with
+contravariant maps on positions; these induce natural transformations of
+extensions, and conversely (the representation theorem).
+
+The present note packages that morphism data into a category $\Cont$, and
+develops its elementary algebra: binary coproducts and binary products. The
+subtlety throughout is the variance of the position component. Because
+positions are pulled back, the composite of two morphisms runs position maps
+\emph{backwards}; once that convention is fixed, the category laws hold by
+ordinary function associativity, with no transports.
+
+\paragraph{What this note claims.}
+In ordinary mathematical language: containers and shape-and-position morphisms
+form a category; that category has binary coproducts (shapes a disjoint union,
+positions case-wise) and binary products (shapes a cartesian product, positions
+a \emph{coproduct} of the position sets). The universal properties are the
+expected bijections
+\[
+  \Hom(C\oplus D,\,E)
+  \;\cong\;
+  \Hom(C,E)\times\Hom(D,E),
+  \qquad
+  \Hom(R,\,C\times D)
+  \;\cong\;
+  \Hom(R,C)\times\Hom(R,D).
+\]
+
+%======================================================================
+\section{Containers and morphisms}
+%======================================================================
+
+We work in a single universe $\Type$. Recall:
+
+\begin{definition}[Container]\label{def:container}
+A \textbf{container} $C$ consists of a type $\Shape(C)$ of shapes and, for each
+shape $s$, a type $\Pos(C)(s)$ of positions. We write $C=(S,P)$ when convenient.
+\end{definition}
+
+\begin{definition}[Container morphism]\label{def:morphism}
+Let $C=(S_C,P_C)$ and $D=(S_D,P_D)$ be containers. A \textbf{morphism}
+$\varphi:C\Rightarrow D$ consists of
+\begin{enumerate}
+  \item a map on shapes $u:S_C\to S_D$, and
+  \item for each $s\in S_C$, a function
+        $g_s:P_D\bigl(u(s)\bigr)\to P_C(s)$
+        (contravariant on positions).
+\end{enumerate}
+We write $\varphi=(u,g)$, and refer to $u$ as the shape component and $g$ as
+the position component.
+\end{definition}
+
+\begin{definition}[Identity morphism]\label{def:id}
+For a container $C$, the \textbf{identity morphism} $\id_C:C\Rightarrow C$ has
+shape component the identity function on $\Shape(C)$ and position component,
+at each shape, the identity function on positions.
+\end{definition}
+
+\begin{definition}[Composition]\label{def:comp}
+Let $\varphi=(u,g):C\Rightarrow D$ and $\psi=(v,h):D\Rightarrow E$ be
+container morphisms. Their \textbf{composite}
+$\psi\circ\varphi:C\Rightarrow E$ (written in applicative order; diagrammatic
+order is $\varphi$ then $\psi$) has
+\begin{enumerate}
+  \item shape component $v\circ u$, and
+  \item position component, at $s\in\Shape(C)$,
+        \[
+          g_s \;\circ\; h_{u(s)}
+          \;:\;
+          \Pos(E)\bigl(v(u(s))\bigr)
+          \;\longrightarrow\;
+          \Pos(C)(s).
+        \]
+\end{enumerate}
+Shape maps compose forwards; position maps compose backwards.
+\end{definition}
+
+\begin{remark}
+The backwards composition of position maps is forced by the intended
+semantics: a labelling of $C$-positions is reindexed first by $\varphi$'s
+pullback and then by $\psi$'s, or equivalently by the composite pullback.
+\end{remark}
+
+Because the type of the position component depends on the shape component, an
+extensionality principle for morphisms must account for that dependence.
+
+\begin{lemma}[Extensionality for morphisms]\label{lem:ext}
+Let $\varphi,\psi:C\Rightarrow D$ be container morphisms. If the shape
+components agree and the position components are (heterogeneously) equal, then
+$\varphi=\psi$.
+\end{lemma}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{lemma}[Pointwise extensionality]\label{lem:ext-prime}
+Let $\varphi,\psi:C\Rightarrow D$ with shape components $u$ and $v$, and
+suppose $h:u=v$. If for every shape $s$ and every $D$-position $p$ of $v(s)$,
+\[
+  g_s(p) \;=\; g'_s\bigl((h\cdot s)\cdot p\bigr)
+\]
+(after transporting $p$ along the action of $h$ at $s$), then $\varphi=\psi$.
+\end{lemma}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{The category of containers}
+%======================================================================
+
+\begin{proposition}[Left unit]\label{prop:id-comp}
+For every container morphism $\varphi:C\Rightarrow D$,
+\begin{equation}
+  \varphi \;\circ\; \id_C \;=\; \varphi.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{proposition}[Right unit]\label{prop:comp-id}
+For every container morphism $\varphi:C\Rightarrow D$,
+\begin{equation}
+  \id_D \;\circ\; \varphi \;=\; \varphi.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{proposition}[Associativity]\label{prop:assoc}
+For morphisms $\varphi:C\Rightarrow D$, $\psi:D\Rightarrow E$,
+$\chi:E\Rightarrow F$,
+\begin{equation}
+  \chi \;\circ\; (\psi \;\circ\; \varphi)
+  \;=\;
+  (\chi \;\circ\; \psi) \;\circ\; \varphi.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+All three laws hold strictly: the underlying shape-map operations are ordinary
+function identity and composition, which are unital and associative on the
+nose, and the backwards position maps inherit the same equalities with no
+transport.
+\end{remark}
+
+\begin{definition}[The category $\Cont$]\label{def:cont}
+The category $\Cont$ has
+\begin{enumerate}
+  \item objects: containers;
+  \item morphisms $C\to D$: container morphisms $C\Rightarrow D$;
+  \item identities and composition as in Definitions~\ref{def:id}
+        and~\ref{def:comp};
+  \item unit and associativity laws as in Propositions~\ref{prop:id-comp},
+        \ref{prop:comp-id}, and~\ref{prop:assoc}.
+\end{enumerate}
+\end{definition}
+
+%======================================================================
+\section{Binary coproducts}
+%======================================================================
+
+\begin{definition}[Coproduct of containers]\label{def:coprod}
+Let $C=(S,P)$ and $D=(T,Q)$ be containers. Their \textbf{coproduct}
+$C\oplus D$ is the container with
+\begin{enumerate}
+  \item shapes $S+T$ (the disjoint union), and
+  \item positions given case-wise:
+        $\Pos(C\oplus D)(\mathsf{inl}\,s)=P(s)$ and
+        $\Pos(C\oplus D)(\mathsf{inr}\,t)=Q(t)$.
+\end{enumerate}
+\end{definition}
+
+\begin{definition}[Injections]\label{def:inl-inr}
+The \textbf{left injection} $\iota_C:C\Rightarrow C\oplus D$ has shape
+component $\mathsf{inl}:S\to S+T$ and position component the identity on
+$P(s)$ (positions of an $\mathsf{inl}$-shape \emph{are} the $C$-positions).
+The \textbf{right injection} $\iota_D:D\Rightarrow C\oplus D$ is defined
+dually via $\mathsf{inr}$.
+\end{definition}
+
+\begin{definition}[Copairing]\label{def:desc}
+Given morphisms $\varphi:C\Rightarrow E$ and $\psi:D\Rightarrow E$, their
+\textbf{copairing} $[\varphi,\psi]:C\oplus D\Rightarrow E$ has shape
+component $\mathsf{elim}(u_\varphi,u_\psi)$ (dispatch on the sum) and
+position component that of $\varphi$ on $\mathsf{inl}$-shapes and that of
+$\psi$ on $\mathsf{inr}$-shapes.
+\end{definition}
+
+\begin{proposition}[Left computation]\label{prop:inl-desc}
+For morphisms $\varphi:C\Rightarrow E$ and $\psi:D\Rightarrow E$,
+\begin{equation}
+  [\varphi,\psi] \;\circ\; \iota_C \;=\; \varphi.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{proposition}[Right computation]\label{prop:inr-desc}
+For morphisms $\varphi:C\Rightarrow E$ and $\psi:D\Rightarrow E$,
+\begin{equation}
+  [\varphi,\psi] \;\circ\; \iota_D \;=\; \psi.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{proposition}[Uniqueness / $\eta$-rule]\label{prop:desc-eta}
+For every morphism $\chi:C\oplus D\Rightarrow E$,
+\begin{equation}
+  \bigl[\,\chi\circ\iota_C,\; \chi\circ\iota_D\,\bigr] \;=\; \chi.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[Universal property of the coproduct]\label{thm:coprod-up}
+For every cocone $(\varphi:C\Rightarrow E,\;\psi:D\Rightarrow E)$ there is a
+unique morphism $\chi:C\oplus D\Rightarrow E$ such that
+$\chi\circ\iota_C=\varphi$ and $\chi\circ\iota_D=\psi$. Explicitly,
+$\chi=[\varphi,\psi]$; uniqueness follows from Propositions~\ref{prop:inl-desc},
+\ref{prop:inr-desc}, and~\ref{prop:desc-eta}. Equivalently,
+\begin{equation}
+  \Hom_{\Cont}(C\oplus D,\,E)
+  \;\cong\;
+  \Hom_{\Cont}(C,E)\times\Hom_{\Cont}(D,E)
+\end{equation}
+naturally in $E$.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{Binary products}
+%======================================================================
+
+The product of containers is dual in the categorical sense, but the
+combinatorics of positions are not a naive product: the positions of a
+product shape are the \emph{coproduct} of the two position sets. This is the
+product of the underlying polynomials.
+
+\begin{definition}[Product of containers]\label{def:prod}
+Let $C=(S,P)$ and $D=(T,Q)$ be containers. Their \textbf{product}
+$C\times D$ is the container with
+\begin{enumerate}
+  \item shapes $S\times T$, and
+  \item positions of $(s,t)$ given by $P(s)+Q(t)$.
+\end{enumerate}
+\end{definition}
+
+\begin{definition}[Projections]\label{def:fst-snd}
+The \textbf{first projection} $\pi_C:C\times D\Rightarrow C$ has shape
+component the first projection $S\times T\to S$, and position component
+(contravariant) the coproduct injection $\mathsf{inl}:P(s)\to P(s)+Q(t)$.
+The \textbf{second projection} $\pi_D$ is defined dually via $\mathsf{inr}$.
+\end{definition}
+
+\begin{remark}
+The variance is the teaching point dual to the coproduct. There the injections
+were identity-on-positions; here the projections carry a coproduct injection
+\emph{backwards} on positions: a $C$-position is sent into the larger
+position set $P(s)+Q(t)$.
+\end{remark}
+
+\begin{definition}[Pairing]\label{def:pair}
+Given morphisms $f:R\Rightarrow C$ and $g:R\Rightarrow D$, their
+\textbf{pairing} $\langle f,g\rangle:R\Rightarrow C\times D$ has shape
+component $r\mapsto\bigl(u_f(r),\,u_g(r)\bigr)$ and position component, at
+$r$, the coproduct elimination of $f$'s and $g$'s position maps.
+\end{definition}
+
+\begin{proposition}[Left computation]\label{prop:pair-fst}
+For morphisms $f:R\Rightarrow C$ and $g:R\Rightarrow D$,
+\begin{equation}
+  \pi_C \;\circ\; \langle f,g\rangle \;=\; f.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{proposition}[Right computation]\label{prop:pair-snd}
+For morphisms $f:R\Rightarrow C$ and $g:R\Rightarrow D$,
+\begin{equation}
+  \pi_D \;\circ\; \langle f,g\rangle \;=\; g.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{proposition}[Uniqueness / $\eta$-rule]\label{prop:pair-eta}
+For every morphism $\chi:R\Rightarrow C\times D$,
+\begin{equation}
+  \bigl\langle\,
+    \pi_C\circ\chi,\;
+    \pi_D\circ\chi
+  \,\bigr\rangle
+  \;=\; \chi.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[Universal property of the product]\label{thm:prod-up}
+For every cone $(f:R\Rightarrow C,\;g:R\Rightarrow D)$ there is a unique
+morphism $\chi:R\Rightarrow C\times D$ such that $\pi_C\circ\chi=f$ and
+$\pi_D\circ\chi=g$. Explicitly, $\chi=\langle f,g\rangle$; uniqueness follows
+from Propositions~\ref{prop:pair-fst}, \ref{prop:pair-snd},
+and~\ref{prop:pair-eta}. Equivalently,
+\begin{equation}
+  \Hom_{\Cont}(R,\,C\times D)
+  \;\cong\;
+  \Hom_{\Cont}(R,C)\times\Hom_{\Cont}(R,D)
+\end{equation}
+naturally in $R$.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{Discussion}
+%======================================================================
+
+\paragraph{What has been established.}
+Containers and their morphisms form a category $\Cont$ with strictly holding
+unit and associativity laws. Binary coproducts and products exist and satisfy
+the full universal properties. The combinatorics are those of polynomial
+functors: coproduct of containers is case-wise on both shapes and positions;
+product of containers multiplies shapes and \emph{adds} positions.
+
+\paragraph{Variance.}
+The entire development turns on the contravariance of the position component.
+With positions pulled back, composites and universal maps typecheck without
+transport, and all category and universal-property laws reduce to function
+extensionality and case analysis on sum types.
+
+\paragraph{Scope.}
+This note does not treat the composition product of containers (the monoidal
+structure whose comonoids are directed containers), nor the extension functor
+$\Cont\to[\Type,\Type]$ as a fully faithful embedding. Those belong to
+companion developments.
+
+\paragraph{Machine checking.}
+Every definition and theorem statement above corresponds to a declaration in a
+machine-checked formalisation. The phrase ``by lean'' indicates that the proof
+has been verified by a proof assistant.
+
+%======================================================================
+\section*{Acknowledgements}
+%======================================================================
+
+The mathematical content follows the theory of containers of Abbott,
+Altenkirch, and Ghani. The presentation here is a prose rendering of a formal
+development intended for human review of the theorem statements.
+
+\begin{thebibliography}{9}
+
+\bibitem{abbott2003}
+M.~Abbott, T.~Altenkirch, and N.~Ghani.
+\newblock Categories of containers.
+\newblock In \emph{FoSSaCS}, volume~2620 of \emph{LNCS}, pages 23--38.
+\newblock Springer, 2003.
+
+\bibitem{abbott2005}
+M.~Abbott, T.~Altenkirch, and N.~Ghani.
+\newblock Containers: constructing strictly positive types.
+\newblock \emph{Theoretical Computer Science}, 342(1):3--27, 2005.
+
+\end{thebibliography}
+
+\end{document}

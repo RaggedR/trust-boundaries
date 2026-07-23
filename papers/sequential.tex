@@ -1,0 +1,391 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath,amsthm,mathtools}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{parskip}
+\usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
+
+% Theorem environments (arXiv / journal style)
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{remark}[theorem]{Remark}
+
+% Notation
+\newcommand{\Ext}{\mathrm{Ext}}
+\newcommand{\Shape}{\mathrm{Shape}}
+\newcommand{\Pos}{\mathrm{Pos}}
+\newcommand{\Type}{\mathbf{Type}}
+\newcommand{\id}{\mathrm{id}}
+\newcommand{\Cont}{\mathbf{Cont}}
+\newcommand{\seqop}{\mathbin{\triangleleft}}
+
+\title{The Sequential Operator on Containers:\\
+  Units, Associator, and Composition of Extensions}
+\author{Extracted from a machine-checked development}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We equip the category of containers with the \emph{sequential operator}
+$\seqop$, whose extension is composition of the induced polynomial
+functors: $\Ext(G \seqop F) \cong \Ext\,G \circ \Ext\,F$. The unit is the
+identity container $I = 1 \seqop {!}$. We construct the left and right
+unitors $I \seqop F \cong F$ and $F \seqop I \cong F$, and the
+associator $(H \seqop G) \seqop F \cong H \seqop (G \seqop F)$, as
+isomorphisms of containers. All dependent types involved agree
+definitionally: the associator is re-association of an iterated
+dependent sum, and no transport is required. A $\seqop$-comonoid in the
+category of containers is precisely a directed container. All stated
+results have been machine-checked.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%======================================================================
+\section{Introduction}
+%======================================================================
+
+Containers present a class of polynomial endofunctors on types: a shape
+type equipped with a family of position types determines the functor
+\[
+  X \;\longmapsto\; \sum_{s}\; X^{P(s)}.
+\]
+Composition of such functors is again a polynomial functor of the same
+form, and the composite has an explicit combinatorial description. That
+description is the sequential operator~$\seqop$.
+
+The operator is the spine of the theory of directed containers: a
+directed container is exactly a $\seqop$-comonoid in the category of
+containers. The present note records the monoidal structure itself---the
+operator, its unit, and the coherence isomorphisms---leaving the
+comonoid laws to the directed-container development.
+
+\paragraph{What this note claims.}
+In ordinary mathematical language: the sequential composite
+$G \seqop F$ has shapes
+\[
+  \sum_{t \,:\, \Shape(G)}\;
+  \bigl(\Pos(G)(t) \to \Shape(F)\bigr)
+\]
+and positions that are pairs of an outer $G$-position with an inner
+$F$-position in the shape sitting there. Its extension is functor
+composition. The monoidal coherences (unitors and associator) are
+isomorphisms of containers whose underlying shape maps are the evident
+bijections, and all position fibres line up definitionally.
+
+%======================================================================
+\section{Containers recalled}
+%======================================================================
+
+\begin{definition}[Container]\label{def:container}
+A \textbf{container} $C$ consists of a type $\Shape(C)$ of shapes and,
+for each shape~$s$, a type $\Pos(C)(s)$ of positions. We write
+$C = (S, P)$ when convenient.
+\end{definition}
+
+\begin{definition}[Extension]\label{def:ext}
+The \textbf{extension} of a container~$C$ at a type~$X$ is
+\begin{equation}
+  \Ext\,C\,X \;=\; \sum_{s \,:\, \Shape(C)}\;
+  \bigl(\Pos(C)(s) \to X\bigr).
+\end{equation}
+\end{definition}
+
+\begin{definition}[Container morphism]\label{def:morphism}
+A \textbf{morphism} $\varphi : C \Rightarrow D$ consists of a map on
+shapes $u : \Shape(C) \to \Shape(D)$ and, for each shape~$s$, a
+contravariant map on positions
+$g_s : \Pos(D)(u(s)) \to \Pos(C)(s)$.
+\end{definition}
+
+We write $\Cont$ for the category of containers and container morphisms.
+Composition of morphisms and identities are the evident ones
+(covariant on shapes, contravariant on positions).
+
+%======================================================================
+\section{The sequential operator}
+%======================================================================
+
+\begin{definition}[Sequential operator]\label{def:seq}
+Let $F$ and $G$ be containers. The \textbf{sequential composite}
+$G \seqop F$ (``$G$ outside, $F$ inside'') is the container with
+\begin{align}
+  \Shape(G \seqop F)
+  &\;=\;
+  \sum_{t \,:\, \Shape(G)}\;
+  \bigl(\Pos(G)(t) \to \Shape(F)\bigr), \\[4pt]
+  \Pos(G \seqop F)\,(t, f)
+  &\;=\;
+  \sum_{q \,:\, \Pos(G)(t)}\;
+  \Pos(F)\bigl(f(q)\bigr).
+\end{align}
+A shape is an outer $G$-shape together with a choice of inner $F$-shape
+for each $G$-position; a position is an outer position together with an
+inner position in the shape sitting there.
+\end{definition}
+
+\begin{definition}[Identity container]\label{def:I}
+The \textbf{identity container} is
+\begin{equation}
+  I \;=\; \bigl(1,\; {\ast} \mapsto 1\bigr),
+\end{equation}
+one shape and one position. Its extension is the identity functor, and
+it is the unit for~$\seqop$.
+\end{definition}
+
+%======================================================================
+\section{Extension is functor composition}
+%======================================================================
+
+The defining property of~$\seqop$ is that extension turns sequential
+composition into composition of functors.
+
+\begin{definition}[Uncurrying of labellings]\label{def:seqext}
+For containers $G$ and~$F$ and a type~$X$, define maps
+\begin{align}
+  \alpha_X &\;:\;
+  \Ext\,(G \seqop F)\,X
+  \;\longrightarrow\;
+  \Ext\,G\,(\Ext\,F\,X), \\[4pt]
+  \beta_X &\;:\;
+  \Ext\,G\,(\Ext\,F\,X)
+  \;\longrightarrow\;
+  \Ext\,(G \seqop F)\,X
+\end{align}
+by regrouping: $\alpha$ sends a labelling of the nested position sum to
+an outer structure of inner structures; $\beta$ is the inverse
+uncurrying. Explicitly, writing a shape of $G \seqop F$ as
+$\langle t, f \rangle$ and a labelling as~$v$,
+\begin{align}
+  \alpha_X\,\bigl\langle \langle t, f \rangle,\, v \bigr\rangle
+  &\;=\;
+  \bigl\langle
+    t,\;
+    q \mapsto
+    \bigl\langle f(q),\; r \mapsto v\langle q, r \rangle \bigr\rangle
+  \bigr\rangle, \\[4pt]
+  \beta_X\,\bigl\langle t,\, m \bigr\rangle
+  &\;=\;
+  \bigl\langle
+    \langle t,\, q \mapsto \pi_1(m(q)) \rangle,\;
+    \langle q, r \rangle \mapsto \pi_2(m(q))(r)
+  \bigr\rangle.
+\end{align}
+\end{definition}
+
+\begin{theorem}[Extension of sequential composite]
+\label{thm:seq-ext}
+For all containers $G$ and~$F$ and every type~$X$, the maps $\alpha_X$
+and $\beta_X$ are mutually inverse:
+\begin{equation}
+  \beta_X \circ \alpha_X \;=\; \id,
+  \qquad
+  \alpha_X \circ \beta_X \;=\; \id.
+\end{equation}
+Thus $\Ext\,(G \seqop F) \cong \Ext\,G \circ \Ext\,F$ as functors on
+types. Both fibres agree definitionally, so the round trips hold after
+case analysis on nested pairs.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{Isomorphisms of containers}
+%======================================================================
+
+\begin{definition}[Container isomorphism]\label{def:iso}
+An \textbf{isomorphism of containers} $C \cong D$ is a pair of
+morphisms $\mathrm{hom} : C \Rightarrow D$ and
+$\mathrm{inv} : D \Rightarrow C$ that are mutual inverses under
+composition of container morphisms.
+\end{definition}
+
+\begin{remark}
+The unitors and associator are isomorphisms, not equalities: the
+underlying shape types are bijective (e.g.\ $(1 \to S) \cong S$) but not
+definitionally identical.
+\end{remark}
+
+%======================================================================
+\section{Left and right unitors}
+%======================================================================
+
+\begin{theorem}[Left unitor]\label{thm:left-unitor}
+For every container~$F$ there is an isomorphism of containers
+\begin{equation}
+  I \seqop F \;\cong\; F.
+\end{equation}
+Forward, read off the single inner shape
+($f : 1 \to \Shape(F)$ maps to $f(\ast)$); backward, send a shape~$s$ to
+the constant assignment ${\ast} \mapsto s$. Positions transport along the
+same collapse of the unit type. Both round trips hold by $\eta$-laws for
+the unit type and dependent sums.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[Right unitor]\label{thm:right-unitor}
+For every container~$F$ there is an isomorphism of containers
+\begin{equation}
+  F \seqop I \;\cong\; F.
+\end{equation}
+Forward, drop the trivial inner data
+($g : \Pos(F)(s) \to 1$ is unique); backward, pad with the unique map
+to the unit type. Positions
+$\sum_{p \,:\, \Pos(F)(s)} 1$ collapse to $\Pos(F)(s)$.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{The associator}
+%======================================================================
+
+\begin{theorem}[Associator]\label{thm:associator}
+For all containers $H$, $G$, and~$F$ there is an isomorphism of
+containers
+\begin{equation}
+  (H \seqop G) \seqop F
+  \;\cong\;
+  H \seqop (G \seqop F).
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}[Explicit data]
+A shape of the left-hand side is a triple
+$\bigl(\langle a, g \rangle,\, k\bigr)$ with
+$g : \Pos(H)(a) \to \Shape(G)$ and
+\[
+  k \;:\;
+  \Bigl(
+    \sum_{u \,:\, \Pos(H)(a)}\;
+    \Pos(G)\bigl(g(u)\bigr)
+  \Bigr)
+  \to
+  \Shape(F).
+\]
+A shape of the right-hand side is a pair $\langle a, m \rangle$ with
+\[
+  m \;:\;
+  \Pos(H)(a)
+  \to
+  \sum_{b \,:\, \Shape(G)}\;
+  \bigl(\Pos(G)(b) \to \Shape(F)\bigr).
+\]
+The bijection curries the inner data:
+\begin{equation}
+  m(u) \;=\; \bigl\langle g(u),\; v \mapsto k\langle u, v \rangle \bigr\rangle,
+\end{equation}
+inverted by $g(u) = \pi_1(m(u))$ and
+$k\langle u, v \rangle = \pi_2(m(u))(v)$.
+
+On positions the isomorphism is re-association of a nested dependent
+sum,
+\begin{equation}
+  \bigl\langle \langle u, v \rangle,\, p \bigr\rangle
+  \;\longleftrightarrow\;
+  \bigl\langle u,\, \langle v, p \rangle \bigr\rangle.
+\end{equation}
+ Crucially, the fibre
+$\Pos(F)\bigl(\pi_2(m(u))(v)\bigr)$ is definitionally equal to
+$\Pos(F)\bigl(k\langle u, v \rangle\bigr)$, so no transport is needed
+and the round trips close by case analysis on nested pairs.
+\end{remark}
+
+%======================================================================
+\section{Organising remark: comonoids and directed containers}
+%======================================================================
+
+\begin{remark}[$\seqop$-comonoids]
+A \textbf{$\seqop$-comonoid} in $\Cont$ is a container~$C$ equipped with
+a counit $C \Rightarrow I$ and a comultiplication
+$C \Rightarrow C \seqop C$ satisfying the comonoid laws (coassociativity
+up to the associator; counitality up to the unitors). Such a structure is
+precisely a \textbf{directed container}: equivalently, a comonad on
+types whose underlying functor is a container extension.
+
+Thus $(\Cont, \seqop, I)$ is the monoidal home of directed containers.
+The comonoid laws unfold to the directed-container axioms (root,
+subtree, shift, and laws D1--D5); we record the correspondence as the
+organising remark and leave the equivalence to the directed-container
+development.
+\end{remark}
+
+%======================================================================
+\section{Discussion}
+%======================================================================
+
+\paragraph{What has been established.}
+The sequential operator equips containers with a monoidal structure
+whose extension is functor composition. The unitors and associator are
+isomorphisms of containers; all relevant fibres agree definitionally, so
+the constructions are transport-free.
+
+\paragraph{Why definitional agreement matters.}
+In dependent type theory, re-associating nested sums often forces
+transport along equalities of fibres. Here the position type of
+$G \seqop F$ is arranged so that the two associations of a triple sum
+are definitionally the same family. The associator is therefore nothing
+but the combinatorial re-bracketing
+$((u,v),p) \leftrightarrow (u,(v,p))$.
+
+\paragraph{Machine checking.}
+Every definition and theorem statement above corresponds to a declaration
+in a machine-checked formalisation. The phrase ``by lean'' indicates that
+the proof has been verified by a proof assistant.
+
+%======================================================================
+\section*{Acknowledgements}
+%======================================================================
+
+The mathematical content follows the theory of containers of Abbott,
+Altenkirch, and Ghani, and the sequential (composition) product standard
+in that literature. The presentation here is a prose rendering of a
+formal development intended for human review of the theorem statements.
+
+\begin{thebibliography}{9}
+
+\bibitem{abbott2005}
+M.~Abbott, T.~Altenkirch, and N.~Ghani.
+\newblock Containers: constructing strictly positive types.
+\newblock \emph{Theoretical Computer Science}, 342(1):3--27, 2005.
+
+\bibitem{abbott2003}
+M.~Abbott, T.~Altenkirch, and N.~Ghani.
+\newblock Categories of containers.
+\newblock In \emph{FoSSaCS}, volume~2620 of \emph{LNCS}, pages 23--38.
+\newblock Springer, 2003.
+
+\bibitem{ahman2012}
+D.~Ahman, J.~Chapman, and T.~Uustalu.
+\newblock When is a container a comonad?
+\newblock In \emph{FoSSaCS}, volume~7213 of \emph{LNCS}, pages 74--88.
+\newblock Springer, 2012.
+
+\end{thebibliography}
+
+\end{document}

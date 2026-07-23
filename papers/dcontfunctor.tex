@@ -1,0 +1,308 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath,amsthm,mathtools}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{parskip}
+\usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
+
+% Theorem environments (arXiv / journal style)
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{remark}[theorem]{Remark}
+
+% Notation
+\newcommand{\Ext}{\mathrm{Ext}}
+\newcommand{\Shape}{\mathrm{Shape}}
+\newcommand{\Pos}{\mathrm{Pos}}
+\newcommand{\Type}{\mathbf{Type}}
+\newcommand{\id}{\mathrm{id}}
+\newcommand{\rootp}{\mathrm{o}}
+
+\title{Covariant Functors of Directed Containers}
+\author{Extracted from a machine-checked development}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We introduce covariant functors between directed containers: maps that act
+forward on both shapes and positions and preserve root, sub-shape, and shift.
+Under the dictionary that a directed container presents a small category with
+morphisms $p : s \to s \downarrow p$, such a functor is precisely a functor of
+presented categories. We construct identities and composition, prove the
+category laws, and record the transport lemmas needed for the composition law
+on shifts. The proofs of all stated results have been machine-checked; we
+record only the mathematical content.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%======================================================================
+\section{Introduction}
+%======================================================================
+
+A directed container presents, for each shape~$s$, a category whose morphisms
+out of~$s$ are positions of~$s$, with identity the root and composition given
+by the shift. Container morphisms in the classical sense are
+\emph{contravariant} on positions and correspond to cofunctors of these
+presented categories. The present note isolates the covariant sibling: a map
+that sends shapes forward and positions forward, preserving root, sub, and
+shift.
+
+The definition is given directly on directed containers, without passing
+through an intermediate ``small category'' construction. This keeps the
+identity and unit laws definitional on containers whose sub-shape operation is
+strictly a projection, and matches the law-naming style of the corresponding
+cofunctor development.
+
+We work in a single universe of types. Proofs are indicated by the phrase
+``by lean.''
+
+\paragraph{What this note claims.}
+Directed containers and their covariant functors form a category. A covariant
+functor $C \Rightarrow D$ is a shape map and a forward position map satisfying
+three laws F0--F2 (preservation of sub-shapes, roots, and shifts). Identities
+and composition exist, composition is associative, and identities are strict
+units.
+
+%======================================================================
+\section{Background: directed containers}
+%======================================================================
+
+\begin{definition}[Directed container]
+A \textbf{directed container} consists of a container $(S,P)$ together with
+\begin{align*}
+  \rootp &\;:\; (s : S) \to P(s), \\
+  \downarrow &\;:\; (s : S) \to P(s) \to S, \\
+  \oplus &\;:\; (s : S) \to (p : P(s)) \to P(s \downarrow p) \to P(s),
+\end{align*}
+satisfying the standard axioms D1--D5.
+\end{definition}
+
+\begin{remark}[Presented category]
+Informally, one may regard each shape~$s$ as an object and each position
+$p \in P(s)$ as a morphism $s \to s \downarrow p$, with
+$\id_s = \rootp(s)$ and composition $(p;q) = p \oplus q$. The axioms D1--D5
+are the category laws for this presentation. We use this dictionary only as
+motivation; the formal development never builds the category explicitly.
+\end{remark}
+
+%======================================================================
+\section{Covariant functors}
+%======================================================================
+
+\begin{definition}[Covariant functor of directed containers]\label{def:dcont-functor}
+Let $C$ and $D$ be directed containers. A \textbf{covariant functor}
+$\varphi : C \Rightarrow D$ consists of
+\begin{enumerate}
+  \item a map on shapes $u : \Shape(C) \to \Shape(D)$, and
+  \item for each shape $s \in \Shape(C)$, a map on positions
+        \[
+          g_s \;:\; \Pos(C)(s) \;\longrightarrow\; \Pos(D)\bigl(u(s)\bigr),
+        \]
+\end{enumerate}
+such that the following three laws hold:
+\begin{align}
+  \tag{F0}
+  u\bigl(s \downarrow_C p\bigr)
+  &\;=\;
+  u(s) \downarrow_D g_s(p),
+  \\[4pt]
+  \tag{F1}
+  g_s\bigl(\rootp_C(s)\bigr)
+  &\;=\;
+  \rootp_D\bigl(u(s)\bigr),
+  \\[4pt]
+  \tag{F2}
+  g_s\bigl(p \oplus_C q\bigr)
+  &\;=\;
+  g_s(p) \oplus_D
+    \bigl(
+      (\mathrm{F0}) \mathbin{\triangleright}
+      g_{s \downarrow_C p}(q)
+    \bigr).
+\end{align}
+Here the transport in F2 moves the inner image position
+$g_{s \downarrow_C p}(q)$, which lives over $u(s \downarrow_C p)$, into the
+fibre over $u(s) \downarrow_D g_s(p)$ along the equality F0.
+\end{definition}
+
+\begin{remark}
+Contrast classical directed-container morphisms (cofunctors of the presented
+categories), whose position component is \emph{contravariant}. Here both
+components run forward: F0 says the codomain of a morphism is preserved, F1
+preserves identities, and F2 preserves composition.
+\end{remark}
+
+%======================================================================
+\section{Identity and transport lemmas}
+%======================================================================
+
+\begin{definition}[Identity functor]\label{def:id}
+For a directed container~$C$, the \textbf{identity functor}
+$\id_C : C \Rightarrow C$ has shape map and position map both the identity.
+The laws F0--F2 hold by reflexivity; the transport in F2 is along a
+reflexive equality and vanishes.
+\end{definition}
+
+\begin{lemma}[Position map commutes with transport]\label{lem:onpos-transport}
+Let $\varphi : C \Rightarrow D$ be a covariant functor, let $e : a = b$ be an
+equality of shapes of~$C$, and let $p$ be a position of~$a$. Then
+\begin{equation}
+  g_b\bigl(e \mathbin{\triangleright} p\bigr)
+  \;=\;
+  \bigl(u(e)\bigr) \mathbin{\triangleright} g_a(p),
+\end{equation}
+where $u(e)$ denotes the image of~$e$ under the shape map.
+\end{lemma}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{lemma}[Composite transport]\label{lem:transport-trans}
+For a family $P$ and equalities $h_1 : x = y$, $h_2 : y = z$,
+\begin{equation}
+  h_2 \mathbin{\triangleright}
+    \bigl(h_1 \mathbin{\triangleright} p\bigr)
+  \;=\;
+  (h_1 \mathbin{;}\, h_2) \mathbin{\triangleright} p.
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{Composition}
+%======================================================================
+
+\begin{definition}[Composition of covariant functors]\label{def:comp}
+Let $\varphi : C \Rightarrow D$ and $\psi : D \Rightarrow E$ be covariant
+functors, with shape maps $u$, $u'$ and position maps $g$, $g'$ respectively.
+Their \textbf{composite} $\psi \circ \varphi : C \Rightarrow E$ has
+\begin{align}
+  (\psi \circ \varphi)_S(s)
+  &\;=\;
+  u'\bigl(u(s)\bigr),
+  \\[4pt]
+  (\psi \circ \varphi)_p(s,p)
+  &\;=\;
+  g'_{u(s)}\bigl(g_s(p)\bigr).
+\end{align}
+The law F0 for the composite is the composite of the factors' F0 equalities;
+F1 is two rewrites along the factors' F1; F2 is the factors' F2 followed by
+Lemmas~\ref{lem:onpos-transport} and~\ref{lem:transport-trans}.
+\end{definition}
+
+\begin{proposition}[Left unit]\label{prop:id-comp}
+For every covariant functor $\varphi : C \Rightarrow D$,
+\begin{equation}
+  \varphi \circ \id_C \;=\; \varphi.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{proposition}[Right unit]\label{prop:comp-id}
+For every covariant functor $\varphi : C \Rightarrow D$,
+\begin{equation}
+  \id_D \circ \varphi \;=\; \varphi.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{proposition}[Associativity]\label{prop:comp-assoc}
+For covariant functors
+$\varphi : B \Rightarrow C$,
+$\psi : C \Rightarrow D$, and
+$\chi : D \Rightarrow E$,
+\begin{equation}
+  \chi \circ (\psi \circ \varphi)
+  \;=\;
+  (\chi \circ \psi) \circ \varphi.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+The data of functors compose strictly. The law fields are propositional, so
+associativity and the unit laws hold by proof irrelevance once the underlying
+maps agree.
+\end{remark}
+
+%======================================================================
+\section{Discussion}
+%======================================================================
+
+\paragraph{What has been established.}
+Covariant functors of directed containers form a category: they have
+identities, an associative composition, and strict unit laws. The only
+genuinely dependent obligation is F2, which requires transporting an inner
+position along F0 before the target shift can consume it; composition of
+functors inherits this obligation and discharges it via the two transport
+lemmas.
+
+\paragraph{Relation to cofunctors.}
+The classical morphisms of directed containers (position-contravariant, shape
+covariant) are the cofunctors of the presented categories. The structure
+defined here is the functorial dual. Both live over the same objects; they are
+not interchangeable.
+
+\paragraph{Scope.}
+The development does not construct the presented small category as an
+independent object, nor does it prove an equivalence between covariant
+functors of directed containers and functors of those categories. It also does
+not treat natural transformations between covariant functors.
+
+\paragraph{Machine checking.}
+Every definition and theorem statement above corresponds to a declaration in a
+machine-checked formalisation. The phrase ``by lean'' indicates that the proof
+has been verified by a proof assistant.
+
+%======================================================================
+\section*{Acknowledgements}
+%======================================================================
+
+The mathematical content is a covariant counterpart to the cofunctor calculus
+for directed containers of Ahman, Chapman, and Uustalu. The presentation here
+is a prose rendering of a formal development intended for human review of the
+theorem statements.
+
+\begin{thebibliography}{9}
+
+\bibitem{ahman2014}
+D.~Ahman, J.~Chapman, and T.~Uustalu.
+\newblock When is a container a comonad?
+\newblock \emph{Logical Methods in Computer Science}, 10(3), 2014.
+
+\bibitem{abbott2005}
+M.~Abbott, T.~Altenkirch, and N.~Ghani.
+\newblock Containers: constructing strictly positive types.
+\newblock \emph{Theoretical Computer Science}, 342(1):3--27, 2005.
+
+\end{thebibliography}
+
+\end{document}

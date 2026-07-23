@@ -1,0 +1,447 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath,amsthm,mathtools}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{parskip}
+\usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
+
+% Theorem environments (arXiv / journal style)
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{remark}[theorem]{Remark}
+
+% Notation
+\newcommand{\Ext}{\mathrm{Ext}}
+\newcommand{\Shape}{\mathrm{Shape}}
+\newcommand{\Pos}{\mathrm{Pos}}
+\newcommand{\Type}{\mathbf{Type}}
+\newcommand{\id}{\mathrm{id}}
+\newcommand{\rootp}{\mathrm{o}}
+
+\title{From Container Comonads Back to Directed Containers}
+\author{Extracted from a machine-checked development}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We prove the converse of the Ahman--Chapman--Uustalu correspondence between
+directed containers and comonads on container extensions. Starting from a
+comonad structure on the extension of a container, we recover root, sub-shape,
+and shift operations, and show that the five directed-container axioms follow
+from the three comonad laws. A key step is that the right counit law forces the
+outer shape map of the comultiplication to be the identity. The proofs of all
+stated results have been machine-checked; we record only the mathematical
+content.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%======================================================================
+\section{Introduction}
+%======================================================================
+
+Ahman, Chapman, and Uustalu showed that a container extension carries a
+comonad structure if and only if the container is \emph{directed}: it is
+equipped with a root, a sub-shape operation, and a shift satisfying five
+equational axioms D1--D5. The forward direction is standard: from directed
+data one builds counit and comultiplication on the extension. This note
+treats the converse.
+
+By the representation theorem for containers, natural transformations of
+extensions are container morphisms. Consequently a comonad on $\Ext\,C$ is
+determined by combinatorial data: a root choice from the counit, and a triple
+of maps from the comultiplication. The right counit law forces the outer shape
+component of the comultiplication to be the identity. Once that collapses, the
+remaining data are precisely root, sub, and shift, and the three comonad laws
+become D1--D5---the same partition as in the forward direction, read in
+reverse.
+
+We work in a single universe of types. Proofs are indicated by the phrase
+``by lean,'' meaning they have been checked by a proof assistant rather than
+written out in prose.
+
+\paragraph{What this note claims.}
+A comonad on a container extension is, up to the transport forced by a
+propositional identity of shapes, exactly a directed container. More
+precisely: from counit and comultiplication data satisfying the three comonad
+laws one recovers operations $(\rootp,\downarrow,\oplus)$ satisfying D1--D5;
+packaging a directed container as a comonad and recovering returns the
+original directed container; and the recovered structure induces the same
+counit and comultiplication as those one started from.
+
+%======================================================================
+\section{Containers, extensions, and generic elements}
+%======================================================================
+
+\begin{definition}[Container and extension]
+A \textbf{container} $C$ consists of a type $\Shape(C)$ of shapes and, for
+each shape~$s$, a type $\Pos(C)(s)$ of positions. The \textbf{extension} at a
+type~$X$ is
+\begin{equation}
+  \Ext\,C\,X \;=\; \sum_{s \,:\, \Shape(C)}\;
+    \bigl(\Pos(C)(s) \to X\bigr).
+\end{equation}
+We write $\langle s,\, v\rangle$ for a typical element.
+\end{definition}
+
+\begin{definition}[Functorial action]
+For $f : X \to Y$,
+\begin{equation}
+  \Ext\,C\,f\,\bigl\langle s,\, v\bigr\rangle
+  \;=\;
+  \bigl\langle s,\; f \circ v\bigr\rangle.
+\end{equation}
+\end{definition}
+
+The following two lemmas package elementary structure of dependent pairs that
+will be used to read laws off equalities of extensions.
+
+\begin{lemma}[Injectivity of extension pairs]\label{lem:mk-inj}
+If $\langle s_1,\, v_1\rangle = \langle s_2,\, v_2\rangle$ in $\Ext\,C\,X$,
+then there exists $h : s_1 = s_2$ such that
+$v_1(q) = v_2(h \mathbin{\triangleright} q)$ for all positions~$q$ of~$s_1$.
+\end{lemma}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{lemma}[Normalisation along a shape equality]\label{lem:norm-aux}
+Let $t = s$ be a shape equality, let $\mathrm{sub}$ assign shapes to positions
+of~$t$, and let $\mathrm{val}$ map nested positions back to positions of~$s$.
+Then for any labelling~$v$ of~$s$,
+\begin{equation}
+\begin{aligned}
+  &\bigl\langle t,\;
+    \lambda p.\,
+      \bigl\langle \mathrm{sub}\,p,\;
+        \lambda q.\, v(\mathrm{val}\,p\,q)\bigr\rangle
+  \bigr\rangle \\
+  &\qquad=\;
+  \bigl\langle s,\;
+    \lambda p.\,
+      \bigl\langle \mathrm{sub}\,(h^{-1} \mathbin{\triangleright} p),\;
+        \lambda q.\,
+          v\bigl(\mathrm{val}\,(h^{-1} \mathbin{\triangleright} p)\,q\bigr)
+      \bigr\rangle
+  \bigr\rangle,
+\end{aligned}
+\end{equation}
+where $h$ is the given equality $t = s$.
+\end{lemma}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{Combinatorial data of a container comonad}
+%======================================================================
+
+By the representation theorem, a natural transformation
+$\Ext\,C \Longrightarrow \Ext\,D$ is a container morphism. Applying this to
+counit and comultiplication yields the following packaging.
+
+\begin{definition}[Container comonad data]\label{def:container-comonad}
+A \textbf{container comonad} is a container equipped with
+\begin{enumerate}
+  \item a root choice $e : (s : S) \to P(s)$;
+  \item an outer shape map $c_S : S \to S$;
+  \item an inner shape assignment
+        $c_{\downarrow} : (s : S) \to P(c_S(s)) \to S$;
+  \item a value map
+        $c_{\oplus} : (s : S) \to (p : P(c_S(s))) \to
+          P(c_{\downarrow}(s,p)) \to P(s)$.
+\end{enumerate}
+\end{definition}
+
+\begin{definition}[Induced counit and comultiplication]\label{def:counit-comult}
+Given container comonad data~$M$, define
+\begin{align}
+  \varepsilon\langle s,\, v\rangle
+  &\;=\;
+  v\bigl(e(s)\bigr), \\[4pt]
+  \delta\langle s,\, v\rangle
+  &\;=\;
+  \bigl\langle
+    c_S(s),\;
+    \lambda p.\,
+      \bigl\langle
+        c_{\downarrow}(s,p),\;
+        \lambda q.\, v\bigl(c_{\oplus}(s,p,q)\bigr)
+      \bigr\rangle
+  \bigr\rangle.
+\end{align}
+\end{definition}
+
+\begin{definition}[Comonad laws]\label{def:is-comonad}
+The data~$M$ \textbf{satisfy the comonad laws} when, for every type~$X$,
+\begin{align}
+  \varepsilon \circ \delta &\;=\; \id &&\text{(left counit),} \\
+  (\Ext\,C\,\varepsilon) \circ \delta &\;=\; \id &&\text{(right counit),} \\
+  (\Ext\,C\,\delta) \circ \delta &\;=\; \delta \circ \delta
+    &&\text{(coassociativity).}
+\end{align}
+\end{definition}
+
+%======================================================================
+\section{Collapse of the outer shape}
+%======================================================================
+
+\begin{theorem}[Outer shape is the identity]\label{thm:cshape-eq}
+If $M$ satisfies the comonad laws, then for every shape~$s$,
+\begin{equation}
+  c_S(s) \;=\; s.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}[Idea of the argument]
+Probe the right counit law $(\Ext\,C\,\varepsilon) \circ \delta = \id$ at the
+generic element $\langle s,\, \id\rangle \in \Ext\,C\,(P(s))$. The left-hand
+side has outer shape $c_S(s)$; the right-hand side has outer shape~$s$. Reading
+off the shape component yields the claim.
+\end{remark}
+
+%======================================================================
+\section{Recovered directed-container operations}
+%======================================================================
+
+Using Theorem~\ref{thm:cshape-eq} to transport positions into the $c_S(s)$
+fibre, we read root, sub-shape, and shift off the combinatorial data.
+
+\begin{definition}[Recovered operations]\label{def:recovered}
+Assume $M$ satisfies the comonad laws. Define
+\begin{align}
+  \rootp(s) &\;=\; e(s), \\[4pt]
+  s \downarrow p
+  &\;=\;
+  c_{\downarrow}\bigl(s,\; (c_S(s)=s)^{-1} \mathbin{\triangleright} p\bigr),
+  \\[4pt]
+  p \oplus q
+  &\;=\;
+  c_{\oplus}\bigl(s,\;
+    (c_S(s)=s)^{-1} \mathbin{\triangleright} p,\; q\bigr).
+\end{align}
+\end{definition}
+
+\begin{proposition}[Normalised comultiplication]\label{prop:comult-norm}
+For every shape~$s$ and labelling~$v$,
+\begin{equation}
+  \delta\langle s,\, v\rangle
+  \;=\;
+  \bigl\langle s,\;
+    \lambda p.\,
+      \bigl\langle s \downarrow p,\;
+        \lambda q.\, v(p \oplus q)\bigr\rangle
+  \bigr\rangle.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+Thus, once the outer shape collapses, comultiplication is already in the
+standard directed-container form, up to the transports inherent in
+Definition~\ref{def:recovered}.
+
+%======================================================================
+\section{Directed-container axioms from comonad laws}
+%======================================================================
+
+Each directed-container law is obtained by probing a comonad law at a generic
+element and normalising the comultiplication. The partition matches the
+forward direction run in reverse: left counit yields D1 and D2; right counit
+yields D3; coassociativity yields D4 and D5.
+
+\begin{theorem}[D1 from left counit]\label{thm:d1}
+For every shape~$s$,
+\begin{equation}
+  s \downarrow \rootp(s) \;=\; s.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[D2 from left counit]\label{thm:d2}
+For every shape~$s$ and every position $q$ of $s \downarrow \rootp(s)$,
+\begin{equation}
+  \rootp(s) \oplus q \;=\; (s \downarrow \rootp(s) = s) \mathbin{\triangleright} q.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[D3 from right counit]\label{thm:d3}
+For every shape~$s$ and position~$p$ of~$s$,
+\begin{equation}
+  p \oplus \rootp\bigl(s \downarrow p\bigr) \;=\; p.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[D4 from coassociativity]\label{thm:d4}
+For every shape~$s$, position~$p$ of~$s$, and position~$q$ of
+$s \downarrow p$,
+\begin{equation}
+  s \downarrow (p \oplus q) \;=\; \bigl(s \downarrow p\bigr) \downarrow q.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[D5 from coassociativity]\label{thm:d5}
+For positions as in D4 and a further nested position~$q'$,
+\begin{equation}
+  (p \oplus q) \oplus
+    \bigl((s \downarrow (p \oplus q)
+      = (s \downarrow p) \downarrow q)^{-1}
+      \mathbin{\triangleright} q'\bigr)
+  \;=\;
+  p \oplus (q \oplus q').
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{definition}[Recovery of a directed container]\label{def:to-directed}
+Given container comonad data satisfying the comonad laws, the
+\textbf{recovered directed container} has the same underlying container, root
+$\rootp$, sub~$\downarrow$, and shift~$\oplus$ as in
+Definition~\ref{def:recovered}, with laws D1--D5 given by
+Theorems~\ref{thm:d1}--\ref{thm:d5}.
+\end{definition}
+
+\begin{theorem}[Recovery preserves the counit]\label{thm:counit-same}
+The directed container of Definition~\ref{def:to-directed} induces the same
+counit as the original container comonad.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[Recovery preserves the comultiplication]\label{thm:comult-same}
+The directed container of Definition~\ref{def:to-directed} induces the same
+comultiplication as the original container comonad.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+Together, Theorems~\ref{thm:counit-same} and~\ref{thm:comult-same} say that
+applying the forward construction to the recovered directed container returns
+the original comonad.
+
+%======================================================================
+\section{The other half of the equivalence}
+%======================================================================
+
+Conversely, every directed container packages as container comonad data with
+outer shape map the identity.
+
+\begin{definition}[Packaging]\label{def:packaging}
+Let $D$ be a directed container. Define container comonad data by
+$e = \rootp$, $c_S = \id$, $c_{\downarrow} = \downarrow$, and
+$c_{\oplus} = \oplus$.
+\end{definition}
+
+\begin{proposition}[Packaged data form a comonad]\label{prop:packaged-is-comonad}
+The data of Definition~\ref{def:packaging} satisfy the three comonad laws.
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[Round-trip on directed containers]\label{thm:roundtrip}
+Packaging a directed container as a container comonad and recovering yields
+the original directed container.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+Because $c_S = \id$ definitionally in the packaging, every transport along
+$c_S(s) = s$ is the identity, and the recovered operations agree with the
+original ones without residual casts.
+\end{remark}
+
+%======================================================================
+\section{Discussion}
+%======================================================================
+
+\paragraph{What has been established.}
+Container comonads and directed containers determine each other. The linchpin
+is Theorem~\ref{thm:cshape-eq}: comultiplication cannot change the outer
+shape. After that collapse, comonad laws and directed-container axioms are
+two presentations of the same equational content, partitioned identically in
+both directions.
+
+\paragraph{Scope.}
+The development works with comonad data already presented in combinatorial
+form (as guaranteed by the representation theorem). It does not re-prove that
+every natural transformation arises from a container morphism; that is
+assumed as background. Dependent transports along propositional equalities of
+shapes are intrinsic to the converse and mirror those of the forward theory.
+
+\paragraph{Machine checking.}
+Every definition and theorem statement above corresponds to a declaration in a
+machine-checked formalisation. The phrase ``by lean'' indicates that the proof
+has been verified by a proof assistant.
+
+%======================================================================
+\section*{Acknowledgements}
+%======================================================================
+
+The mathematical content follows Ahman, Chapman, and Uustalu's characterisation
+of container comonads. The presentation here is a prose rendering of a formal
+development intended for human review of the theorem statements.
+
+\begin{thebibliography}{9}
+
+\bibitem{ahman2014}
+D.~Ahman, J.~Chapman, and T.~Uustalu.
+\newblock When is a container a comonad?
+\newblock \emph{Logical Methods in Computer Science}, 10(3), 2014.
+
+\bibitem{abbott2005}
+M.~Abbott, T.~Altenkirch, and N.~Ghani.
+\newblock Containers: constructing strictly positive types.
+\newblock \emph{Theoretical Computer Science}, 342(1):3--27, 2005.
+
+\end{thebibliography}
+
+\end{document}

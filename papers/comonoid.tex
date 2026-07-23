@@ -1,0 +1,315 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath,amsthm,mathtools}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{parskip}
+\usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
+
+% Theorem environments (arXiv / journal style)
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{remark}[theorem]{Remark}
+
+% Notation
+\newcommand{\Ext}{\mathrm{Ext}}
+\newcommand{\Shape}{\mathrm{Shape}}
+\newcommand{\Pos}{\mathrm{Pos}}
+\newcommand{\Type}{\mathbf{Type}}
+\newcommand{\id}{\mathrm{id}}
+\newcommand{\Cont}{\mathbf{Cont}}
+\newcommand{\rootp}{\mathrm{o}}
+
+\title{Directed Containers as Comonoids\\
+  in the Sequential Monoidal Structure on Containers}
+\author{Extracted from a machine-checked development}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We define comonoids in the monoidal category of containers under sequential
+composition, and show that every directed container determines such a
+comonoid. Counit and comultiplication are container morphisms
+$\varepsilon : C \Rightarrow I$ and $\delta : C \Rightarrow C \mathbin{\triangleleft} C$,
+and the comonoid laws are equations of container morphisms built from the
+sequential action on morphisms and the monoidal unitors and associator.
+Unfolding these laws recovers the directed-container axioms D1--D5. The proofs
+of all stated results have been machine-checked; we record only the
+mathematical content.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%======================================================================
+\section{Introduction}
+%======================================================================
+
+The category $\Cont$ of containers and container morphisms carries a monoidal
+structure $(\Cont,\, \triangleleft,\, I)$ whose tensor is sequential
+composition: the extension of $C \mathbin{\triangleleft} D$ is the composite of
+the extensions of~$C$ and~$D$, and~$I$ is the unit container (a single shape
+with a single position). A \emph{comonoid} in this monoidal category is a
+container~$C$ together with morphisms
+\[
+  \varepsilon : C \Rightarrow I,
+  \qquad
+  \delta : C \Rightarrow C \mathbin{\triangleleft} C
+\]
+satisfying the two counit laws and coassociativity, all stated internally to
+$\Cont$.
+
+This note shows that every directed container---a container with root,
+sub-shape, and shift satisfying D1--D5---gives rise to such a comonoid. The
+point of the internal formulation is that the laws never mention extensions or
+endofunctors on types: they are equations between container morphisms. Upon
+unfolding, one recovers the directed-container axioms on the nose, with the
+same partition that appears at the comonad level:
+\begin{itemize}
+  \item right counit is D3;
+  \item left counit is D1 (shapes) and D2 (positions);
+  \item coassociativity is D4 (shapes) and D5 (positions).
+\end{itemize}
+Thus the correspondence between directed containers and comonads on extensions
+is an artifact of the monoidal structure on $\Cont$, not merely of passage
+through the functor category.
+
+We work in a single universe of types. Proofs are indicated by the phrase
+``by lean.''
+
+\paragraph{What this note claims.}
+Directed containers are $\triangleleft$-comonoids. Explicitly: the root
+supplies a counit $C \Rightarrow I$; sub and shift supply a comultiplication
+$C \Rightarrow C \mathbin{\triangleleft} C$; and D1--D5 are precisely the three
+comonoid laws for sequential composition. (The converse---that every comonoid
+arises this way---is not treated here.)
+
+%======================================================================
+\section{Background}
+%======================================================================
+
+\begin{definition}[Container morphism]
+A \textbf{morphism} $\varphi : C \Rightarrow D$ of containers consists of a
+shape map $u : \Shape(C) \to \Shape(D)$ and, for each shape~$s$, a
+contravariant position map
+$g_s : \Pos(D)(u(s)) \to \Pos(C)(s)$.
+\end{definition}
+
+\begin{definition}[Sequential composition]\label{def:seq}
+The \textbf{sequential composite} $E \mathbin{\triangleleft} C$ of containers
+has shapes $\sum_{t \,:\, \Shape(E)} \bigl(\Pos(E)(t) \to \Shape(C)\bigr)$
+and positions over $\langle t,\, f\rangle$ given by
+$\sum_{u \,:\, \Pos(E)(t)} \Pos(C)(f(u))$. The unit container~$I$ has a
+single shape and a single position.
+\end{definition}
+
+We assume the monoidal structure on $(\Cont,\, \triangleleft,\, I)$:
+associator $\alpha$, left and right unitors $\lambda$ and $\rho$, and the
+action of $\triangleleft$ on morphisms (denoted $\triangleleft_2$ or
+$\mathrm{seq}_2$ when we need the binary map on arrows). Composition of
+container morphisms is written in diagrammatic order when convenient, so that
+$\delta ; (\varepsilon \mathbin{\triangleleft} C)$ means
+$(\varepsilon \mathbin{\triangleleft} C) \circ \delta$ in applicative order.
+
+\begin{definition}[Directed container]
+A \textbf{directed container} is a container equipped with
+\begin{align*}
+  \rootp &\;:\; (s : S) \to P(s), \\
+  \downarrow &\;:\; (s : S) \to P(s) \to S, \\
+  \oplus &\;:\; (s : S) \to (p : P(s)) \to P(s \downarrow p) \to P(s),
+\end{align*}
+satisfying axioms D1--D5 (sub under root; shift by root; shift by sub-root;
+nesting of subs; associativity of shift).
+\end{definition}
+
+%======================================================================
+\section{Technical lemmas on morphisms and transport}
+%======================================================================
+
+Because some directed-container axioms are only propositional equalities of
+shapes, comparing container morphisms whose shape maps agree only
+propositionally requires pointwise extensionality and a computation of
+position transport under sequential composition.
+
+\begin{lemma}[Pointwise extensionality of morphisms]\label{lem:ext-eq}
+Let $f,g : \Shape(C) \to \Shape(D)$ and let $f_p$, $g_p$ be position maps
+over~$f$ and~$g$ respectively. If $h_s : f(s) = g(s)$ for every~$s$ and
+$f_p(s,p) = g_p\bigl(s,\, h_s \mathbin{\triangleright} p\bigr)$ for every
+position~$p$, then the morphisms $\langle f,\, f_p\rangle$ and
+$\langle g,\, g_p\rangle$ are equal.
+\end{lemma}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{lemma}[Cancelation of cast round-trips]\label{lem:cast-symm}
+For a family $P$ and an equality $h : a = b$, transporting a value of
+$P(a)$ along~$h$ and back along $h^{-1}$ returns the original value.
+\end{lemma}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{lemma}[Sequential position transport]\label{lem:seq-pos-transport}
+Let $E$ and $C$ be containers, let $t$ be a shape of~$E$, and let
+$f,g : \Pos(E)(t) \to \Shape(C)$ be inner-shape assignments with
+$h_u : f(u) = g(u)$ for every outer position~$u$. Transport of a position
+$\langle u,\, q\rangle$ of $E \mathbin{\triangleleft} C$ over
+$\langle t,\, f\rangle$ along the induced shape equality yields
+\begin{equation}
+  \bigl\langle u,\;
+    (h_u \mathbin{\triangleright} q) \bigr\rangle
+\end{equation}
+over $\langle t,\, g\rangle$: the outer position is fixed and only the inner
+position is transported.
+\end{lemma}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{Comonoids in $(\Cont, \triangleleft, I)$}
+%======================================================================
+
+\begin{definition}[Comonoid]\label{def:comonoid}
+A \textbf{comonoid} in $(\Cont,\, \triangleleft,\, I)$ consists of a
+container~$C$ together with morphisms
+\begin{equation}
+  \varepsilon : C \Rightarrow I,
+  \qquad
+  \delta : C \Rightarrow C \mathbin{\triangleleft} C,
+\end{equation}
+such that the following equations of morphisms hold:
+\begin{align}
+  \delta ; \bigl(\varepsilon \mathbin{\triangleleft} C\bigr)
+  &\;=\;
+  \lambda_C^{-1}
+  &&\text{(left counit),} \\[4pt]
+  \delta ; \bigl(C \mathbin{\triangleleft} \varepsilon\bigr)
+  &\;=\;
+  \rho_C^{-1}
+  &&\text{(right counit),} \\[4pt]
+  \delta ; \bigl(\delta \mathbin{\triangleleft} C\bigr) ; \alpha_{C,C,C}
+  &\;=\;
+  \delta ; \bigl(C \mathbin{\triangleleft} \delta\bigr)
+  &&\text{(coassociativity).}
+\end{align}
+\end{definition}
+
+\begin{remark}
+These are the standard comonoid axioms in a monoidal category, written with
+the sequential tensor and its coherence isomorphisms.
+\end{remark}
+
+%======================================================================
+\section{From directed containers to comonoids}
+%======================================================================
+
+\begin{definition}[Counit from a directed container]\label{def:counit}
+Let $D$ be a directed container. The \textbf{counit}
+$\varepsilon : D \Rightarrow I$ is the container morphism with unique shape
+map and position map
+\begin{equation}
+  \varepsilon_p(s,\, \ast) \;=\; \rootp(s).
+\end{equation}
+\end{definition}
+
+\begin{definition}[Comultiplication from a directed container]\label{def:comult}
+The \textbf{comultiplication}
+$\delta : D \Rightarrow D \mathbin{\triangleleft} D$ is the container morphism
+with
+\begin{align}
+  \delta_S(s) &\;=\; \bigl\langle s,\; \lambda p.\, s \downarrow p \bigr\rangle,
+  \\[4pt]
+  \delta_p\bigl(s,\, \langle p,\, q\rangle\bigr)
+  &\;=\; p \oplus q.
+\end{align}
+\end{definition}
+
+\begin{theorem}[Directed containers are comonoids]\label{thm:to-comonoid}
+For every directed container~$D$, the morphisms $\varepsilon$ and $\delta$ of
+Definitions~\ref{def:counit} and~\ref{def:comult} satisfy the three comonoid
+laws of Definition~\ref{def:comonoid}. Thus $D$ is a
+$\triangleleft$-comonoid.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}[How the axioms match]
+\begin{enumerate}
+  \item \textbf{Right counit.} Both sides have definitionally equal shape
+        maps; the position equality is exactly D3.
+  \item \textbf{Left counit.} Shape equality is D1; after sequential position
+        transport (Lemma~\ref{lem:seq-pos-transport}), the position equality
+        is D2.
+  \item \textbf{Coassociativity.} Shape equality is D4 (pointwise in outer
+        and inner positions); position equality is D5 after cancelling a cast
+        round-trip (Lemma~\ref{lem:cast-symm}) and applying sequential
+        transport twice.
+\end{enumerate}
+\end{remark}
+
+%======================================================================
+\section{Discussion}
+%======================================================================
+
+\paragraph{What has been established.}
+The directed-container structure is precisely the data of a comonoid in
+$(\Cont,\, \triangleleft,\, I)$, at least in the forward direction. The
+comonoid laws are equations of container morphisms; their unfolding is the
+classical list D1--D5. In particular, one need not pass through
+$[\mathbf{Set},\, \mathbf{Set}]$ to state or verify the comonoid equations.
+
+\paragraph{What is not established here.}
+The converse---that every $\triangleleft$-comonoid arises from a directed
+container---is not formalised in the source development. One expects it by
+the same representation and shape-collapse arguments that recover directed
+data from a container comonad on the extension, but that direction is left
+open.
+
+\paragraph{Machine checking.}
+Every definition and theorem statement above corresponds to a declaration in a
+machine-checked formalisation. The phrase ``by lean'' indicates that the proof
+has been verified by a proof assistant.
+
+%======================================================================
+\section*{Acknowledgements}
+%======================================================================
+
+The mathematical content follows the monoidal structure of sequential
+composition of containers and the directed-container theory of Ahman, Chapman,
+and Uustalu. The presentation here is a prose rendering of a formal
+development intended for human review of the theorem statements.
+
+\begin{thebibliography}{9}
+
+\bibitem{ahman2014}
+D.~Ahman, J.~Chapman, and T.~Uustalu.
+\newblock When is a container a comonad?
+\newblock \emph{Logical Methods in Computer Science}, 10(3), 2014.
+
+\bibitem{abbott2005}
+M.~Abbott, T.~Altenkirch, and N.~Ghani.
+\newblock Containers: constructing strictly positive types.
+\newblock \emph{Theoretical Computer Science}, 342(1):3--27, 2005.
+
+\end{thebibliography}
+
+\end{document}

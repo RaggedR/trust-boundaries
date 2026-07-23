@@ -1,0 +1,307 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath,amsthm,mathtools}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{parskip}
+\usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
+
+% Theorem environments (arXiv / journal style)
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{remark}[theorem]{Remark}
+
+% Notation
+\newcommand{\Shape}{\mathrm{Shape}}
+\newcommand{\Pos}{\mathrm{Pos}}
+\newcommand{\Type}{\mathbf{Type}}
+\newcommand{\id}{\mathrm{id}}
+\newcommand{\src}{\mathrm{src}}
+\newcommand{\tgt}{\mathrm{tgt}}
+\newcommand{\rootpos}{\mathrm{root}}
+\newcommand{\sub}{\mathrm{sub}}
+\newcommand{\shift}{\mathrm{shift}}
+
+\title{Polytrees and Thinness of Network Directed Containers}
+\author{Extracted from a machine-checked development}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+A directed graph is a \emph{polytree} when it is acyclic and satisfies an
+edge-disjoint reachability condition: distinct edges out of the same source
+never share a common reachable descendant. We prove that if $G$ is a polytree,
+then between any two nodes there is at most one directed path---equivalently,
+the network directed container $\mathrm{network}(G)$ is thin. As a corollary,
+positions at a node~$v$ are in bijection with the set of nodes reachable
+from~$v$, the unique path serving as the inverse to the endpoint projection.
+The proofs of all stated results have been machine-checked; we record only the
+mathematical content.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%======================================================================
+\section{Introduction}
+%======================================================================
+
+The network construction associates to every directed graph~$G$ a directed
+container whose positions at a node are directed paths out of that node,
+paired with their endpoints. In general there may be many paths between a
+given pair of nodes. When $G$ is a polytree---the directed analogue of a
+forest---paths become unique, and the position type collapses to a mere set of
+reachable endpoints.
+
+The present note isolates that uniqueness theorem. We take as definition of
+polytree the conjunction of directed acyclicity with an edge-disjointness
+condition on reachability: if two distinct edges leave the same vertex, no
+vertex is reachable from both of their targets. From these two hypotheses one
+obtains, by induction on paths, that any two paths with the same endpoints
+coincide. Thinness of the network container and a bijection between positions
+and reachable nodes are immediate consequences.
+
+The development works throughout in a single universe of types. Proofs are
+indicated by the phrase ``by lean,'' meaning they have been checked by a proof
+assistant rather than written out in prose.
+
+\paragraph{What this note claims.}
+In ordinary mathematical language: polytrees have unique directed paths between
+any ordered pair of nodes. Consequently the free category on a polytree is a
+preorder (at most one morphism between any two objects), and the directed
+container of routes is thin.
+
+%======================================================================
+\section{Reachability, acyclicity, and edge-disjointness}
+%======================================================================
+
+Throughout, let $G$ be a directed graph with node type~$V$, edge type~$E$, and
+endpoint maps $\src,\tgt : E \to V$. Write $\mathrm{Path}_G(v,w)$ for the type
+of finite directed paths from $v$ to~$w$, as in the network development.
+
+\begin{definition}[Reachability]\label{def:reachable}
+A node $w$ is \textbf{reachable} from a node~$v$ when the type
+$\mathrm{Path}_G(v,w)$ is inhabited. We write $\mathrm{Reachable}_G(v,w)$ for
+this proposition.
+\end{definition}
+
+\begin{definition}[Trivial path]\label{def:trivial}
+A path $p : \mathrm{Path}_G(v,w)$ is \textbf{trivial} when it is the empty path
+(equivalently, when $v = w$ and $p = \mathrm{nil}(v)$). A non-empty path is a
+$\mathrm{cons}$.
+\end{definition}
+
+\begin{definition}[Acyclicity]\label{def:acyclic}
+The graph $G$ is \textbf{acyclic} when every self-path is trivial:
+\begin{equation}
+  \forall\, v \in V.\;
+  \forall\, p : \mathrm{Path}_G(v,v).\;
+  \text{$p$ is trivial}.
+\end{equation}
+\end{definition}
+
+\begin{definition}[Edge-disjoint reachability]\label{def:edge-disjoint}
+The graph $G$ satisfies \textbf{edge-disjoint reachability} when, for any two
+edges $e_1 \neq e_2$ with $\src(e_1) = \src(e_2)$ and any node~$w$,
+\begin{equation}
+  \neg\Bigl(
+    \mathrm{Reachable}_G\bigl(\tgt(e_1),\, w\bigr)
+    \;\wedge\;
+    \mathrm{Reachable}_G\bigl(\tgt(e_2),\, w\bigr)
+  \Bigr).
+\end{equation}
+In words: distinct edges out of the same source never have a common reachable
+descendant.
+\end{definition}
+
+\begin{definition}[Polytree]\label{def:polytree}
+A \textbf{polytree} is a directed graph that is acyclic and satisfies
+edge-disjoint reachability.
+\end{definition}
+
+\begin{lemma}[No reverse cons-path]\label{lem:no-cons}
+If $G$ is acyclic, $e \in E$, and $p : \mathrm{Path}_G\bigl(\tgt(e),\,
+\src(e)\bigr)$, then contradiction: $\mathrm{cons}(e,p)$ would be a non-trivial
+self-path at $\src(e)$.
+\end{lemma}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{Path uniqueness}
+%======================================================================
+
+To compare two paths without nested dependent elimination on indices, it is
+convenient to package the first-step decomposition of a path explicitly.
+
+\begin{definition}[Path view]\label{def:path-view}
+For nodes $v,w \in V$, a \textbf{path view} is either
+\begin{enumerate}
+  \item $\mathrm{trivial}(h)$ for a proof $h : v = w$, or
+  \item $\mathrm{step}(e,h_{\mathrm{src}},\tau)$ for an edge~$e$, a proof
+        $h_{\mathrm{src}} : \src(e) = v$, and a tail path
+        $\tau : \mathrm{Path}_G\bigl(\tgt(e),\, w\bigr)$.
+\end{enumerate}
+Every path $p : \mathrm{Path}_G(v,w)$ determines a path view, and every path
+view determines a path; the two constructions are mutually inverse on paths.
+\end{definition}
+
+\begin{theorem}[Path uniqueness in a polytree]\label{thm:path-unique}
+Let $G$ be a polytree. For any nodes $v,w \in V$ and any two paths
+$p,q : \mathrm{Path}_G(v,w)$, one has $p = q$.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}[Idea of the argument]
+The proof proceeds by structural induction on~$p$, examining the path view
+of~$q$ at each step.
+\begin{itemize}
+  \item If $p$ is empty and $q$'s view is trivial, both paths are empty and
+        agree.
+  \item If $p$ is empty and $q$'s view is a step, the step produces a directed
+        cycle, contradicting acyclicity (Lemma~\ref{lem:no-cons}).
+  \item If $p$ is a cons and $q$'s view is trivial, one obtains a cycle
+        symmetrically.
+  \item If $p = \mathrm{cons}(e_1,p_1)$ and $q$'s view is a step along~$e_2$:
+        when $e_1 \neq e_2$, the common endpoint~$w$ is reachable from both
+        $\tgt(e_1)$ and $\tgt(e_2)$, contradicting edge-disjointness; when
+        $e_1 = e_2$, the inductive hypothesis equates the tails.
+\end{itemize}
+\end{remark}
+
+\begin{corollary}[Thinness]\label{cor:thin}
+If $G$ is a polytree, then for every pair of nodes $v,w$ the type
+$\mathrm{Path}_G(v,w)$ is a subsingleton: it has at most one element.
+Equivalently, the directed container $\mathrm{network}(G)$ is thin.
+\end{corollary}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{Positions and reachable endpoints}
+%======================================================================
+
+In a polytree, a position at~$v$---a pair $\langle w,\rho \rangle$ of endpoint
+and path---carries no more information than the endpoint alone, once
+reachability is known.
+
+\begin{definition}[Endpoint equivalence]\label{def:endpoint-equiv}
+Let $G$ be a polytree and fix a node~$v$. Define maps
+\begin{align}
+  \Phi
+  &\;:\;
+  \sum_{w \,:\, V}\; \mathrm{Path}_G(v,w)
+  \;\longrightarrow\;
+  \bigl\{ w \in V \mid \mathrm{Reachable}_G(v,w) \bigr\}, \\[4pt]
+  \Phi\bigl\langle w,\rho \bigr\rangle
+  &\;=\;
+  \bigl\langle w,\, \langle\rho\rangle \bigr\rangle,
+\end{align}
+and, choosing for each reachability witness a path (via the axiom of choice),
+\begin{align}
+  \Psi
+  &\;:\;
+  \bigl\{ w \in V \mid \mathrm{Reachable}_G(v,w) \bigr\}
+  \;\longrightarrow\;
+  \sum_{w \,:\, V}\; \mathrm{Path}_G(v,w), \\[4pt]
+  \Psi\bigl\langle w,\, h \bigr\rangle
+  &\;=\;
+  \bigl\langle w,\, \mathrm{choose}(h) \bigr\rangle.
+\end{align}
+\end{definition}
+
+\begin{theorem}[Endpoint bijection]\label{thm:endpoint-equiv}
+If $G$ is a polytree, then for every node~$v$ the maps $\Phi$ and $\Psi$ of
+Definition~\ref{def:endpoint-equiv} are mutually inverse. In particular,
+\begin{equation}
+  \Pos\bigl(\mathrm{network}(G)\bigr)(v)
+  \;\simeq\;
+  \bigl\{ w \in V \mid \mathrm{Reachable}_G(v,w) \bigr\}.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+The left inverse uses path uniqueness (Theorem~\ref{thm:path-unique}) to
+identify the chosen path with the original path component. The right inverse is
+immediate from the construction of $\Phi$ and $\Psi$. Choice enters only in
+selecting a path from a mere inhabitance proof; uniqueness ensures the choice
+is immaterial.
+\end{remark}
+
+%======================================================================
+\section{Discussion}
+%======================================================================
+
+\paragraph{What has been established.}
+Polytrees---acyclic digraphs with edge-disjoint reachability---have unique
+directed paths. The network directed container is therefore thin, and positions
+at a node biject with reachable endpoints. In supply-chain terms: on a
+polytree shipping graph, a destination determines a unique route from a given
+origin.
+
+\paragraph{On the definition of polytree.}
+The edge-disjointness condition is the directed counterpart of the undirected
+forest property that two distinct branches never reconverge. Acyclicity alone
+does not suffice for uniqueness (a directed acyclic graph may have multiple
+paths between the same endpoints); both hypotheses are used in the inductive
+argument.
+
+\paragraph{Scope.}
+The development does not construct the polytree structure on the running
+eleven-facility wine network (though that graph is a polytree by inspection),
+nor does it treat the converse: thinness of $\mathrm{network}(G)$ characterising
+polytrees. Counterexamples on the DAG and cyclic rungs of the ladder appear
+separately.
+
+\paragraph{Machine checking.}
+Every definition and theorem statement above corresponds to a declaration in a
+machine-checked formalisation. The phrase ``by lean'' indicates that the proof
+has been verified by a proof assistant.
+
+%======================================================================
+\section*{Acknowledgements}
+%======================================================================
+
+The mathematical content follows the thinness proposition for polytree networks
+in the supply-chain development that motivated this note. The presentation is a
+prose rendering of a formal development intended for human review of the
+theorem statements.
+
+\begin{thebibliography}{9}
+
+\bibitem{abbott2005}
+M.~Abbott, T.~Altenkirch, and N.~Ghani.
+\newblock Containers: constructing strictly positive types.
+\newblock \emph{Theoretical Computer Science}, 342(1):3--27, 2005.
+
+\bibitem{ahman2014}
+D.~Ahman and T.~Uustalu.
+\newblock Coalgebraic update lenses.
+\newblock In \emph{MFPS}, volume~308 of \emph{ENTCS}, pages 25--48, 2014.
+
+\end{thebibliography}
+
+\end{document}

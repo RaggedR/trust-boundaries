@@ -1,0 +1,502 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath,amsthm,mathtools}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{parskip}
+\usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
+
+% Theorem environments (arXiv / journal style)
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{remark}[theorem]{Remark}
+
+% Notation
+\newcommand{\Type}{\mathbf{Type}}
+\newcommand{\cmin}{\mathrm{cmin}}
+\newcommand{\cmax}{\mathrm{cmax}}
+\newcommand{\tauu}{\tau}
+
+\title{Trajectory Systems:\\
+  Circular Verification Collapses Canonical Trust}
+\author{Extracted from a machine-checked development}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+A trajectory system is a trust system in which claims are agent actions
+and checking steps are causal dependencies among those actions. We introduce
+a five-level trajectory chain and two concrete systems sharing a common
+dependency topology: a \emph{circular} trajectory, modelling circular
+verification, and an \emph{honest} trajectory with sound grades. In the
+circular system, canonical trust $\tauu$ evaluates to bottom at every event.
+In the honest system, $\tauu$ attains the grade $\mathsf{independent}$ along
+sound paths and is limited by the weakest step grade along weaker ones. The
+proofs of all stated results have been machine-checked; we record only the
+mathematical content.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%======================================================================
+\section{Introduction}
+%======================================================================
+
+Trust systems grade claims by the strength of the checks that support them.
+Canonical trust $\tauu$ is the greatest sound assignment of grades: at each
+claim, the best (join) over checking steps of the meet of the step's own
+grade with the canonical trusts of its premises. When the premise relation
+is well founded, $\tauu$ is uniquely determined by well-founded recursion.
+
+Trajectory systems specialise this picture to agent workflows. Claims are
+events (actions of an agent); checking steps record causal dependence of one
+event on others; grades record how strongly each dependence was checked.
+The motivating phenomenon is \emph{circular verification}: a chain of events
+in which each step claims independence of prior checks, yet the root is
+unsupported and a terminal ``verify'' step is itself unsupported. The
+widest-bottleneck semantics of $\tauu$ then forces every event to bottom,
+regardless of intermediate grades that look strong in isolation.
+
+We work throughout with finite chains of check strengths and finite systems
+of events. No special order theory beyond meets and joins in a chain is
+required. Proofs are indicated by the phrase ``by lean,'' meaning they have
+been checked by a proof assistant rather than written out in prose.
+
+\paragraph{What this note claims.}
+In ordinary mathematical language, the claim is: under the circular grading
+of Definition~\ref{def:circular}, canonical trust is identically bottom; under
+the honest grading of Definition~\ref{def:honest} on the same dependency
+topology, canonical trust recovers the independent grade along the sound
+spine and is limited by the shallow grade at the weaker branch. Circular
+verification is therefore invisible to node-local grade inspection alone: it
+is diagnosed only by computing $\tauu$ globally.
+
+%======================================================================
+\section{Recollections: chains and trust systems}
+%======================================================================
+
+We recall only what is needed; full development appears in the companion
+note on trust systems.
+
+\begin{definition}[Chain]\label{def:chain}
+A \textbf{chain} $T$ is a linearly ordered type equipped with a bottom
+element $\bot$, such that $\le$ is reflexive, transitive, antisymmetric, and
+total, and $\bot \le a$ for every $a \in T$. Meets and joins exist and are
+computable:
+\begin{equation}
+  \cmin(a,b) \;=\;
+  \begin{cases}
+    a & \text{if } a \le b, \\
+    b & \text{otherwise,}
+  \end{cases}
+  \qquad
+  \cmax(a,b) \;=\;
+  \begin{cases}
+    b & \text{if } a \le b, \\
+    a & \text{otherwise.}
+  \end{cases}
+\end{equation}
+\end{definition}
+
+\begin{definition}[Trust system]\label{def:system}
+A \textbf{trust system} over claims $C$ graded in a chain $T$ consists of
+\begin{enumerate}
+  \item a type $\mathrm{Step}$ of checking steps,
+  \item a conclusion map $\mathrm{concl} : \mathrm{Step} \to C$,
+  \item a finite list of premises $\mathrm{prems} : \mathrm{Step} \to
+        \mathrm{List}(C)$,
+  \item a grade map $\mathrm{grade} : \mathrm{Step} \to T$,
+  \item for each claim $x$, a finite list $\mathrm{stepsInto}(x)$ of steps
+        concluding at $x$, coherent with $\mathrm{concl}$.
+\end{enumerate}
+The \textbf{premise relation} $y \prec x$ holds when $y$ is a premise of
+some step into $x$.
+\end{definition}
+
+\begin{definition}[Step grade and canonical trust]\label{def:tau}
+Given an assignment $t : C \to T$, the \textbf{step grade} of a step $f$ is
+\begin{equation}
+  \mathrm{stepGrade}(t,f)
+  \;=\;
+  \cmin\bigl(
+    \mathrm{grade}(f),\;
+    \cmin_{y \in \mathrm{prems}(f)} t(y)
+  \bigr)
+\end{equation}
+(the meet of the step's own grade with the assigned levels of all premises;
+empty meets yield the step grade alone).
+
+When the premise relation is well founded, \textbf{canonical trust}
+$\tauu : C \to T$ is defined by well-founded recursion:
+\begin{equation}
+  \tauu(x)
+  \;=\;
+  \cmax\Bigl(
+    \bot,\;
+    \cmax_{f \in \mathrm{stepsInto}(x)}
+      \mathrm{stepGrade}(\tauu, f)
+  \Bigr).
+\end{equation}
+Equivalently, $\tauu(x)$ is the join over steps into $x$ of their step
+grades under $\tauu$ itself, defaulting to $\bot$ when there are no steps.
+\end{definition}
+
+\begin{remark}
+Canonical trust is the greatest sound assignment: every sound grading is
+bounded by $\tauu$, and $\tauu$ itself is sound. We use only the recursive
+character of $\tauu$ below.
+\end{remark}
+
+%======================================================================
+\section{The trajectory chain}
+%======================================================================
+
+\begin{definition}[Trajectory levels]\label{def:tlevel}
+The \textbf{trajectory chain} $T_{\mathrm{traj}}$ is the five-element chain
+\begin{equation}
+  \mathsf{unsupported}
+  \;<\;
+  \mathsf{shallow}
+  \;<\;
+  \mathsf{independent}
+  \;<\;
+  \mathsf{crossVerified}
+  \;<\;
+  \mathsf{mechChecked},
+\end{equation}
+with bottom $\bot = \mathsf{unsupported}$. The order is the unique linear
+order extending the displayed chain of covering relations (and equality).
+\end{definition}
+
+\begin{proposition}[Chain structure]\label{prop:tlevel-chain}
+$T_{\mathrm{traj}}$ carries the structure of a chain in the sense of
+Definition~\ref{def:chain}.
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+Informally: $\mathsf{unsupported}$ means no usable check;
+$\mathsf{shallow}$ a weak or one-sided check;
+$\mathsf{independent}$ a check that does not depend on the claim under
+review; $\mathsf{crossVerified}$ independent confirmation from a second
+source; $\mathsf{mechChecked}$ machine verification.
+\end{remark}
+
+%======================================================================
+\section{Events and shared topology}
+%======================================================================
+
+\begin{definition}[Events]\label{def:evt}
+Let $E = \{e_0, e_1, e_2, e_3, e_4\}$ be a five-element type of
+\textbf{events}.
+\end{definition}
+
+Both systems below use the same dependency topology: steps are identified
+with events (one step concluding at each event), and premises form a
+directed acyclic graph
+\begin{equation}
+  e_0 \;\longrightarrow\; e_1 \;\longrightarrow\; e_2
+  \;\longrightarrow\; e_3,
+  \qquad
+  e_2 \;\longrightarrow\; e_4.
+\end{equation}
+Explicitly:
+\begin{center}
+\begin{tabular}{lll}
+\hline
+Event & Premises & Informal role \\
+\hline
+$e_0$ & $\emptyset$ & root / ground event \\
+$e_1$ & $\{e_0\}$ & first dependent step \\
+$e_2$ & $\{e_1\}$ & intermediate step \\
+$e_3$ & $\{e_2\}$ & claim branch \\
+$e_4$ & $\{e_2\}$ & verify branch \\
+\hline
+\end{tabular}
+\end{center}
+
+\begin{proposition}[Well-foundedness of the topology]
+The premise relation of this topology is well founded.
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{The circular trajectory}
+%======================================================================
+
+\begin{definition}[Circular trajectory]\label{def:circular}
+The \textbf{circular trajectory} is the trust system
+$\mathcal{S}_{\mathrm{circ}}$ on claims $E$ graded in $T_{\mathrm{traj}}$
+with the topology of the previous section and grades
+\begin{center}
+\begin{tabular}{ll}
+\hline
+Event & Grade \\
+\hline
+$e_0$ & $\mathsf{unsupported}$ \\
+$e_1$ & $\mathsf{independent}$ \\
+$e_2$ & $\mathsf{independent}$ \\
+$e_3$ & $\mathsf{shallow}$ \\
+$e_4$ & $\mathsf{unsupported}$ \\
+\hline
+\end{tabular}
+\end{center}
+\end{definition}
+
+\begin{remark}[Why ``circular'']
+The topology is acyclic; circularity lives in the grades. The root $e_0$ is
+unsupported, yet $e_1$ and $e_2$ are graded as independent checks, and the
+terminal verify step $e_4$ is itself unsupported. Locally, intermediate
+steps look strong; globally, every path either begins at an unsupported
+root or ends at an unsupported verify. The computation of $\tauu$ makes this
+precise.
+\end{remark}
+
+\begin{lemma}[Leaf computation]\label{lem:circ-e0}
+In $\mathcal{S}_{\mathrm{circ}}$,
+\begin{equation}
+  \tauu(e_0) \;=\; \mathsf{unsupported}.
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{lemma}\label{lem:circ-e1}
+In $\mathcal{S}_{\mathrm{circ}}$,
+\begin{equation}
+  \tauu(e_1) \;=\; \mathsf{unsupported}.
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{lemma}\label{lem:circ-e2}
+In $\mathcal{S}_{\mathrm{circ}}$,
+\begin{equation}
+  \tauu(e_2) \;=\; \mathsf{unsupported}.
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{lemma}\label{lem:circ-e3}
+In $\mathcal{S}_{\mathrm{circ}}$,
+\begin{equation}
+  \tauu(e_3) \;=\; \mathsf{unsupported}.
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{lemma}\label{lem:circ-e4}
+In $\mathcal{S}_{\mathrm{circ}}$,
+\begin{equation}
+  \tauu(e_4) \;=\; \mathsf{unsupported}.
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[Circular collapse]\label{thm:circular-bot}
+In the circular trajectory, canonical trust is bottom at every event:
+\begin{equation}
+  \forall\, e \in E,\qquad
+  \tauu_{\mathcal{S}_{\mathrm{circ}}}(e) \;=\; \mathsf{unsupported}.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}[Idea of the argument]
+Proceed leaf-to-root along the premise order. At $e_0$ the unique step has
+empty premises and grade $\mathsf{unsupported}$, so
+$\tauu(e_0) = \mathsf{unsupported}$. At $e_1$ the step grade is
+$\cmin(\tauu(e_0), \mathsf{independent}) = \mathsf{unsupported}$, and
+similarly for $e_2$. At $e_3$ one meets $\tauu(e_2)$ with
+$\mathsf{shallow}$; at $e_4$ one meets $\tauu(e_2)$ with
+$\mathsf{unsupported}$. In every case the join with $\bot$ remains
+$\mathsf{unsupported}$. Intermediate grades of $\mathsf{independent}$ never
+appear in $\tauu$ because they are bottlenecked by unsupported ancestors
+(or, for $e_4$, by an unsupported self-grade).
+\end{remark}
+
+%======================================================================
+\section{The honest trajectory}
+%======================================================================
+
+\begin{definition}[Honest trajectory]\label{def:honest}
+The \textbf{honest trajectory} is the trust system
+$\mathcal{S}_{\mathrm{hon}}$ on the same claims $E$, the same topology, and
+grades
+\begin{center}
+\begin{tabular}{ll}
+\hline
+Event & Grade \\
+\hline
+$e_0$ & $\mathsf{independent}$ \\
+$e_1$ & $\mathsf{independent}$ \\
+$e_2$ & $\mathsf{independent}$ \\
+$e_3$ & $\mathsf{shallow}$ \\
+$e_4$ & $\mathsf{independent}$ \\
+\hline
+\end{tabular}
+\end{center}
+\end{definition}
+
+\begin{proposition}[Well-foundedness]
+The premise relation of $\mathcal{S}_{\mathrm{hon}}$ is well founded.
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[Honest root]\label{thm:hon-e0}
+In $\mathcal{S}_{\mathrm{hon}}$,
+\begin{equation}
+  \tauu(e_0) \;=\; \mathsf{independent}.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[Honest spine]\label{thm:hon-e1}
+In $\mathcal{S}_{\mathrm{hon}}$,
+\begin{equation}
+  \tauu(e_1) \;=\; \mathsf{independent}.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}\label{thm:hon-e2}
+In $\mathcal{S}_{\mathrm{hon}}$,
+\begin{equation}
+  \tauu(e_2) \;=\; \mathsf{independent}.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[Weak claim branch]\label{thm:hon-e3}
+In $\mathcal{S}_{\mathrm{hon}}$,
+\begin{equation}
+  \tauu(e_3) \;=\; \mathsf{shallow}.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[Honest verify branch]\label{thm:hon-e4}
+In $\mathcal{S}_{\mathrm{hon}}$,
+\begin{equation}
+  \tauu(e_4) \;=\; \mathsf{independent}.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}[Contrast with the circular case]
+The topology is identical; only the grades differ. With an independent root
+and independent steps along the spine $e_0 \to e_1 \to e_2 \to e_4$,
+canonical trust preserves $\mathsf{independent}$. The claim branch $e_3$ is
+limited by its own shallow grade: weakest-link semantics yields
+$\cmin(\tauu(e_2), \mathsf{shallow}) = \mathsf{shallow}$. Thus $\tauu$
+distinguishes sound verification structure from circular structure on the
+nose.
+\end{remark}
+
+%======================================================================
+\section{Discussion}
+%======================================================================
+
+\paragraph{What has been established.}
+Trajectory systems are trust systems specialised to agent-action claims.
+On a fixed five-event topology, circular grades force
+$\tauu \equiv \mathsf{unsupported}$, while honest grades recover
+$\mathsf{independent}$ along the sound path and $\mathsf{shallow}$ on the
+weak branch. The diagnosis of circular verification is therefore a theorem
+about $\tauu$, not a side condition on individual step grades.
+
+\paragraph{Role of well-foundedness.}
+Both systems have well-founded premise relations (the dependency graph is a
+finite DAG). Well-foundedness is load-bearing for the existence of $\tauu$ as
+a recursive definition; circular \emph{citation} in the sense of a cyclic
+premise relation is a different pathology (treated in the companion note on
+trust systems). Here the circularity is graded rather than structural.
+
+\paragraph{Scope.}
+The development treats a single finite event set and a single five-level
+chain. It does not address infinite trajectories, continuous time, or
+composition of trajectory systems with other trust systems; the latter is
+taken up in a companion note on trajectory--trust morphisms.
+
+\paragraph{Machine checking.}
+Every definition and theorem statement above corresponds to a declaration in
+a machine-checked formalisation. The phrase ``by lean'' indicates that the
+proof has been verified by a proof assistant; we have not reproduced the
+formal proof scripts here. A mathematician reading this note need only
+verify that the English statements match the intended mathematics; the
+formal system is responsible for the derivations.
+
+%======================================================================
+\section*{Acknowledgements}
+%======================================================================
+
+The mathematical content specialises the theory of trust systems (canonical
+trust as greatest sound assignment, well-founded premise recursion) to
+trajectory workflows. The circular example is motivated by observed agent
+behaviour under circular verification. The presentation here is a prose
+rendering of a formal development intended for human review of the theorem
+statements.
+
+\begin{thebibliography}{9}
+
+\bibitem{trust-systems}
+Trust systems: the certificate lemma and transport of trust.
+\newblock Companion formal development.
+
+\end{thebibliography}
+
+\end{document}

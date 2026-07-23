@@ -1,0 +1,400 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath,amsthm,mathtools}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{parskip}
+\usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
+
+% Theorem environments (arXiv / journal style)
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{remark}[theorem]{Remark}
+
+% Notation
+\newcommand{\Type}{\mathbf{Type}}
+\newcommand{\Ok}{\mathrm{Ok}}
+\newcommand{\localOk}{\mathrm{localOk}}
+
+\title{Trust Boundaries on Registry Trees:\\
+  Duplicate-Stability of the Boundary Rule}
+\author{Extracted from a machine-checked development}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We treat trust-labelled, finitely branching rose trees as a directed
+container and formalise the \emph{boundary rule} used to validate proof
+registries: a node may claim a threshold trust level only if every
+non-dead-end child claims at least that level. The global rule is the
+coKleisli form of the local check---the local predicate holds at every
+position of the tree. We prove \emph{duplicate-stability}: if a tree
+satisfies the global boundary rule, then every subtree does. Labels do
+not disturb the navigation laws of the underlying directed container.
+Two concrete trust chains (a seven-level agent chain and a six-level
+loop-experiment chain) instantiate the general result. All stated
+results have been machine-checked.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%======================================================================
+\section{Introduction}
+%======================================================================
+
+Proof registries may be organised as finitely branching trees whose
+nodes carry trust labels. A validator walks the tree and enforces a
+node-local rule: a claim graded at or above a threshold may stand only
+if every live child is graded at or above that threshold. Dead ends
+(abandoned approaches) are exempt. Shared nodes import subtrees across
+registry links; for validation to be compositional, a validated tree
+must contribute only validated subtrees.
+
+Directed containers supply the navigation structure: shapes are trees,
+positions are paths from the root, and the comonad operations
+$\mathrm{extract}$ and $\mathrm{duplicate}$ arise from path
+concatenation. The boundary rule, stated at every position produced by
+$\mathrm{duplicate}$, is stable under taking subtrees---transport along
+the directed-container law that subtrees nest along path concatenation.
+
+\paragraph{What this note claims.}
+In ordinary mathematical language: validating the whole tree validates
+every subtree. More precisely, if the local boundary check holds at
+every position of a labelled tree~$t$, then it holds at every position
+of every subtree $t \mathbin{\downarrow} p$. The proof is a one-line
+transport along the nesting law for subtrees. Dead ends are modelled by
+a boolean flag outside the trust order, because an order relation cannot
+express an exemption. Two deployed trust chains instantiate the abstract
+threshold.
+
+%======================================================================
+\section{Trust labels and labelled trees}
+%======================================================================
+
+\begin{definition}[Trust label]\label{def:label}
+Let $T$ be a type of trust levels. A \textbf{trust label} is a pair
+\begin{equation}
+  \ell \;=\; \langle \mathrm{trust}(\ell),\; \mathrm{dead}(\ell) \rangle
+  \;\in\; T \times \mathbb{B},
+\end{equation}
+consisting of a level in~$T$ and a dead-end flag. Dead ends lie outside
+the trust order by design: the boundary rule \emph{exempts} them, and
+no order relation expresses an exemption.
+\end{definition}
+
+\begin{definition}[Labelled rose tree]\label{def:ltree}
+A \textbf{trust-labelled rose tree} over~$T$ is a finitely branching tree
+with a label at every node:
+\begin{equation}
+  t \;=\; \mathrm{node}\bigl(\ell,\; n,\; (t_i)_{i < n}\bigr),
+\end{equation}
+where $\ell$ is a trust label, $n \in \mathbb{N}$ is the branching
+factor, and each $t_i$ is a labelled rose tree. A leaf is a node with
+$n = 0$.
+\end{definition}
+
+\begin{definition}[Root label]\label{def:lab}
+The \textbf{root label} of $t = \mathrm{node}(\ell, n, (t_i))$ is
+$\mathrm{lab}(t) = \ell$. Under the comonad structure below,
+$\mathrm{lab}(t \mathbin{\downarrow} p)$ reads the label at position~$p$.
+\end{definition}
+
+%======================================================================
+\section{Positions, subtrees, and path concatenation}
+%======================================================================
+
+\begin{definition}[Position]\label{def:lpos}
+A \textbf{position} (path) in a labelled tree~$t$ is generated by
+\begin{itemize}
+  \item $\mathsf{here}$ --- the root of~$t$;
+  \item $\mathsf{child}(i, p)$ --- descend into the $i$-th child and
+        continue along path~$p$.
+\end{itemize}
+For a leaf ($n = 0$), the only position is $\mathsf{here}$.
+\end{definition}
+
+\begin{definition}[Subtree and shift]\label{def:sub-shift}
+For a tree~$t$ and position~$p$ in~$t$:
+\begin{itemize}
+  \item the \textbf{subtree} $t \mathbin{\downarrow} p$ is~$t$ itself at
+        $\mathsf{here}$, and the recursively computed subtree of the
+        $i$-th child at $\mathsf{child}(i, p)$;
+  \item the \textbf{shift} (path concatenation)
+        $p \oplus q$ embeds a position~$q$ in the subtree at~$p$ back
+        into~$t$: at $\mathsf{here}$ it is~$q$, and at
+        $\mathsf{child}(i, p)$ it is $\mathsf{child}(i,\, p \oplus q)$.
+\end{itemize}
+\end{definition}
+
+\begin{proposition}[Directed-container laws]\label{prop:d-laws}
+Writing $o(t) = \mathsf{here}$ for the root position, the following hold
+for all trees and positions (labels play no role):
+\begin{enumerate}
+  \item[\textbf{D1.}] $t \mathbin{\downarrow} o(t) \;=\; t$.
+  \item[\textbf{D2.}] $o(t) \oplus q \;=\; q$.
+  \item[\textbf{D3.}] $p \oplus o(t \mathbin{\downarrow} p) \;=\; p$.
+  \item[\textbf{D4.}]
+        $t \mathbin{\downarrow} (p \oplus q)
+         \;=\;
+         (t \mathbin{\downarrow} p) \mathbin{\downarrow} q$.
+  \item[\textbf{D5.}]
+        $(p \oplus q) \oplus r \;=\; p \oplus (q \oplus r)$
+        (up to the identification of fibres supplied by~D4).
+\end{enumerate}
+In particular, labelled trees form a directed container; the navigation
+structure---and hence the induced comonad---is independent of the labels.
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}[Comonad reading]
+The induced comonad on the extension has
+\begin{align}
+  \mathrm{extract}\,\langle t, v \rangle
+  &\;=\; v(\mathsf{here}), \\
+  \mathrm{duplicate}\,\langle t, v \rangle
+  &\;=\;
+  \bigl\langle
+    t,\;
+    p \mapsto
+    \bigl\langle
+      t \mathbin{\downarrow} p,\;
+      q \mapsto v(p \oplus q)
+    \bigr\rangle
+  \bigr\rangle.
+\end{align}
+At every node, $\mathrm{duplicate}$ replaces the label with the full
+sub-search from that point.
+\end{remark}
+
+%======================================================================
+\section{The boundary rule}
+%======================================================================
+
+We now assume $T$ carries a partial order~$\le$ (in applications, a
+linear chain of check strengths with bottom element).
+
+\begin{definition}[Local boundary rule]\label{def:localok}
+Fix a threshold $\theta \in T$. The \textbf{local boundary rule} at a
+tree $t = \mathrm{node}(\ell, n, (t_i))$ is the proposition
+\begin{equation}
+  \localOk_\theta(t)
+  \;:\!\!\Longleftrightarrow\;
+  \Bigl(
+    \theta \le \mathrm{trust}(\ell)
+    \;\Longrightarrow\;
+    \forall\, i < n.\;
+    \bigl(
+      \mathrm{dead}(\mathrm{lab}(t_i))
+      \;\lor\;
+      \theta \le \mathrm{trust}(\mathrm{lab}(t_i))
+    \bigr)
+  \Bigr).
+\end{equation}
+If the node claims $\theta$ or above, every non-dead child claims $\theta$
+or above. There is no recursion: the check inspects one node and its
+immediate children.
+\end{definition}
+
+\begin{definition}[Global boundary rule]\label{def:ok}
+The \textbf{global boundary rule} at threshold~$\theta$ is the
+coKleisli form of the local check: the local rule holds at
+\emph{every} position,
+\begin{equation}
+  \Ok_\theta(t)
+  \;:\!\!\Longleftrightarrow\;
+  \forall\, p \text{ a position in } t.\;
+  \localOk_\theta\bigl(t \mathbin{\downarrow} p\bigr).
+\end{equation}
+Equivalently: the local predicate holds on every sub-search produced by
+$\mathrm{duplicate}$.
+\end{definition}
+
+%======================================================================
+\section{Duplicate-stability}
+%======================================================================
+
+\begin{theorem}[Duplicate-stability of the trust boundary]
+\label{thm:ok-sub}
+Let $\theta \in T$ and let $t$ be a labelled tree. If $\Ok_\theta(t)$,
+then for every position~$p$ in~$t$,
+\begin{equation}
+  \Ok_\theta\bigl(t \mathbin{\downarrow} p\bigr).
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}[Idea of the argument]
+Positions of the subtree $t \mathbin{\downarrow} p$ embed into positions
+of~$t$ by path concatenation $q \mapsto p \oplus q$. The nesting law~D4
+identifies
+\[
+  (t \mathbin{\downarrow} p) \mathbin{\downarrow} q
+  \;=\;
+  t \mathbin{\downarrow} (p \oplus q),
+\]
+so the global check at $p \oplus q$ \emph{is} the check at~$q$ in the
+subtree. Transport along this equality yields the result.
+\end{remark}
+
+\begin{theorem}[Whole equals all duplicates]\label{thm:ok-iff}
+For every threshold~$\theta$ and tree~$t$,
+\begin{equation}
+  \Ok_\theta(t)
+  \;\Longleftrightarrow\;
+  \forall\, p \text{ a position in } t.\;
+  \Ok_\theta\bigl(t \mathbin{\downarrow} p\bigr).
+\end{equation}
+The forward direction is Theorem~\ref{thm:ok-sub}; the backward direction
+reads the root component of each duplicate.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+This is the load-bearing fact for shared nodes: a stub pointing into a
+validated registry inherits a validated subtree, and the validator never
+needs to re-check across the link.
+\end{remark}
+
+%======================================================================
+\section{Deployed trust chains}
+%======================================================================
+
+\begin{definition}[Agent trust chain]\label{def:trustlevel}
+The \textbf{agent trust chain} is the seven-element linear order
+\begin{align*}
+  &\mathrm{unchecked}
+  \;<\; \mathrm{speculative}
+  \;<\; \mathrm{computed}
+  \;<\; \mathrm{proved} \\
+  &\qquad
+  \;<\; \mathrm{peerReviewed}
+  \;<\; \mathrm{published}
+  \;<\; \mathrm{leanVerified},
+\end{align*}
+with bottom element $\mathrm{unchecked}$. The dead-end status is not a
+chain element: it is the $\mathrm{dead}$ flag on labels.
+\end{definition}
+
+\begin{definition}[Registry validity]\label{def:registryok}
+A labelled tree over the agent trust chain is \textbf{registry-valid} if
+it satisfies the global boundary rule at threshold $\mathrm{proved}$:
+\begin{equation}
+  \mathrm{RegistryOk}(t)
+  \;:\!\!\Longleftrightarrow\;
+  \Ok_{\mathrm{proved}}(t).
+\end{equation}
+\end{definition}
+
+\begin{corollary}[Deployed duplicate-stability]\label{cor:registryok-sub}
+If $t$ is registry-valid, then every subtree of~$t$ is registry-valid.
+\end{corollary}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{definition}[Loop-experiment trust chain]\label{def:looptrust}
+The \textbf{loop-experiment trust chain} is the six-element linear order
+\begin{align*}
+  &\mathrm{unchecked}
+  \;<\; \mathrm{speculative}
+  \;<\; \mathrm{computed}
+  \;<\; \mathrm{proved} \\
+  &\qquad
+  \;<\; \mathrm{verified}
+  \;<\; \mathrm{leanVerified},
+\end{align*}
+with bottom element $\mathrm{unchecked}$. The grade $\mathrm{verified}$
+replaces the social-process grades $\mathrm{peerReviewed}$ and
+$\mathrm{published}$ of Definition~\ref{def:trustlevel}: it records an
+independent hostile review.
+\end{definition}
+
+\begin{corollary}[Loop duplicate-stability]\label{cor:loopok-sub}
+A labelled tree over the loop-experiment chain that satisfies
+$\Ok_{\mathrm{proved}}$ has every subtree satisfying
+$\Ok_{\mathrm{proved}}$.
+\end{corollary}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+Both corollaries are instances of Theorem~\ref{thm:ok-sub}, which is
+parametric in the trust type~$T$ and the threshold~$\theta$. The same
+structural fact applies to any chain and any threshold.
+\end{remark}
+
+%======================================================================
+\section{Discussion}
+%======================================================================
+
+\paragraph{What has been established.}
+Trust-labelled rose trees form a directed container whose navigation is
+independent of labels. The boundary rule---local at each node, global
+as a coKleisli condition---is stable under $\mathrm{duplicate}$:
+validated trees decompose into validated subtrees. Two concrete chains
+used in deployed registries instantiate the general theorem.
+
+\paragraph{Relation to transport of trust.}
+Duplicate-stability says validated trees decompose. Separately, morphisms
+of trust systems transport canonical trust laxly: importing along a
+morphism never claims more than the image of the source's canonical
+trust. Together these are the two halves of compositional registry
+validation: structure decomposes, and grades move only downward under
+import.
+
+\paragraph{Machine checking.}
+Every definition and theorem statement above corresponds to a declaration
+in a machine-checked formalisation. The phrase ``by lean'' indicates that
+the proof has been verified by a proof assistant.
+
+%======================================================================
+\section*{Acknowledgements}
+%======================================================================
+
+The presentation here is a prose rendering of a formal development
+intended for human review of the theorem statements. The directed
+container laws follow the theory of Ahman, Chapman, and Uustalu; the
+boundary rule is the mathematical content of a node-local registry
+validator.
+
+\begin{thebibliography}{9}
+
+\bibitem{ahman2012}
+D.~Ahman, J.~Chapman, and T.~Uustalu.
+\newblock When is a container a comonad?
+\newblock In \emph{FoSSaCS}, volume~7213 of \emph{LNCS}, pages 74--88.
+\newblock Springer, 2012.
+
+\bibitem{ahman2014}
+D.~Ahman and T.~Uustalu.
+\newblock Directed containers as categories.
+\newblock \emph{EPTCS}, 207:89--98, 2016.
+
+\end{thebibliography}
+
+\end{document}

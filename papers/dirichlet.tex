@@ -1,0 +1,438 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath,amsthm,mathtools}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{parskip}
+\usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
+
+% Theorem environments (arXiv / journal style)
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{remark}[theorem]{Remark}
+
+% Notation
+\newcommand{\Type}{\mathbf{Type}}
+\newcommand{\id}{\mathrm{id}}
+\newcommand{\Cont}{\mathbf{Cont}}
+\newcommand{\Shape}{\mathrm{Shape}}
+\newcommand{\Pos}{\mathrm{Pos}}
+\newcommand{\Ext}{\mathrm{Ext}}
+\newcommand{\seq}{\mathbin{\triangleleft}}
+\newcommand{\Dir}{\mathbin{\otimes}}
+
+\title{The Dirichlet Tensor on Containers}
+\author{Extracted from a machine-checked development}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We equip the category $\Cont$ of containers with the Dirichlet tensor
+\[
+  C \Dir D
+  \;=\;
+  \bigl(S \times T,\; (s,t) \mapsto P(s) \times Q(t)\bigr)
+\]
+and unit $y$ (one shape, one position---the same container that is the
+unit for sequential composition). Bifunctoriality, structural
+isomorphisms, naturality, and the Mac Lane coherence laws all hold by
+direct computation. The extension of a Dirichlet tensor has a useful
+normal form but is \emph{not} a pointwise combination of the factor
+extensions; the honest monoidal comparison is Day convolution of
+$(\mathbf{Set}, \times, 1)$, with a coend isomorphism (Niu--Spivak). We
+also record the uniformity morphism $C \Dir D \to C \seq D$ embedding
+the Dirichlet tensor as the non-dependent fragment of sequential
+composition, and prove it is not an isomorphism in general. The proofs
+of all stated results have been machine-checked; we record only the
+mathematical content.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%======================================================================
+\section{Introduction}
+%======================================================================
+
+Containers present polynomial endofunctors. Among the monoidal structures
+on the category $\Cont$ of containers, two share shapes $S \times T$ and
+differ only in positions:
+\begin{align}
+  C \times D
+  &\;=\;
+  \bigl(S \times T,\; (s,t) \mapsto P(s) \oplus Q(t)\bigr)
+  &&\text{(categorical product)}, \\
+  C \Dir D
+  &\;=\;
+  \bigl(S \times T,\; (s,t) \mapsto P(s) \times Q(t)\bigr)
+  &&\text{(Dirichlet tensor)}.
+\end{align}
+That single swap---sum of positions versus product of positions---is the
+heart of the chapter. On extensions it is the difference between a
+pointwise product of functors (by the exponential law
+$X^{A+B} \cong X^A \times X^B$) and a structure that does \emph{not}
+split pointwise (witness: $y^3 \Dir y^3 = y^9$, while anything pointwise
+would give $y^6$).
+
+The unit of the Dirichlet tensor is $y$, the one-shape one-position
+container---definitionally the same as the unit~$I$ of sequential
+composition~$\seq$. Two of the four monoidal structures on $\Cont$ thus
+share a unit; both restrict to the identity on that container.
+
+\paragraph{What this note claims.}
+\begin{enumerate}
+  \item $(\Cont, \Dir, y)$ is a monoidal category, with all laws
+        transport-free.
+  \item The extension of $C \Dir D$ has the normal form
+        $\sum_{(s,t)} X^{P(s)\times Q(t)}$, a definitional equality of
+        types and \emph{not} a strict-monoidality statement.
+  \item The uniformity morphism $C \Dir D \to C \seq D$ is canonical but
+        not an isomorphism in general.
+\end{enumerate}
+
+We work throughout in a single universe of types. Proofs are indicated by
+the phrase ``by lean.''
+
+%======================================================================
+\section{The tensor and its unit}
+%======================================================================
+
+\begin{definition}[Container]\label{def:container}
+A \textbf{container} $C = (S,P)$ consists of a shape type~$S$ and a
+position family~$P$. Morphisms are shape maps with contravariant position
+maps; we write $\Cont$ for the category.
+\end{definition}
+
+\begin{definition}[Dirichlet tensor]\label{def:dirichlet}
+The \textbf{Dirichlet tensor} of containers $C = (S,P)$ and $D = (T,Q)$
+is the container
+\begin{equation}
+  C \Dir D
+  \;=\;
+  \bigl(
+    S \times T,\;
+    (s,t) \mapsto P(s) \times Q(t)
+  \bigr).
+\end{equation}
+Positions are a \emph{product}---this is exactly what distinguishes
+$\Dir$ from the categorical product, whose positions are the
+\emph{coproduct} $P(s) \oplus Q(t)$.
+\end{definition}
+
+\begin{definition}[Unit]\label{def:y}
+The unit for the Dirichlet tensor is the container
+\begin{equation}
+  y \;=\; \bigl(1,\; {\ast} \mapsto 1\bigr)
+\end{equation}
+---one shape, one position. It is the same container as the unit~$I$ of
+the sequential operator~$\seq$; the name~$y$ is the polynomial reading
+as the representable $y^1$.
+\end{definition}
+
+\begin{remark}
+The left and right unitors for $\Dir$ are unit-collapses in both shape
+and position components: $y \Dir C$ has shapes $1 \times S$ and
+positions $1 \times P(s)$.
+\end{remark}
+
+%======================================================================
+\section{Bifunctoriality}
+%======================================================================
+
+\begin{definition}[Action on morphisms]\label{def:dir2}
+Given morphisms $\mu : C \to C'$ and $\nu : D \to D'$, the
+\textbf{Dirichlet action}
+\[
+  \mu \Dir_2 \nu
+  \;:\;
+  C \Dir D \;\longrightarrow\; C' \Dir D'
+\]
+acts componentwise:
+\begin{align}
+  \text{on shapes:}\quad
+  (s,t) &\;\longmapsto\; \bigl(\mu(s),\, \nu(t)\bigr), \\
+  \text{on positions:}\quad
+  (p,q) &\;\longmapsto\;
+  \bigl(\mu^\sharp_s(p),\, \nu^\sharp_t(q)\bigr).
+\end{align}
+Unlike sequential composition, whose morphism action threads the outer
+position map through the inner shape assignment, the Dirichlet action is
+strictly componentwise.
+\end{definition}
+
+\begin{proposition}[Functor laws]\label{prop:dir2-laws}
+\begin{enumerate}
+  \item $\id_C \Dir_2 \id_D = \id_{C \Dir D}$;
+  \item $(\mu \mathbin{;}\mu') \Dir_2 (\nu \mathbin{;}\nu')
+        = (\mu \Dir_2 \nu) \mathbin{;} (\mu' \Dir_2 \nu')$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+%======================================================================
+\section{Structural isomorphisms and coherence}
+%======================================================================
+
+\begin{definition}[Associator and unitors]\label{def:dir-struct}
+\begin{enumerate}
+  \item The \textbf{associator}
+        $(C \Dir D) \Dir E \xrightarrow{\sim} C \Dir (D \Dir E)$ is
+        product reassociation on shapes and (backward) product
+        reassociation on positions. Product reassociation is its own
+        mirror image, so the position component is transport-free.
+  \item The \textbf{left unitor} $y \Dir C \xrightarrow{\sim} C$ and
+        \textbf{right unitor} $C \Dir y \xrightarrow{\sim} C$ are the
+        unit-collapses in both components.
+\end{enumerate}
+Both round trips of each isomorphism hold by definitional $\eta$ for
+products and the unit type.
+\end{definition}
+
+\begin{proposition}[Naturality]\label{prop:dir-nat}
+The associator and both unitors of the Dirichlet tensor are natural in
+all arguments.
+\end{proposition}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{theorem}[Coherence]\label{thm:dir-coherence}
+The pentagon and triangle identities hold for the Dirichlet tensor.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+Every map in sight is a product/unit shuffle. Definitional $\eta$ for
+structures identifies the two legs of each coherence diagram on the nose.
+\end{remark}
+
+\begin{theorem}[$(\Cont, \Dir, y)$ is monoidal]\label{thm:dir-monoidal}
+The category of containers, equipped with the Dirichlet tensor and unit
+$y$, is a monoidal category.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+As with the coproduct and product, a formal development that admits only
+one canonical monoidal instance on~$\Cont$ packages the Dirichlet
+structure as named data rather than a global instance. The sequential
+operator is preferred as the canonical instance because its comonoids are
+directed containers. Mathematically, four monoidal structures on one
+category is the point.
+\end{remark}
+
+%======================================================================
+\section{Extension: a normal form, not a strictness theorem}
+%======================================================================
+
+\begin{theorem}[Normal form]\label{thm:normal-form}
+For all containers $C = (S,P)$, $D = (T,Q)$ and every type~$X$,
+\begin{equation}
+  \Ext(C \Dir D)\,X
+  \;=\;
+  \sum_{(s,t) \,:\, S \times T}
+  \bigl(P(s) \times Q(t) \to X\bigr)
+\end{equation}
+as a definitional equality of types.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}[What this is not]
+Theorem~\ref{thm:normal-form} is a useful computation rule and nothing
+more. It is \emph{not} a monoidal-functor statement, and in particular it
+does not say that $\Ext(-)$ is strict monoidal for~$\Dir$.
+
+A comparison map must relate $\Ext(C \Dir D)$ to $\Ext\,C$ and $\Ext\,D$
+through a tensor on the target category. The right-hand side above is not
+built from the functors $\Ext\,C$ and $\Ext\,D$ at all: it re-reads the
+container's presentation $(S,T,P,Q)$. Observing that $\Ext(-)$ ``preserves''
+a tensor that was itself defined by reading the presentation is circular;
+the equality is an unfolding of a definition.
+\end{remark}
+
+\begin{remark}[Honest comparison: Day convolution]
+Compare the three comparisons with real content:
+\begin{itemize}
+  \item sequential:
+        $\Ext(G \seq F)\,X \cong \Ext\,G\bigl(\Ext\,F\,X\bigr)$
+        (target tensor $=$ composition of functors; a genuine iso);
+  \item coproduct:
+        $\Ext(C+D)\,X \cong \Ext\,C\,X \oplus \Ext\,D\,X$
+        (target tensor $=$ pointwise coproduct);
+  \item product:
+        $\Ext(C \times D)\,X \cong \Ext\,C\,X \times \Ext\,D\,X$
+        (target tensor $=$ pointwise product).
+\end{itemize}
+The correct intrinsic account of~$\Dir$ is due to Niu and Spivak:
+$\Dir$ is the \textbf{Day convolution} on $[\mathbf{Set},\mathbf{Set}]$ of
+the cartesian monoidal structure $(\mathbf{Set}, \times, 1)$. The
+comparison map $\Ext\,C \,\odot\, \Ext\,D \to \Ext(C \Dir D)$ is the
+co-Yoneda/density isomorphism out of a coend---an isomorphism, but
+emphatically not an identity. Thus $\Ext(-)$ is \textbf{strong}, not
+strict, monoidal for~$\Dir$.
+\end{remark}
+
+\begin{remark}[Why $\Dir$ is non-pointwise]
+Being a Day convolution is \emph{not} what makes $\Dir$ non-pointwise.
+The categorical product~$\times$ on $\Cont$ is also a Day convolution---of
+$(\mathbf{Set}, +, 0)$---and it \emph{is} pointwise. The real criterion is
+whether the corepresentable splits the domain tensor:
+\begin{itemize}
+  \item $y^{A+B} \cong y^A \times y^B$ --- so Day-of-$+$ (the product
+        $\times$) is pointwise;
+  \item $y^{A \times B}$ admits \textbf{no} such splitting --- so Day-of-
+        $\times$ (the Dirichlet $\Dir$) is not.
+\end{itemize}
+Witness: $y^3 \Dir y^3 = y^9$, whereas anything pointwise would give
+$y^6$.
+\end{remark}
+
+\paragraph{Taxonomy of the four monoidal structures on $\Cont$.}
+\begin{center}
+\begin{tabular}{llll}
+structure & Day convolution of & unit & $\Ext$ pointwise? \\
+\hline
+product $\times$ & $(\mathbf{Set}, +, 0)$ & $1 = y^0$ & yes \\
+Dirichlet $\Dir$ & $(\mathbf{Set}, \times, 1)$ & $y = y^1$ & no \\
+coproduct $+$ & not a Day convolution & $0$ & yes \\
+sequential $\seq$ & not a Day convolution & $I = y$ & no
+\end{tabular}
+\end{center}
+
+%======================================================================
+\section{Dirichlet as the uniform fragment of sequential composition}
+%======================================================================
+
+Both $C \Dir D$ and $C \seq D$ ``put a $D$ at every $C$-position'', but
+\begin{itemize}
+  \item $C \seq D$ lets the inner $D$-shape \emph{depend} on the outer
+        $C$-position: its shapes are $\sum_{s \,:\, S} (P(s) \to T)$;
+  \item $C \Dir D$ forces one inner shape \emph{uniformly}: its shapes
+        are $S \times T$.
+\end{itemize}
+Choosing the constant assignment $p \mapsto t$ therefore embeds $\Dir$
+into~$\seq$. On positions the two agree definitionally:
+\begin{equation}
+  \sum_{p \,:\, P(s)} Q\bigl(({\ast} \mapsto t)(p)\bigr)
+  \;=\;
+  P(s) \times Q(t).
+\end{equation}
+
+\begin{definition}[Uniformity morphism]\label{def:dir-to-seq}
+The canonical \textbf{uniformity morphism}
+\[
+  C \Dir D \;\longrightarrow\; C \seq D
+\]
+sends the shape $(s,t)$ to $\bigl\langle s,\; {\ast} \mapsto t \bigr\rangle$
+(the constant inner-shape assignment); on positions it is the identity,
+the fibres agreeing definitionally.
+\end{definition}
+
+\begin{theorem}[Uniformity is not an isomorphism]\label{thm:not-iso}
+The uniformity morphism is not an isomorphism in general. Concretely,
+for $C = y^2$ (one shape, two positions) and $D = 2$ (two shapes, no
+positions), the shape map
+\[
+  2 \;\longrightarrow\; (2 \to 2),
+  \qquad
+  t \;\longmapsto\; ({\ast} \mapsto t)
+\]
+misses the identity function on the two-element set, hence is not
+surjective on shapes. Equivalently: $y^2 \Dir 2$ has two shapes while
+$y^2 \seq 2$ has four; both have no positions, so their extensions at
+any~$X$ have two and four elements respectively.
+\end{theorem}
+
+\begin{proof}
+By lean.
+\end{proof}
+
+\begin{remark}
+Thus $\Dir \neq \seq$: the uniformity morphism is a genuine comparison,
+not an equivalence. The Dirichlet tensor is sequential composition with
+the dependency switched off---the uniform (non-dependent) fragment
+of~$\seq$.
+\end{remark}
+
+%======================================================================
+\section{Discussion}
+%======================================================================
+
+\paragraph{What has been established.}
+The Dirichlet tensor is a monoidal structure on~$\Cont$, transport-free
+and coherent. Its extension has a clean normal form that must not be
+misread as strict monoidality. The honest comparison is Day convolution.
+The uniformity morphism relates $\Dir$ to~$\seq$ without collapsing them.
+
+\paragraph{Scope.}
+The coend comparison of Niu--Spivak is not formalised here (it requires
+quotients beyond a pure core type theory). The taxonomy of the four
+structures is stated for orientation; the coproduct and product monoidal
+data are in a companion note, and the sequential structure in another.
+
+\paragraph{Machine checking.}
+Every definition and theorem statement above corresponds to a declaration
+in a machine-checked formalisation. The phrase ``by lean'' indicates that
+the proof has been verified by a proof assistant.
+
+%======================================================================
+\section*{Acknowledgements}
+%======================================================================
+
+The mathematical content follows the theory of containers of Abbott,
+Altenkirch, and Ghani, and the Dirichlet/Day-convolution account of
+polynomial functors due to Niu and Spivak. The presentation here is a
+prose rendering of a formal development intended for human review of the
+theorem statements.
+
+\begin{thebibliography}{9}
+
+\bibitem{abbott2005}
+M.~Abbott, T.~Altenkirch, and N.~Ghani.
+\newblock Containers: constructing strictly positive types.
+\newblock \emph{Theoretical Computer Science}, 342(1):3--27, 2005.
+
+\bibitem{abbott2003}
+M.~Abbott, T.~Altenkirch, and N.~Ghani.
+\newblock Categories of containers.
+\newblock In \emph{FoSSaCS}, volume~2620 of \emph{LNCS}, pages 23--38.
+\newblock Springer, 2003.
+
+\bibitem{niu-spivak2023}
+N.~Niu and D.~I.~Spivak.
+\newblock Polynomial functors: a mathematical theory of interaction.
+\newblock arXiv:2312.00990, 2023.
+
+\bibitem{maclane1971}
+S.~Mac~Lane.
+\newblock \emph{Categories for the Working Mathematician}.
+\newblock Springer, 1971.
+
+\end{thebibliography}
+
+\end{document}
