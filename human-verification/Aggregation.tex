@@ -1,0 +1,393 @@
+\documentclass[11pt,a4paper]{article}
+\input{preamble}
+
+\title{Human Verification: \texttt{Containers.Aggregation}\\[4pt]
+  \large Aggregation as a Routing Cofunctor}
+\author{Machine-generated from \texttt{lean/Aggregation.lean} for review by Neil Ghani}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document presents every definition and theorem \emph{statement} from the
+Lean~4 module \lean{Containers.Aggregation} in three parallel forms: the
+original Lean, a readable Haskell rendering, and precise mathematical English.
+Proofs are omitted --- they are machine-checked by Lean.  The purpose is to
+let a human verifier confirm that the formalisation captures the intended
+mathematics.
+
+The file verifies Construction~\texttt{con:aggregation} (\S9 of the paper): a
+\textbf{routing policy} is a cofunctor (directed-container morphism) from the
+concrete 11-facility Sawasdee Cellars network to a 2-node aggregate network
+(Australia $\to$ Thailand).
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%===================================================================
+\section{Overview}
+%===================================================================
+
+A \emph{directed-container morphism} (cofunctor) from $\mathcal{D}$ to
+$\mathcal{E}$ consists of:
+\begin{itemize}
+  \item a map on shapes $u : \mathcal{D}.\mathrm{Shape} \to \mathcal{E}.\mathrm{Shape}$, and
+  \item a \emph{contravariant} position lift:
+    $\ell : (s : \mathcal{D}.\mathrm{Shape}) \to \mathcal{E}.\mathrm{Pos}(u(s)) \to \mathcal{D}.\mathrm{Pos}(s)$,
+\end{itemize}
+satisfying three laws M0, M1, M2 (shape compatibility, root preservation, shift
+compatibility).
+
+Here $\mathcal{D}$ is the Sawasdee Cellars network and $\mathcal{E}$ is the
+2-node aggregate network.  The shape map sends each facility to its region
+(Australia or Thailand); the lift sends each aggregate route to a canonical
+concrete route for that facility.
+
+
+%===================================================================
+\section{The aggregate network}
+%===================================================================
+
+% --- Region --------------------------------------------------------
+\subsection{Inductive type: \lean{Region}}
+
+\begin{defn}[Aggregate regions]
+The 2-node aggregate graph has two nodes: \lean{australia} and \lean{thailand},
+representing the two geographical regions of the wine supply chain.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+inductive Region | australia | thailand
+  deriving DecidableEq, Repr
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data Region = Australia | Thailand deriving (Eq, Show)
+\end{lstlisting}
+
+
+% --- AgLeg ---------------------------------------------------------
+\subsection{Inductive type: \lean{AgLeg}}
+
+\begin{defn}[Aggregate leg]
+There is a single aggregate leg \lean{au2th} representing the sea-freight
+connection from Australia to Thailand.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+inductive AgLeg | au2th
+  deriving DecidableEq, Repr
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data AgLeg = Au2th deriving (Eq, Show)
+\end{lstlisting}
+
+
+% --- GAgg ----------------------------------------------------------
+\subsection{Definition: \lean{GAgg}}
+
+\begin{defn}[2-node aggregate digraph]
+$G_{\mathrm{agg}}$ is the digraph with $V = \{\mathrm{australia},
+\mathrm{thailand}\}$, $E = \{\mathrm{au2th}\}$, $\mathrm{src}(\mathrm{au2th})
+= \mathrm{australia}$, $\mathrm{tgt}(\mathrm{au2th}) = \mathrm{thailand}$.
+
+Its network container $\mathcal{N}(G_{\mathrm{agg}})$ has:
+\begin{itemize}
+  \item $\mathrm{Pos}(\mathrm{australia}) = \{(\mathrm{australia}, \varepsilon),\;
+    (\mathrm{thailand}, \mathrm{au2th})\}$ --- two aggregate routes;
+  \item $\mathrm{Pos}(\mathrm{thailand}) = \{(\mathrm{thailand}, \varepsilon)\}$
+    --- one aggregate route (sink).
+\end{itemize}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+@[reducible] def GAgg : Digraph where
+  V := Region
+  E := AgLeg
+  src := agSrc
+  tgt := agTgt
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+gAgg :: Digraph Region AgLeg
+gAgg = Digraph { src = \Au2th -> Australia
+               , tgt = \Au2th -> Thailand }
+\end{lstlisting}
+
+
+%===================================================================
+\section{The routing policy}
+%===================================================================
+
+% --- region --------------------------------------------------------
+\subsection{Definition: \lean{region} (shape map)}
+
+\begin{defn}[Region assignment]
+Each facility belongs to a region:
+\begin{align*}
+  \mathrm{region}(v) &= \mathrm{australia} \quad
+    \text{for } v \in \{\mathrm{vineyard}_i,\, \mathrm{sawasdee},\, \mathrm{melbournePort}\}, \\
+  \mathrm{region}(v) &= \mathrm{thailand} \quad
+    \text{for } v \in \{\mathrm{thaiPort},\, \mathrm{distributor}_i,\, \mathrm{retail}_i\}.
+\end{align*}
+This is the shape map $u$ of the routing-policy cofunctor.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+@[reducible] def region : Facility -> Region
+  | .vineyard1 | .vineyard2 | .vineyard3 => australia
+  | .sawasdee | .melbournePort           => australia
+  | .thaiPort                            => thailand
+  | .distributor1 | .distributor2        => thailand
+  | .retail1 | .retail2 | .retail3       => thailand
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+region :: Facility -> Region
+region Vineyard1    = Australia
+region Vineyard2    = Australia
+region Vineyard3    = Australia
+region Sawasdee     = Australia
+region MelbournePort = Australia
+region _            = Thailand
+\end{lstlisting}
+
+
+% --- lift ----------------------------------------------------------
+\subsection{Definition: \lean{lift} (position lift)}
+
+\begin{defn}[Canonical concrete route lift]
+The \textbf{lift} $\ell(f, \rho)$ maps an aggregate route $\rho :
+\mathcal{N}(G_{\mathrm{agg}}).\mathrm{Pos}(\mathrm{region}(f))$ to a
+canonical concrete route out of facility $f$.
+
+\begin{itemize}
+  \item If $\rho = (\mathrm{australia}, \varepsilon)$ (stay in Australia):
+    $\ell(f, \rho) = (f, \varepsilon)$ for any Australian facility $f$.
+  \item If $\rho = (\mathrm{thailand}, \mathrm{au2th})$ (cross to Thailand):
+    $\ell(f, \rho)$ is the canonical route from $f$ to Thai Port via the
+    fixed outbound path for $f$.
+  \item For Thai facilities, $\mathrm{Pos}(\mathrm{region}(f)) =
+    \{(\mathrm{thailand}, \varepsilon)\}$, so $\ell(f, \rho) = (f, \varepsilon)$.
+\end{itemize}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def lift : (f : Facility) -> AgPos (region f) -> Route f
+  | .vineyard1, ar => match ar with
+      | <|australia, .nil _|> => <|_, .nil _|>
+      | <|thailand,  _|>      =>
+          alongLeg Leg.v1s (alongLeg Leg.smp (alongLeg Leg.sea <|_, .nil _|>))
+  -- ... (similarly for all 11 facilities)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+lift :: Facility -> AgRoute Region AgLeg -> Route Facility Leg
+lift Vineyard1 (Australia, []) = (Vineyard1, [])
+lift Vineyard1 (Thailand, _)   = (ThaiPort, [V1s, Smp, Sea])
+lift Vineyard2 (Australia, []) = (Vineyard2, [])
+lift Vineyard2 (Thailand, _)   = (ThaiPort, [V2s, Smp, Sea])
+-- ... similarly for all facilities
+lift f         (Thailand, [])  = (f, [])  -- Thai facilities: stay put
+\end{lstlisting}
+
+\begin{fidelitynote}
+The Lean type of \lean{lift} is genuinely dependent: the aggregate position
+type is $\mathcal{N}(G_{\mathrm{agg}}).\mathrm{Pos}(\mathrm{region}(f))$,
+which varies with $f$.  Lean can compute $\mathrm{region}(f)$ concretely by
+case-splitting on $f$, which is why the definition pattern-matches on $f$
+before matching on the aggregate route.
+\end{fidelitynote}
+
+
+% --- Law M0 --------------------------------------------------------
+\subsection{Theorem: \lean{routingM0} (Law M0 --- shape compatibility)}
+
+\begin{thm}[M0: shape compatibility]
+For all facilities $f$ and aggregate routes $\rho :
+\mathcal{N}(G_{\mathrm{agg}}).\mathrm{Pos}(\mathrm{region}(f))$:
+\[
+  \mathrm{region}\bigl(\mathcal{N}(\mathrm{graph}).\mathrm{sub}(f,\; \ell(f, \rho))\bigr)
+  \;=\;
+  \mathcal{N}(G_{\mathrm{agg}}).\mathrm{sub}\bigl(\mathrm{region}(f),\; \rho\bigr).
+\]
+The endpoint of the concrete route (in the wine network) maps to the
+aggregate endpoint under \lean{region}.  Proved by cases on $f$ and $\rho$.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem routingM0 (f : Facility) (ar : AgPos (region f)) :
+    region (Wine.network.sub f (lift f ar)) =
+    (Digraph.network GAgg).sub (region f) ar
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- M0: region (sub_wine f (lift f ar)) = sub_agg (region f) ar
+-- For all f, ar: the endpoint of the concrete route has the right region.
+propM0 :: Facility -> AgRoute Region AgLeg -> Bool
+propM0 f ar = region (endpoint (lift f ar)) == agEndpoint (region f) ar
+\end{lstlisting}
+
+
+% --- Law M1 --------------------------------------------------------
+\subsection{Theorem: \lean{routingM1} (Law M1 --- root preservation)}
+
+\begin{thm}[M1: root preservation]
+For all facilities $f$:
+\[
+  \ell\!\left(f,\; \mathcal{N}(G_{\mathrm{agg}}).\mathrm{root}(\mathrm{region}(f))\right)
+  \;=\;
+  \mathcal{N}(\mathrm{graph}).\mathrm{root}(f).
+\]
+Lifting the aggregate empty route gives the concrete empty route.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem routingM1 (f : Facility) :
+    lift f ((Digraph.network GAgg).root (region f)) =
+    Wine.network.root f
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- M1: lift f (agRoot (region f)) = wineRoot f
+-- Lifting the aggregate empty route is the concrete empty route.
+propM1 :: Facility -> Bool
+propM1 f = lift f (agRoot (region f)) == wineRoot f
+\end{lstlisting}
+
+
+% --- Law M2 --------------------------------------------------------
+\subsection{Theorem: \lean{routingM2} (Law M2 --- shift compatibility)}
+
+\begin{thm}[M2: shift compatibility]
+For all $f : \mathrm{Facility}$, aggregate routes $\rho :
+\mathcal{N}(G_{\mathrm{agg}}).\mathrm{Pos}(\mathrm{region}(f))$, and
+$k : \mathcal{N}(G_{\mathrm{agg}}).\mathrm{Pos}(\mathcal{N}(G_{\mathrm{agg}}).\mathrm{sub}(\mathrm{region}(f), \rho))$:
+\[
+  \ell\bigl(f,\; \mathcal{N}(G_{\mathrm{agg}}).\mathrm{shift}(\mathrm{region}(f), \rho, k)\bigr)
+  \;=\;
+  \mathcal{N}(\mathrm{graph}).\mathrm{shift}\!\left(f,\; \ell(f, \rho),\;
+    \ell\!\left(\mathcal{N}(\mathrm{graph}).\mathrm{sub}(f, \ell(f,\rho)),\;
+    \mathrm{M0}^{-1}(k)\right)\right).
+\]
+Lifting a concatenated aggregate route equals the concrete concatenation of
+the lifted segments.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem routingM2 (f : Facility) (ar : AgPos (region f))
+    (k : (Digraph.network GAgg).Pos
+           ((Digraph.network GAgg).sub (region f) ar)) :
+    lift f ((Digraph.network GAgg).shift (region f) ar k) =
+    Wine.network.shift f (lift f ar)
+      (lift (Wine.network.sub f (lift f ar))
+            ((routingM0 f ar).symm cast k))
+\end{lstlisting}
+
+\begin{fidelitynote}
+The transport \lean{(routingM0 f ar).symm cast k} (Lean notation: \texttt{.symm \(\blacktriangleright\) k}) coerces $k$ along the M0
+equality.  In the concrete proof, M0 is \lean{rfl} in all cases, so the
+transport reduces to the identity.  The Haskell rendering omits this coercion
+entirely.
+\end{fidelitynote}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- M2: lift f (agShift (region f) ar k)
+--     = wineShift f (lift f ar) (lift (wineSub f (lift f ar)) k)
+-- (Omitting the transport; it is trivial in all concrete cases.)
+propM2 :: Facility -> AgRoute Region AgLeg
+       -> AgRoute Region AgLeg -> Bool
+propM2 f ar k =
+  lift f (agShift (region f) ar k) ==
+  wineShift f (lift f ar) (lift (wineSub f (lift f ar)) k)
+\end{lstlisting}
+
+
+% --- routingPolicy -------------------------------------------------
+\subsection{Definition: \lean{routingPolicy}}
+
+\begin{defn}[Routing policy as a directed-container morphism]
+The \textbf{routing policy} is the directed-container morphism (cofunctor)
+\[
+  \mathrm{routingPolicy} : \mathrm{DContMorphism}(\mathcal{N}(\mathrm{graph}),\;
+  \mathcal{N}(G_{\mathrm{agg}}))
+\]
+with shape map \lean{region} and position lift \lean{lift}, satisfying laws M0,
+M1, M2.  This verifies Construction~\texttt{con:aggregation}.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def routingPolicy : DContMorphism Wine.network (Digraph.network GAgg) where
+  onShapes := region
+  onPos    := lift
+  m0       := routingM0
+  m1       := routingM1
+  m2       := routingM2
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data DContMorphism d e = DContMorphism
+  { onShapes :: Shape d -> Shape e
+  , onPos    :: (s :: Shape d) -> Pos e (onShapes s) -> Pos d s
+  -- plus proofs of M0, M1, M2
+  }
+
+routingPolicy :: DContMorphism WineNetwork AggNetwork
+routingPolicy = DContMorphism
+  { onShapes = region
+  , onPos    = lift
+  }
+\end{lstlisting}
+
+\begin{fidelitynote}
+A directed-container morphism is a \emph{cofunctor}: the position map goes
+\emph{backwards}, from aggregate positions to concrete positions, just as a
+container morphism's position map is contravariant.  The shape map goes
+forward (facility $\to$ region) while the position lift goes backward (aggregate
+route $\to$ concrete route).
+\end{fidelitynote}
+
+
+%===================================================================
+\section{Translation conventions}
+%===================================================================
+
+\begin{enumerate}
+\item \textbf{Dependent position types.}  The type of \lean{lift} is
+  $\Pi(f : \mathrm{Facility}),\, \mathcal{N}(G_{\mathrm{agg}}).\mathrm{Pos}(\mathrm{region}(f)) \to \mathrm{Route}(f)$.
+  The first argument determines the type of the aggregate position; this is a
+  genuinely dependent type that Haskell cannot express directly.
+
+\item \textbf{Transport in M2.}  The cast \lean{(routingM0 f ar).symm cast k} (Lean: \texttt{.symm \(\blacktriangleright\) k})
+  appears because the endpoint of \lean{lift f ar} has type \lean{Facility},
+  while $k$'s domain is parametrised by a \lean{Region}.  The M0 equality
+  converts between them.  In all concrete cases, M0 is \lean{rfl} and the
+  transport is the identity.
+
+\item \textbf{Proof bodies omitted.}  Only definitions and theorem
+  \emph{statements} are translated.  Lean checks the proofs; the human
+  verifier checks that the \emph{statements} match the intended mathematics.
+\end{enumerate}
+
+\end{document}

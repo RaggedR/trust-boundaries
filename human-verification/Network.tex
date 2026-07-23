@@ -1,0 +1,384 @@
+\documentclass[11pt,a4paper]{article}
+\input{preamble}
+
+\title{Human Verification: \texttt{Containers.Network}\\[4pt]
+  \large Shipping Networks as Directed Containers}
+\author{Machine-generated from \texttt{lean/Network.lean} for review by Neil Ghani}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document presents every definition and theorem \emph{statement} from the
+Lean~4 module \lean{Containers.Network} in three parallel forms: the original
+Lean, a readable Haskell rendering, and precise mathematical English.  Proofs
+are omitted --- they are machine-checked by Lean.  The purpose is to let a
+human verifier confirm that the formalisation captures the intended
+mathematics.
+
+The file verifies Construction~\texttt{con:network} (\S4 of the paper): every
+directed graph $G$ induces a directed container $\mathcal{N}(G)$ whose shapes
+are nodes, whose positions at a node $v$ are finite directed paths out of $v$,
+and whose directed-container laws follow from path-concatenation identities.
+The file ends with the 11-facility Sawasdee Cellars wine network as the
+paper's running example.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%===================================================================
+\section{Overview}
+%===================================================================
+
+A \emph{digraph} $G = (V, E, \mathrm{src}, \mathrm{tgt})$ gives rise to a
+directed container $\mathcal{N}(G)$ --- the \emph{network container} ---
+following the recipe:
+\begin{itemize}
+  \item $\mathbf{Shape} = V$ (nodes);
+  \item $\mathbf{Pos}(v) = \{(w, \rho) \mid \rho \text{ is a path } v \rightsquigarrow w\}$
+    (routes out of $v$, together with their endpoint);
+  \item $\mathbf{root}(v) = (v, \varepsilon)$ (the empty path);
+  \item $\mathbf{sub}(v, (w, \rho)) = w$ (the endpoint of the route);
+  \item $\mathbf{shift}(v, (w, \rho), (u, \sigma)) = (u, \rho \mathbin{+\!\!+} \sigma)$
+    (route concatenation).
+\end{itemize}
+As a category (via \lean{DContCat.cat}) this is the free category on $G$.
+
+%===================================================================
+\section{Directed graphs}
+%===================================================================
+
+% --- Digraph -------------------------------------------------------
+\subsection{Structure: \lean{Digraph}}
+
+\begin{defn}[Directed graph]
+A \textbf{directed (multi-)graph} $G$ consists of a type $V$ of vertices, a
+type $E$ of edges, and two maps $\mathrm{src}, \mathrm{tgt} : E \to V$ giving
+the source and target of each edge.  Parallel edges and loops are allowed; no
+finiteness is assumed.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+structure Digraph where
+  V   : Type
+  E   : Type
+  src : E -> V
+  tgt : E -> V
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data Digraph v e = Digraph
+  { src :: e -> v
+  , tgt :: e -> v
+  }
+\end{lstlisting}
+
+
+% --- Path ----------------------------------------------------------
+\subsection{Inductive type: \lean{Digraph.Path}}
+
+\begin{defn}[Directed path]
+A \textbf{directed path} $\rho : \mathrm{Path}_G(v, w)$ is defined
+inductively:
+\begin{itemize}
+  \item $\mathrm{nil}(v) : \mathrm{Path}_G(v, v)$ --- the empty path at $v$;
+  \item $\mathrm{cons}(e, \rho) : \mathrm{Path}_G(\mathrm{src}(e), w)$ when
+    $\rho : \mathrm{Path}_G(\mathrm{tgt}(e), w)$ --- prepend an edge.
+\end{itemize}
+Paths are cons-at-the-front: the first constructor argument is an outgoing
+edge from the start node, followed by a path from its target.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+inductive Path (G : Digraph) : G.V -> G.V -> Type
+  | nil  (v : G.V)                            : Path G v v
+  | cons (e : G.E) {w : G.V}
+         (p : Path G (G.tgt e) w)             : Path G (G.src e) w
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Approximation: a path is a non-empty-or-empty list of edges.
+-- The endpoint types v, w are not tracked.
+data Path e = Nil | Cons e (Path e)
+\end{lstlisting}
+
+\begin{fidelitynote}
+In Lean, \lean{Path G v w} is a \emph{type} indexed by both endpoints; the
+type system enforces that consecutive edges match.  In Haskell, this
+dependency is erased: a path is just a list of edges, and endpoint
+compatibility is a runtime property only.
+\end{fidelitynote}
+
+
+% --- Path.append ---------------------------------------------------
+\subsection{Definition: \lean{Path.append}}
+
+\begin{defn}[Path concatenation]
+Given paths $\rho : \mathrm{Path}_G(v, w)$ and $\sigma : \mathrm{Path}_G(w, u)$,
+their concatenation $\rho \mathbin{+\!\!+} \sigma : \mathrm{Path}_G(v, u)$ is
+defined by recursion on $\rho$:
+\[
+  \mathrm{nil}(v) \mathbin{+\!\!+} \sigma = \sigma, \qquad
+  \mathrm{cons}(e, \rho) \mathbin{+\!\!+} \sigma =
+    \mathrm{cons}(e,\; \rho \mathbin{+\!\!+} \sigma).
+\]
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def append : {v w u : G.V} -> Path G v w -> Path G w u -> Path G v u
+  | _, _, _, .nil _,    q => q
+  | _, _, _, .cons e p, q => .cons e (p.append q)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+append :: Path e -> Path e -> Path e
+append Nil         q = q
+append (Cons e p)  q = Cons e (append p q)
+\end{lstlisting}
+
+
+% --- nil_append / append_nil / append_assoc -----------------------
+\subsection{Theorems: \lean{Path.nil\_append}, \lean{Path.append\_nil}, \lean{Path.append\_assoc}}
+
+\begin{thm}[Path monoid laws]
+For all paths $\rho : \mathrm{Path}_G(v, w)$,
+$\sigma : \mathrm{Path}_G(w, u)$, $\tau : \mathrm{Path}_G(u, x)$:
+\begin{enumerate}
+  \item \textbf{Left unit}: $\mathrm{nil}(v) \mathbin{+\!\!+} \rho = \rho$ (definitional).
+  \item \textbf{Right unit}: $\rho \mathbin{+\!\!+} \mathrm{nil}(w) = \rho$.
+  \item \textbf{Associativity}: $(\rho \mathbin{+\!\!+} \sigma) \mathbin{+\!\!+} \tau = \rho \mathbin{+\!\!+} (\sigma \mathbin{+\!\!+} \tau)$.
+\end{enumerate}
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem nil_append {v w : G.V} (p : Path G v w) :
+    (Path.nil v).append p = p
+
+theorem append_nil : {v w : G.V} -> (p : Path G v w) ->
+    p.append (Path.nil w) = p
+
+theorem append_assoc : {v w u x : G.V} ->
+    (p : Path G v w) -> (q : Path G w u) -> (r : Path G u x) ->
+    (p.append q).append r = p.append (q.append r)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Left unit  (by definition):  append Nil q = q
+-- Right unit (by induction):   append p Nil = p
+-- Associativity (by induction):
+--   append (append p q) r = append p (append q r)
+\end{lstlisting}
+
+
+%===================================================================
+\section{The network directed container}
+%===================================================================
+
+% --- Digraph.network -----------------------------------------------
+\subsection{Definition: \lean{Digraph.network}}
+
+\begin{defn}[Network container]
+For a digraph $G$, the \textbf{network directed container} $\mathcal{N}(G)$ is
+the directed container with:
+\begin{align*}
+  \mathrm{Shape}   &= G.V, \\
+  \mathrm{Pos}(v)  &= \textstyle\sum_{w : G.V} \mathrm{Path}_G(v, w), \\
+  \mathrm{root}(v) &= (v,\, \mathrm{nil}(v)), \\
+  \mathrm{sub}(v, (w, \rho)) &= w, \\
+  \mathrm{shift}(v, (w, \rho), (u, \sigma)) &= (u,\, \rho \mathbin{+\!\!+} \sigma).
+\end{align*}
+The directed-container laws D1, D2, D4 hold definitionally (\lean{rfl});
+D3 is the right-unit law and D5 is associativity of \lean{append}.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def network (G : Digraph) : DirectedContainer where
+  Shape := G.V
+  Pos v := (w : G.V) * Path G v w
+  root v := <|v, .nil v|>
+  sub _ p := p.1
+  shift _ p q := <|q.1, p.2.append q.2|>
+  d1 _ := rfl
+  d4 _ _ _ := rfl
+  d2 _ _ := rfl
+  d3 _ p := congrArg (Sigma.mk p.1) (Path.append_nil p.2)
+  d5 _ p q r := congrArg (Sigma.mk r.1)
+                  (Path.append_assoc p.2 q.2 r.2)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- A directed container (simplified: positions are just paths, not
+-- endpoint-paired, since Haskell lacks dependent pairs in the same way).
+data Network v e = Network
+  { netRoot  :: v -> (v, Path e)
+  , netSub   :: v -> (v, Path e) -> v
+  , netShift :: v -> (v, Path e) -> (v, Path e) -> (v, Path e)
+  }
+
+network :: Digraph v e -> Network v e
+network g = Network
+  { netRoot  = \v -> (v, Nil)
+  , netSub   = \_ p -> fst p
+  , netShift = \_ p q -> (fst q, append (snd p) (snd q))
+  }
+\end{lstlisting}
+
+\begin{fidelitynote}
+The five directed-container laws (D1--D5) encode the monoidal structure of path
+concatenation.  D1 says the empty path ends at its own start node; D4 says
+the endpoint of a concatenated path is the endpoint of the second segment;
+D3 is right-unit; D5 is associativity.  D2 is the left-unit law, but must be
+stated via a transport along D1 in the general directed-container formalism;
+here it reduces to \lean{rfl} because D1 is definitional.
+\end{fidelitynote}
+
+
+%===================================================================
+\section{The Sawasdee Cellars wine network}
+%===================================================================
+
+% --- Wine.Facility / Wine.Leg / Wine.graph -------------------------
+\subsection{Types and graph: \lean{Wine.Facility}, \lean{Wine.Leg}, \lean{Wine.graph}}
+
+\begin{defn}[Sawasdee Cellars network]
+The \textbf{Sawasdee Cellars} shipping network (\S2 of the paper) has:
+\begin{itemize}
+  \item 11 facilities: three vineyards, the Sawasdee export agency, Melbourne
+    Port, Thai Port, two distributors, three retail shops;
+  \item 10 legs: three vineyard-to-Sawasdee legs (\lean{v1s}, \lean{v2s},
+    \lean{v3s}), one Sawasdee-to-port (\lean{smp}), the sea-freight leg
+    (\lean{sea}), two port-to-distributor legs (\lean{td1}, \lean{td2}), and
+    three distributor-to-retail legs (\lean{d1r1}, \lean{d1r2}, \lean{d2r3}).
+\end{itemize}
+This is a polytree (hence thin as a directed container).
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+inductive Facility
+  | vineyard1 | vineyard2 | vineyard3
+  | sawasdee | melbournePort | thaiPort
+  | distributor1 | distributor2
+  | retail1 | retail2 | retail3
+  deriving DecidableEq, Repr
+
+inductive Leg
+  | v1s | v2s | v3s | smp | sea
+  | td1 | td2 | d1r1 | d1r2 | d2r3
+  deriving DecidableEq, Repr
+
+@[reducible] def graph : Digraph where
+  V := Facility
+  E := Leg
+  src := Leg.src
+  tgt := Leg.tgt
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data Facility = Vineyard1 | Vineyard2 | Vineyard3
+              | Sawasdee  | MelbournePort | ThaiPort
+              | Distributor1 | Distributor2
+              | Retail1 | Retail2 | Retail3
+
+data Leg = V1s | V2s | V3s | Smp | Sea
+         | Td1 | Td2 | D1r1 | D1r2 | D2r3
+\end{lstlisting}
+
+
+% --- Wine.network --------------------------------------------------
+\subsection{Definition: \lean{Wine.network}}
+
+\begin{defn}[Wine shipping network as a directed container]
+\lean{Wine.network} $:= \mathcal{N}(\text{graph})$ is the directed container
+obtained by applying Construction~\texttt{con:network} to the Sawasdee Cellars
+graph.  Its shapes are the 11 facilities, and its positions at a facility $v$
+are all directed routes out of $v$ (including the trivial route).
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def network : DirectedContainer := Digraph.network graph
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+wineNetwork :: Network Facility Leg
+wineNetwork = network wineGraph
+\end{lstlisting}
+
+
+% --- Sanity checks ------------------------------------------------
+\subsection{Sanity checks (examples checked by \lean{rfl})}
+
+\begin{prop}[Route count at Vineyard$_1$]
+The position set $\mathrm{Pos}(\mathrm{vineyard1})$ has exactly 9 elements:
+the empty route, plus one route to each of the eight facilities reachable from
+Vineyard$_1$ (Sawasdee, Melbourne Port, Thai Port, Distributor$_1$,
+Distributor$_2$, Retail$_1$, Retail$_2$, Retail$_3$).
+\end{prop}
+
+\begin{prop}[Retail shop is a sink]
+The position set $\mathrm{Pos}(\mathrm{retail1})$ has exactly 1 element: the
+empty route.  Retail shops are sinks in the shipping graph.
+\end{prop}
+
+\begin{prop}[\lean{sub} is the route endpoint]
+For the full Vineyard$_1 \to$ Retail$_1$ route \lean{fullRoute}:
+$\mathcal{N}(\text{graph}).\mathrm{sub}(\mathrm{vineyard1}, \mathrm{fullRoute})
+= \mathrm{retail1}$.
+\end{prop}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+example : rVineyard1.length = 9 := rfl
+example : rRetail1.length = 1 := rfl
+example : network.sub vineyard1 fullRoute = retail1 := rfl
+example : network.shift vineyard1 (network.root vineyard1) fullRoute
+          = fullRoute := rfl
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- These are definitional equalities in Lean (rfl checks),
+-- corresponding to properties of the concrete enumerations.
+--
+-- routeCount Vineyard1 = 9
+-- routeCount Retail1   = 1
+-- sub Vineyard1 fullRoute = Retail1
+-- shift Vineyard1 (root Vineyard1) fullRoute = fullRoute
+\end{lstlisting}
+
+
+%===================================================================
+\section{Translation conventions}
+%===================================================================
+
+\begin{enumerate}
+\item \textbf{Dependent endpoint indices.}  In Lean, \lean{Path G v w} and
+  positions $\Sigma_{w} \mathrm{Path}_G(v, w)$ are genuinely dependent types.
+  In Haskell, we drop the endpoint tracking and use plain lists or pairs.
+
+\item \textbf{Definitional vs.\ propositional equality.}  Several directed-
+  container laws hold definitionally (\lean{rfl}) because the definitions are
+  chosen so that the relevant type-level equalities reduce by computation.
+  This precision is invisible in the Haskell reading.
+
+\item \textbf{Proof bodies omitted.}  Only definitions and theorem
+  \emph{statements} are translated.  Lean checks the proofs; the human
+  verifier checks that the \emph{statements} match the intended mathematics.
+\end{enumerate}
+
+\end{document}

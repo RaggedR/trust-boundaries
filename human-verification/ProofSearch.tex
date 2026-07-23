@@ -1,0 +1,373 @@
+\documentclass[11pt,a4paper]{article}
+\input{preamble}
+
+\title{Human Verification: \texttt{Containers.ProofSearch}\\[4pt]
+  \large Binary Proof Search Trees as a Directed Container}
+\author{Machine-generated from \texttt{lean/ProofSearch.lean} for review by Neil Ghani}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document presents every definition and theorem \emph{statement} from the
+Lean~4 module \lean{Containers.ProofSearch} in three parallel forms: the
+original Lean, a readable Haskell rendering, and precise mathematical English.
+Proofs are omitted --- they are machine-checked by Lean.  The purpose is to
+let a human verifier confirm that the formalisation captures the intended
+mathematics.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%===================================================================
+\section{Overview}
+%===================================================================
+
+This file realises binary proof-search trees as a directed container.  The
+shapes are binary tree structures; positions are paths from the root to any
+node.  The directed-container comonad structure comes from \emph{path
+concatenation}:
+\begin{itemize}
+  \item $\mathrm{root}(t) = \varepsilon$ (the empty path \lean{here});
+  \item $t \downarrow p = $ the sub-tree rooted at position $p$;
+  \item $p \oplus q = $ the path obtained by following $p$ then $q$.
+\end{itemize}
+
+Laws D1 and D2 hold by $\mathrm{rfl}$ (definitionally from the first cases
+of the recursive definitions).  D3--D5 are verified by structural recursion
+on paths.
+
+The induced comonad on $\mathrm{Ext}(\mathrm{proofSearch})$ has:
+\begin{itemize}
+  \item $\mathrm{extract}(t, v) = v(\varepsilon)$: read the label at the root;
+  \item $\mathrm{duplicate}(t, v) = (t,\; p \mapsto (t \downarrow p,\; q \mapsto v(p \oplus q)))$:
+        at every node, replace the label with the full sub-search from that point.
+\end{itemize}
+A coKleisli morphism $W(X) \to Y$ is a \textbf{proof strategy}: a function
+that inspects the entire search tree to decide what to produce.
+
+%===================================================================
+\section{Shapes: binary search trees}
+%===================================================================
+
+% --- 1. STree -----------------------------------------------------
+\subsection{Inductive type: \lean{STree}}
+
+\begin{defn}[Binary search tree]
+A \textbf{binary search tree shape} is either a \lean{leaf} (a terminal node)
+or a \lean{node} with two sub-trees:
+\[
+  \mathrm{STree} \;::=\; \lean{leaf} \;\mid\; \lean{node}(\ell, r).
+\]
+A leaf represents either a dead end or a success state; the distinction lives
+in the labelling, not the shape.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+inductive STree where
+  | leaf : STree
+  | node : STree -> STree -> STree
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data STree = Leaf | Node STree STree
+  deriving (Show, Eq)
+\end{lstlisting}
+
+
+%===================================================================
+\section{Positions: paths in a tree}
+%===================================================================
+
+% --- 2. SPos ------------------------------------------------------
+\subsection{Inductive type: \lean{SPos}}
+
+\begin{defn}[Position in a binary search tree]
+A \textbf{position} in an \lean{STree} is a path from the root to a node:
+\begin{itemize}
+  \item \lean{here}: the root (valid for any tree);
+  \item \lean{left}$\,p$: descend into the left sub-tree and continue along $p$
+        (only valid for a \lean{node});
+  \item \lean{right}$\,p$: similarly for the right sub-tree.
+\end{itemize}
+For a \lean{leaf}, the only position is \lean{here} --- this is what makes a
+leaf a dead end.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+inductive SPos : STree -> Type where
+  | here  : SPos t
+  | left  : SPos l -> SPos (.node l r)
+  | right : SPos r -> SPos (.node l r)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data SPos t where
+  Here  :: SPos t
+  Left  :: SPos l -> SPos (Node l r)
+  Right :: SPos r -> SPos (Node l r)
+-- Requires GADTs or can be approximated as:
+data SPos = Here | GoLeft SPos | GoRight SPos
+\end{lstlisting}
+
+\begin{fidelitynote}
+In Lean, \lean{SPos} is indexed by the tree: \lean{SPos\,t} is the type of
+positions \emph{in} $t$.  The \lean{left} constructor is only well-typed when
+the tree is a \lean{node}.  In plain Haskell, the index is not enforced;
+\lean{GoLeft Here} on a leaf would type-check but be semantically invalid.
+The GADT version recovers the index.
+\end{fidelitynote}
+
+
+%===================================================================
+\section{The directed-container operations}
+%===================================================================
+
+% --- 3. STree.sub -------------------------------------------------
+\subsection{Definition: \lean{STree.sub}}
+
+\begin{defn}[Sub-tree at a position]
+The sub-tree at position $p$ in tree $t$:
+\begin{align*}
+  t \downarrow \lean{here} &= t, \\
+  (\lean{node}\,\ell\,r) \downarrow \lean{left}(p) &= \ell \downarrow p, \\
+  (\lean{node}\,\ell\,r) \downarrow \lean{right}(p) &= r \downarrow p.
+\end{align*}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def STree.sub : (t : STree) -> SPos t -> STree
+  | t, .here => t
+  | .node l _, .left p => l.sub p
+  | .node _ r, .right p => r.sub p
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+sub :: STree -> SPos -> STree
+sub t    Here        = t
+sub (Node l _) (GoLeft  p) = sub l p
+sub (Node _ r) (GoRight p) = sub r p
+sub Leaf   _         = error "invalid position"
+\end{lstlisting}
+
+
+% --- 4. STree.shift -----------------------------------------------
+\subsection{Definition: \lean{STree.shift}}
+
+\begin{defn}[Shift (path concatenation)]
+The shift $p \oplus q$ embeds position $q$ in the sub-tree at $p$ back
+into the whole tree --- this is path concatenation:
+\begin{align*}
+  t.\lean{shift}(\lean{here}, q) &= q, \\
+  (\lean{node}\,\ell\,r).\lean{shift}(\lean{left}(p), q)
+    &= \lean{left}(\ell.\lean{shift}(p, q)), \\
+  (\lean{node}\,\ell\,r).\lean{shift}(\lean{right}(p), q)
+    &= \lean{right}(r.\lean{shift}(p, q)).
+\end{align*}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def STree.shift : (t : STree) -> (p : SPos t) -> SPos (t.sub p) -> SPos t
+  | _, .here, q => q
+  | .node l _, .left p, q => .left (l.shift p q)
+  | .node _ r, .right p, q => .right (r.shift p q)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+shift :: STree -> SPos -> SPos -> SPos
+shift _          Here        q = q
+shift (Node l _) (GoLeft  p) q = GoLeft  (shift l p q)
+shift (Node _ r) (GoRight p) q = GoRight (shift r p q)
+shift Leaf       _           _ = error "invalid position"
+\end{lstlisting}
+
+
+%===================================================================
+\section{Directed-container laws}
+%===================================================================
+
+% --- 5. STree.shift_root (D3) ------------------------------------
+\subsection{Theorem: \lean{STree.shift\_root} (D3)}
+
+\begin{thm}[D3: right identity]
+Shifting by the root of the sub-tree recovers the original position (right
+unit law: $p \oplus \varepsilon = p$):
+\[
+  t.\lean{shift}(p, \lean{here}) \;=\; p
+  \quad\text{for all } p : \mathrm{SPos}(t).
+\]
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def STree.shift_root : (t : STree) -> (p : SPos t) ->
+    t.shift p .here = p
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- D3 (right identity):
+-- prop_shift_root t p = shift t p Here == p
+\end{lstlisting}
+
+
+% --- 6. STree.sub_shift (D4) -------------------------------------
+\subsection{Theorem: \lean{STree.sub\_shift} (D4)}
+
+\begin{thm}[D4: sub-trees nest along the shift]
+The sub-tree at a concatenated path equals descending twice:
+\[
+  t \downarrow (p \oplus q) \;=\; (t \downarrow p) \downarrow q
+  \quad\text{for all } p : \mathrm{SPos}(t),\; q : \mathrm{SPos}(t \downarrow p).
+\]
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def STree.sub_shift : (t : STree) -> (p : SPos t) -> (q : SPos (t.sub p)) ->
+    t.sub (t.shift p q) = (t.sub p).sub q
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- D4:
+-- prop_sub_shift t p q = sub t (shift t p q) == sub (sub t p) q
+\end{lstlisting}
+
+
+% --- 7. STree.shift_assoc (D5) -----------------------------------
+\subsection{Theorem: \lean{STree.shift\_assoc} (D5)}
+
+\begin{thm}[D5: shift is associative]
+Path concatenation is associative (with transport along D4):
+\[
+  t.\lean{shift}(p \oplus q,\; D4^{-1} \triangleright r)
+  \;=\;
+  t.\lean{shift}(p,\; (t \downarrow p).\lean{shift}(q, r))
+\]
+for all $p : \mathrm{SPos}(t)$, $q : \mathrm{SPos}(t \downarrow p)$,
+$r : \mathrm{SPos}((t \downarrow p) \downarrow q)$.
+
+The transport $D4^{-1} \triangleright r$ is needed because $r$ lives over
+$(t \downarrow p) \downarrow q$, while the left-hand side needs it over
+$t \downarrow (p \oplus q)$; D4 witnesses that these two types are equal.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def STree.shift_assoc : (t : STree) -> (p : SPos t) -> (q : SPos (t.sub p)) ->
+    (r : SPos ((t.sub p).sub q)) ->
+    t.shift (t.shift p q) ((t.sub_shift p q).symm [> r) =
+      t.shift p ((t.sub p).shift q r)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- D5 (associativity, transport suppressed):
+-- prop_shift_assoc t p q r =
+--   shift t (shift t p q) r == shift t p (shift (sub t p) q r)
+\end{lstlisting}
+
+\begin{fidelitynote}
+The Lean statement requires $r$ to be transported along $\mathrm{sub\_shift}$
+(D4) from the fibre over $(t \downarrow p) \downarrow q$ to the fibre over
+$t \downarrow (p \oplus q)$.  In Haskell, positions are unindexed and the
+transport is invisible.
+\end{fidelitynote}
+
+
+%===================================================================
+\section{The directed container}
+%===================================================================
+
+% --- 8. proofSearch -----------------------------------------------
+\subsection{Definition: \lean{proofSearch}}
+
+\begin{defn}[The \lean{proofSearch} directed container]
+Define the directed container of binary proof-search trees as:
+\[
+  \mathrm{proofSearch} \;=\; (\mathrm{STree},\; \mathrm{SPos},\;
+  \lean{here},\; \lean{STree.sub},\; \lean{STree.shift})
+\]
+with:
+\begin{itemize}
+  \item D1: $t \downarrow \lean{here} = t$ (by $\mathrm{rfl}$);
+  \item D2: $t.\lean{shift}(\lean{here}, q) = q$ (by $\mathrm{rfl}$);
+  \item D3: $\lean{STree.shift\_root}$;
+  \item D4: $\lean{STree.sub\_shift}$;
+  \item D5: $\lean{STree.shift\_assoc}$.
+\end{itemize}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def proofSearch : DirectedContainer where
+  Shape := STree
+  Pos := SPos
+  root := fun _ => .here
+  sub := STree.sub
+  shift := STree.shift
+  d1 := fun _ => rfl
+  d4 := STree.sub_shift
+  d2 := fun _ _ => rfl
+  d3 := STree.shift_root
+  d5 := STree.shift_assoc
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+proofSearch :: DirectedContainer STree SPos
+proofSearch = DirectedContainer
+  { shape = STree
+  , pos   = SPos
+  , root  = const Here
+  , sub   = sub
+  , shift = shift
+  -- D1: sub t Here = t              (by definition)
+  -- D2: shift t Here q = q          (by definition)
+  -- D3: shift t p Here = p          (STree.shift_root)
+  -- D4: sub t (shift t p q) = sub (sub t p) q  (STree.sub_shift)
+  -- D5: shift t (shift t p q) r = shift t p (shift (sub t p) q r)  (D5)
+  }
+\end{lstlisting}
+
+
+%===================================================================
+\section{Translation conventions}
+%===================================================================
+
+\begin{enumerate}
+\item \textbf{D1 and D2 are definitional.}  The first case in both
+  \lean{STree.sub} and \lean{STree.shift} handles \lean{here}, giving
+  $t \downarrow \lean{here} = t$ and $t.\lean{shift}(\lean{here}, q) = q$
+  by $\mathrm{rfl}$.  D3--D5 require structural recursion.
+
+\item \textbf{Positions are indexed.}  In Lean, \lean{SPos\,t} is the type of
+  positions in $t$.  The tree structure constrains which constructors are
+  valid.  Haskell approximates this with an unindexed \lean{SPos} type.
+
+\item \textbf{The D5 transport.}  D5 requires a position to be transported
+  along D4 before shift can consume it.  This transport is $\mathrm{rfl}$
+  in both the \lean{here} and \lean{left}/\lean{right} cases (the recursion
+  is definitional), but it must be stated in the type of D5 to make the law
+  well-typed.
+
+\item \textbf{Comonad reading.}  The induced comonad on
+  $\mathrm{Ext}(\mathrm{proofSearch})$ is defined by the general machinery of
+  directed containers; its laws follow from D1--D5.  This document only
+  formalises the directed-container structure itself.
+
+\item \textbf{Proof bodies omitted.}  Only statements are translated.
+\end{enumerate}
+
+\end{document}

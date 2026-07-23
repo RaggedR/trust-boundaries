@@ -1,0 +1,459 @@
+\documentclass[11pt,a4paper]{article}
+\input{preamble}
+
+\title{Human Verification: \texttt{Containers.Tracking}\\[4pt]
+  \large Compositional Tracking on Shipping Networks}
+\author{Machine-generated from \texttt{lean/Tracking.lean} for review by Neil Ghani}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document presents every definition and theorem \emph{statement} from the
+Lean~4 module \lean{Containers.Tracking} in three parallel forms: the original
+Lean, a readable Haskell rendering, and precise mathematical English.  Proofs
+are omitted --- they are machine-checked by Lean.  The purpose is to let a
+human verifier confirm that the formalisation captures the intended
+mathematics.
+
+The file verifies Construction~\texttt{con:tracking} (\S4.3 of the paper): for
+any monoid $M$, a \textbf{compositional tracking} of $M$-data on a shipping
+network is in bijection with edge-labellings $G.E \to M$.  The file also
+provides three concrete monoid instances and a cold-chain worked example.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%===================================================================
+\section{Overview}
+%===================================================================
+
+A tracking assigns a monoid value $d(v, \rho)$ to every route $\rho$ out of
+node $v$, compatibly with the directed-container structure:
+\begin{itemize}
+  \item \textbf{T-root}: $d(v, \mathrm{root}(v)) = 1$ (empty route gets unit);
+  \item \textbf{T-shift}: $d(v, \mathrm{shift}(v, \rho, \sigma)) = d(v, \rho)
+    \cdot d(\mathrm{sub}(v, \rho), \sigma)$ (concatenation becomes product).
+\end{itemize}
+The main theorem says this is exactly an edge-labelling: fold the label along the
+path.
+
+
+%===================================================================
+\section{Bundled monoid}
+%===================================================================
+
+% --- Monoid' -------------------------------------------------------
+\subsection{Structure: \lean{Monoid'}}
+
+\begin{defn}[Bundled monoid]
+A \textbf{bundled monoid} $M$ consists of a carrier type $M.\mathrm{M}$, a
+binary operation $M.\mathrm{mul}$, a unit $M.\mathrm{one}$, and proofs of
+associativity, left-unit, and right-unit.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+structure Monoid' where
+  M         : Type
+  mul       : M -> M -> M
+  one       : M
+  mul_assoc : forall a b c, mul (mul a b) c = mul a (mul b c)
+  one_mul   : forall a, mul one a = a
+  mul_one   : forall a, mul a one = a
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Standard Haskell typeclass:
+class Monoid m where
+  mempty  :: m
+  mappend :: m -> m -> m
+  -- laws: mappend mempty x = x
+  --       mappend x mempty = x
+  --       mappend (mappend x y) z = mappend x (mappend y z)
+\end{lstlisting}
+
+
+%===================================================================
+\section{The Tracking structure}
+%===================================================================
+
+% --- Tracking ------------------------------------------------------
+\subsection{Structure: \lean{Tracking}}
+
+\begin{defn}[Compositional tracking]
+A \textbf{compositional tracking} of \lean{Mon}-data on the network
+$\mathcal{N}(G)$ is a structure consisting of:
+\begin{itemize}
+  \item a function $d : (v : G.V) \to \mathcal{N}(G).\mathrm{Pos}(v) \to M$,
+  \item proof of \textbf{T-root}: $d(v, \mathcal{N}(G).\mathrm{root}(v)) = 1$
+    for all $v$, and
+  \item proof of \textbf{T-shift}: for all $v$, $\rho$, $\sigma$,
+    $d(v, \mathcal{N}(G).\mathrm{shift}(v, \rho, \sigma)) =
+      d(v, \rho) \cdot d(\mathcal{N}(G).\mathrm{sub}(v, \rho), \sigma)$.
+\end{itemize}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+structure Tracking (G : Digraph) (Mon : Monoid') where
+  d       : (v : G.V) -> (network G).Pos v -> Mon.M
+  d_root  : forall v, d v ((network G).root v) = Mon.one
+  d_shift : forall (v : G.V) (rho : (network G).Pos v)
+              (sigma : (network G).Pos ((network G).sub v rho)),
+      d v ((network G).shift v rho sigma) =
+        Mon.mul (d v rho) (d ((network G).sub v rho) sigma)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data Tracking g m = Tracking
+  { trackVal   :: Node g -> Route g -> m
+  -- laws (not enforced by the type):
+  -- trackVal v (root v) = mempty
+  -- trackVal v (shift v rho sigma) =
+  --   mappend (trackVal v rho) (trackVal (sub v rho) sigma)
+  }
+\end{lstlisting}
+
+
+%===================================================================
+\section{Fold along a path}
+%===================================================================
+
+% --- foldPath ------------------------------------------------------
+\subsection{Definition: \lean{foldPath}}
+
+\begin{defn}[Path fold]
+Given an edge-labelling $f : G.E \to M$, the \textbf{fold} of $f$ along a path
+$\rho : \mathrm{Path}_G(v, w)$ is:
+\[
+  \mathrm{foldPath}(M, f, \mathrm{nil}(v)) = 1, \qquad
+  \mathrm{foldPath}(M, f, \mathrm{cons}(e, \rho)) = f(e) \cdot \mathrm{foldPath}(M, f, \rho).
+\]
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def foldPath {G : Digraph} (Mon : Monoid') (f : G.E -> Mon.M) :
+    {v w : G.V} -> Path G v w -> Mon.M
+  | _, _, .nil _    => Mon.one
+  | _, _, .cons e p => Mon.mul (f e) (foldPath Mon f p)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+foldPath :: Monoid m => (e -> m) -> [e] -> m
+foldPath _ []     = mempty
+foldPath f (e:es) = mappend (f e) (foldPath f es)
+-- equivalently: foldMap f
+\end{lstlisting}
+
+
+% --- foldPath_append -----------------------------------------------
+\subsection{Theorem: \lean{foldPath\_append}}
+
+\begin{thm}[Fold distributes over concatenation]
+For all edge-labellings $f$ and paths $\rho, \sigma$:
+\[
+  \mathrm{foldPath}(M, f, \rho \mathbin{+\!\!+} \sigma) =
+  \mathrm{foldPath}(M, f, \rho) \cdot \mathrm{foldPath}(M, f, \sigma).
+\]
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem foldPath_append {G : Digraph} (Mon : Monoid') (f : G.E -> Mon.M) :
+    forall {v w u : G.V} (p : Path G v w) (q : Path G w u),
+    foldPath Mon f (p.append q) =
+      Mon.mul (foldPath Mon f p) (foldPath Mon f q)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- foldPath f (p ++ q) = mappend (foldPath f p) (foldPath f q)
+-- This is the standard homomorphism property of foldMap.
+\end{lstlisting}
+
+
+%===================================================================
+\section{The bijection}
+%===================================================================
+
+% --- Tracking.ofEdge -----------------------------------------------
+\subsection{Definition: \lean{Tracking.ofEdge}}
+
+\begin{defn}[Edge-labelling $\to$ tracking]
+Given an edge-labelling $f : G.E \to M$, the induced tracking has
+$d(v, (w, \rho)) := \mathrm{foldPath}(M, f, \rho)$.  T-root holds because
+$\mathrm{foldPath}$ of the empty path is $1$; T-shift holds by
+\lean{foldPath\_append}.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Tracking.ofEdge {G : Digraph} {Mon : Monoid'} (f : G.E -> Mon.M) :
+    Tracking G Mon where
+  d _ rho    := foldPath Mon f rho.2
+  d_root _ := rfl
+  d_shift _ rho sigma := foldPath_append Mon f rho.2 sigma.2
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+ofEdge :: Monoid m => (e -> m) -> Tracking g m
+ofEdge f = Tracking { trackVal = \_ route -> foldPath f (path route) }
+\end{lstlisting}
+
+
+% --- singleEdge / Tracking.toEdge ----------------------------------
+\subsection{Definitions: \lean{singleEdge} and \lean{Tracking.toEdge}}
+
+\begin{defn}[Single-edge position and restriction]
+The \textbf{single-edge position} at the source of $e$ is the route
+$(G.\mathrm{tgt}(e),\, \mathrm{cons}(e, \mathrm{nil}))
+\in \mathcal{N}(G).\mathrm{Pos}(G.\mathrm{src}(e))$.
+
+Given a tracking $t$, the \textbf{restriction to edges} is
+$\mathrm{toEdge}(t)(e) := t.d(G.\mathrm{src}(e),\, \mathrm{singleEdge}(G, e))$.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def singleEdge (G : Digraph) (e : G.E) : (network G).Pos (G.src e) :=
+  <|G.tgt e, Path.cons e (.nil (G.tgt e))|>
+
+def Tracking.toEdge {G : Digraph} {Mon : Monoid'} (t : Tracking G Mon) :
+    G.E -> Mon.M :=
+  fun e => t.d (G.src e) (singleEdge G e)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+singleEdge :: Digraph v e -> e -> Route v e
+singleEdge g e = (tgt g e, [e])
+
+toEdge :: Tracking g m -> e -> m
+toEdge t e = trackVal t (src g e) (singleEdge g e)
+\end{lstlisting}
+
+
+% --- round-trip theorems ------------------------------------------
+\subsection{Theorems: \lean{Tracking.ofEdge\_toEdge} and \lean{Tracking.toEdge\_ofEdge}}
+
+\begin{thm}[Bijection round trips]
+The maps \lean{toEdge} and \lean{ofEdge} are mutually inverse:
+\begin{enumerate}
+  \item \textbf{Left inverse}: For every tracking $t$,
+    $\mathrm{ofEdge}(\mathrm{toEdge}(t)) = t$.  (Uses T-root and T-shift
+    induction along the path: \lean{foldPath\_eq\_tracking}.)
+  \item \textbf{Right inverse}: For every edge-labelling $f$,
+    $\mathrm{toEdge}(\mathrm{ofEdge}(f)) = f$.  (Immediate: fold of the
+    single-edge path is $f(e) \cdot 1 = f(e)$.)
+\end{enumerate}
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Tracking.ofEdge_toEdge {G : Digraph} {Mon : Monoid'}
+    (t : Tracking G Mon) : Tracking.ofEdge (t.toEdge) = t
+
+theorem Tracking.toEdge_ofEdge {G : Digraph} {Mon : Monoid'}
+    (f : G.E -> Mon.M) : (Tracking.ofEdge f).toEdge = f
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- ofEdge . toEdge = id    (for trackings)
+-- toEdge . ofEdge = id    (for edge-labellings)
+\end{lstlisting}
+
+
+% --- trackingBijection ---------------------------------------------
+\subsection{Definition: \lean{trackingBijection}}
+
+\begin{defn}[Tracking bijection (Main Theorem)]
+The pair $(\mathrm{toEdge}, \mathrm{ofEdge})$ constitutes a bijection
+\[
+  \mathrm{Tracking}(G, M) \;\cong\; (G.E \to M).
+\]
+Bundled as a \lean{Bijection} record with the two round-trip proofs.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def trackingBijection (G : Digraph) (Mon : Monoid') :
+    Bijection (Tracking G Mon) (G.E -> Mon.M) where
+  toFun     := Tracking.toEdge
+  invFun    := Tracking.ofEdge
+  left_inv  := Tracking.ofEdge_toEdge
+  right_inv := Tracking.toEdge_ofEdge
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- The bijection (toEdge, ofEdge) establishes:
+-- Tracking G M  ~=  (Edge G -> M)
+trackingBijection :: Iso (Tracking g m) (e -> m)
+trackingBijection = Iso toEdge ofEdge
+\end{lstlisting}
+
+
+%===================================================================
+\section{Monoid instances}
+%===================================================================
+
+% --- maxTempMonoid -------------------------------------------------
+\subsection{Definition: \lean{maxTempMonoid}}
+
+\begin{defn}[Max-temperature monoid]
+The \textbf{max-temperature monoid} $(\{\mathrm{Cold}, \mathrm{Warm}\},
+\max, \mathrm{Cold})$ is the idempotent monoid for peak-temperature tracking:
+\lean{Warm} dominates \lean{Cold} (absorbs it), and \lean{Cold} is the unit.
+A single warm leg along any route dominates all cold legs; no subsequent
+refrigeration can undo it.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+inductive MaxTemp | Cold | Warm
+  deriving DecidableEq, Repr
+
+def maxTempMonoid : Monoid' where
+  M         := MaxTemp
+  mul       := maxTempMul
+  one       := .Cold
+  one_mul   := fun x => by cases x <;> rfl
+  mul_one   := fun x => by cases x <;> rfl
+  mul_assoc := fun x y z => by cases x <;> cases y <;> cases z <;> rfl
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data MaxTemp = Cold | Warm deriving (Eq, Show)
+
+instance Semigroup MaxTemp where
+  Cold <> x = x
+  Warm <> _ = Warm
+
+instance Monoid MaxTemp where
+  mempty = Cold
+\end{lstlisting}
+
+
+% --- coldChainMonoid -----------------------------------------------
+\subsection{Definition: \lean{coldChainMonoid}}
+
+\begin{defn}[Cold-chain monoid]
+The \textbf{cold-chain monoid} $(\mathrm{Bool}, \mathbin{\&\&}, \mathrm{true})$:
+$\mathrm{true}$ means the chain is intact; $\mathrm{false}$ means it is broken.
+Once one leg breaks the chain, no subsequent leg can repair it.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def coldChainMonoid : Monoid' where
+  M         := Bool
+  mul       := (· && ·)
+  one       := true
+  one_mul   := Bool.true_and
+  mul_one   := Bool.and_true
+  mul_assoc := Bool.and_assoc
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- (All, getAll) from Data.Monoid: mempty = True, mappend = (&&)
+newtype ColdChain = ColdChain Bool
+
+instance Monoid ColdChain where
+  mempty = ColdChain True
+  mappend (ColdChain a) (ColdChain b) = ColdChain (a && b)
+\end{lstlisting}
+
+
+% --- licListMonoid -------------------------------------------------
+\subsection{Definition: \lean{licListMonoid}}
+
+\begin{defn}[Licence-accumulation monoid]
+For any licence type $L$, the \textbf{licence-list monoid} $(\mathrm{List}(L),
+\mathbin{++}, [])$ accumulates the union (as a list) of licences required by
+each leg along a route.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def licListMonoid (L : Type) : Monoid' where
+  M         := List L
+  mul       := (· ++ ·)
+  one       := []
+  one_mul   := List.nil_append
+  mul_one   := List.append_nil
+  mul_assoc := List.append_assoc
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Standard list monoid: mempty = [], mappend = (++)
+type LicList l = [l]
+\end{lstlisting}
+
+
+%===================================================================
+\section{Cold-chain worked example}
+%===================================================================
+
+\subsection{Example: warm last-mile leg breaks the cold chain}
+
+\begin{prop}[Warm leg breaks the chain]
+In a 2-node graph (\lean{Hub} $\to$ \lean{Shop}) with a single leg
+\lean{lastMile} labelled $\mathrm{false}$ (warm), the tracking value of the
+route Hub $\to$ Shop is $\mathrm{false}$, and the empty route is $\mathrm{true}$.
+\end{prop}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+-- The cold-chain tracking induced by warmLabel (lastMile => false):
+example : coldTracking.d Hub
+    <|Shop, Path.cons (G := coldGraph) .lastMile
+                      (.nil (G := coldGraph) Shop)|> = false
+
+-- The empty route is intact:
+example : coldTracking.d Hub <|Hub, .nil (G := coldGraph) Hub|> = true
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+warmLabel :: Arc -> Bool
+warmLabel LastMile = False
+
+coldTracking :: Tracking ColdGraph Bool
+coldTracking = ofEdge warmLabel
+
+-- trackVal coldTracking Hub [LastMile] = False
+-- trackVal coldTracking Hub []        = True
+\end{lstlisting}
+
+
+%===================================================================
+\section{Translation conventions}
+%===================================================================
+
+\begin{enumerate}
+\item \textbf{Bundled monoid.}  Lean uses a record \lean{Monoid'} instead of a
+  typeclass, matching the bundled style of the rest of the formalisation.
+  In Haskell, the standard \hask{Monoid} typeclass plays the same role.
+
+\item \textbf{T-root and T-shift as data.}  The tracking laws are bundled into
+  the \lean{Tracking} structure as proof fields, not stated as separate
+  theorems.  In Haskell they are law comments; QuickCheck could test them.
+
+\item \textbf{Proof bodies omitted.}  Only definitions and theorem
+  \emph{statements} are translated.  Lean checks the proofs; the human
+  verifier checks that the \emph{statements} match the intended mathematics.
+\end{enumerate}
+
+\end{document}

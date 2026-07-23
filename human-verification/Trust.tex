@@ -1,0 +1,1313 @@
+\documentclass[11pt,a4paper]{article}
+\input{preamble}
+
+\title{Human Verification: \texttt{Trust}\\[4pt]
+  \large The Certificate Lemma and Transport of Trust}
+\author{Machine-generated from \texttt{lean/Trust.lean} for review by Neil Ghani}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document presents every definition and theorem \emph{statement} from the
+Lean~4 module \lean{Containers.Trust} in three parallel forms: the original
+Lean, a readable Haskell rendering, and precise mathematical English.  Proofs
+are omitted --- they are machine-checked by Lean.  This is the central file
+of the trust-systems formalisation, providing the definitions and results
+referenced by all other modules.
+
+Main results formalised here: (i) the certificate lemma (Lemma 2.2): $\tau$
+is the greatest sound assignment; (ii) equivalence of the fixpoint form and
+the derivation-sup (max-min) form of $\tau$; (iii) lax transport of trust
+along morphisms (Lemma 3.2); (iv) consolidation preservation (Theorem 3):
+a genuine position map preserves $\tau$ exactly; (v) the circular-citation
+counterexample; and (vi) the shape-only counterexample.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%===================================================================
+\section{Overview}
+%===================================================================
+
+A \emph{trust system} is a dependency structure graded in a poset of check
+strengths $T$.  Claims have checking steps with premises; the grade records
+how strong a check each step received.  The \emph{canonical trust} $\tau(x)$
+is the widest-bottleneck value: the best derivation's weakest link.
+
+Two corrections to the prose notes discovered during formalisation:
+
+\begin{enumerate}
+\item Lemma 2.2 (i) needs $T$ to be a \textbf{chain} (linear order), not
+  merely a lattice: in a general lattice, a finite sup need not be attained
+  by any element.  All deployed check-posets are finite chains.
+\item Lemma 3.2 needs $\phi(\bot) = \bot$ (``unchecked maps to unchecked''):
+  monotonicity alone fails on underivable claims.
+\end{enumerate}
+
+%===================================================================
+\section{The check-strength chain}
+%===================================================================
+
+\subsection{Class: \lean{Chain}}
+
+\begin{defn}[Chain]
+A \textbf{chain} (bounded decidable linear order) is a type $T$ with a
+relation $\le$, a bottom element $\bot$, satisfying: reflexivity,
+transitivity, antisymmetry, totality, $\bot \le a$ for all $a$, and
+decidable $\le$.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+class Chain (T : Type) extends LE T where
+  bot       : T
+  le_refl   : forall a : T, a <= a
+  le_trans  : forall {a b c : T}, a <= b -> b <= c -> a <= c
+  le_antisymm : forall {a b : T}, a <= b -> b <= a -> a = b
+  le_total  : forall a b : T, a <= b \/ b <= a
+  bot_le    : forall a : T, bot <= a
+  dec       : forall a b : T, Decidable (a <= b)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+class (Eq t, Ord t, Bounded t) => Chain t where
+  bot :: t
+  bot = minBound
+-- In Haskell, Ord + Bounded gives a total order with a bottom.
+-- Decidability is automatic (all Haskell values are decidable).
+\end{lstlisting}
+
+\begin{fidelitynote}
+In Lean the chain structure is a typeclass with explicit proof fields.
+Lean's \lean{instance} mechanism checks these proofs at class instantiation
+time.  In Haskell, \hask{Ord} provides totality and decidability; antisymmetry
+and transitivity are assumed (no proof terms).
+\end{fidelitynote}
+
+%===================================================================
+\section{Meet and join on a chain}
+%===================================================================
+
+\subsection{Definitions: \lean{cmin} and \lean{cmax}}
+
+\begin{defn}[Meet and join]
+For $a, b : T$ in a chain:
+\begin{align*}
+  \mathrm{cmin}(a, b) &= \text{if } a \le b \text{ then } a \text{ else } b
+    && (\text{meet, weaker of the two}), \\
+  \mathrm{cmax}(a, b) &= \text{if } a \le b \text{ then } b \text{ else } a
+    && (\text{join, stronger of the two}).
+\end{align*}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def cmin (a b : T) : T := if a <= b then a else b
+def cmax (a b : T) : T := if a <= b then b else a
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+cmin :: (Ord t) => t -> t -> t
+cmin a b = if a <= b then a else b
+
+cmax :: (Ord t) => t -> t -> t
+cmax a b = if a <= b then b else a
+
+-- Equivalently: cmin = min, cmax = max.
+\end{lstlisting}
+
+\subsection{Theorems: \lean{cmin} and \lean{cmax} properties}
+
+The following basic facts about \lean{cmin} and \lean{cmax} are proved
+and used throughout:
+
+\begin{thm}[Meet and join properties]
+\begin{align*}
+  &\mathrm{cmin}(a,b) \le a && \text{(\lean{cmin\_le\_left})} \\
+  &\mathrm{cmin}(a,b) \le b && \text{(\lean{cmin\_le\_right})} \\
+  &c \le a \wedge c \le b \implies c \le \mathrm{cmin}(a,b) && \text{(\lean{le\_cmin})} \\
+  &a \le \mathrm{cmax}(a,b) && \text{(\lean{le\_cmax\_left})} \\
+  &b \le \mathrm{cmax}(a,b) && \text{(\lean{le\_cmax\_right})} \\
+  &\mathrm{cmax}(a,b) = a \vee \mathrm{cmax}(a,b) = b && \text{(\lean{cmax\_cases})}
+\end{align*}
+The last property (\lean{cmax\_cases}) uses linearity of the chain and is the
+attainment fact that makes the soundness direction of the certificate lemma work.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem cmin_le_left (a b : T) : cmin a b <= a
+theorem cmin_le_right (a b : T) : cmin a b <= b
+theorem le_cmin {a b c : T} (ha : c <= a) (hb : c <= b) : c <= cmin a b
+theorem le_cmax_left (a b : T) : a <= cmax a b
+theorem le_cmax_right (a b : T) : b <= cmax a b
+theorem cmax_cases (a b : T) : cmax a b = a \/ cmax a b = b
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Standard properties of min/max on a total order.
+-- cmax_cases: max a b == a || max a b == b   (always True)
+\end{lstlisting}
+
+%===================================================================
+\section{Folds over lists}
+%===================================================================
+
+\subsection{Theorems: folds of \lean{cmin} and \lean{cmax} over lists}
+
+The following are helper lemmas used in the proofs of the main theorems.
+They express standard properties of iterated meets and joins over lists.
+
+\begin{thm}[List fold lemmas]
+Let $l$ be a list and $\mathrm{init}$ an initial value.
+\begin{align*}
+  &a \in l \implies a \le l.\mathrm{foldr}(\mathrm{cmax}, \mathrm{init})
+  && \text{(\lean{le\_foldr\_max})} \\
+  &l.\mathrm{foldr}(\mathrm{cmax}, \mathrm{init}) = \mathrm{init}
+   \;\vee\; l.\mathrm{foldr}(\mathrm{cmax}, \mathrm{init}) \in l
+  && \text{(\lean{foldr\_max\_cases})} \\
+  &a \in l \implies l.\mathrm{foldr}(\mathrm{cmin}, \mathrm{init}) \le a
+  && \text{(\lean{foldr\_min\_le})} \\
+  &l.\mathrm{foldr}(\mathrm{cmin}, \mathrm{init}) \le \mathrm{init}
+  && \text{(\lean{foldr\_min\_le\_init})}
+\end{align*}
+\lean{foldr\_max\_cases} is the key attainment lemma: on a chain, the
+max-fold is always attained by the initial value or a list member.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem le_foldr_max {a : T} {l : List T} (h : a in l) (init : T) :
+    a <= l.foldr cmax init
+
+theorem foldr_max_cases : forall (l : List T) (init : T),
+    l.foldr cmax init = init \/ l.foldr cmax init in l
+
+theorem foldr_min_le {a : T} {l : List T} (h : a in l) (init : T) :
+    l.foldr cmin init <= a
+
+theorem foldr_min_le_init : forall (l : List T) (init : T),
+    l.foldr cmin init <= init
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- le_foldr_max:    a `elem` l => a <= foldr cmax init l
+-- foldr_max_cases: foldr cmax init l == init || foldr cmax init l `elem` l
+-- foldr_min_le:    a `elem` l => foldr cmin init l <= a
+-- foldr_min_le_init: foldr cmin init l <= init
+\end{lstlisting}
+
+\subsection{Theorems: monotonicity lemmas for folds}
+
+\begin{thm}[Monotonicity of folds]
+\begin{enumerate}
+\item \textbf{\lean{foldr\_min\_map\_mono}}: pointwise domination of mapped
+  \lean{cmin}-folds: if $f(a) \le g(a)$ for all $a \in l$ and $i_1 \le i_2$,
+  then $(l.\mathrm{map}\,f).\mathrm{foldr}(\mathrm{cmin}, i_1) \le
+  (l.\mathrm{map}\,g).\mathrm{foldr}(\mathrm{cmin}, i_2)$.
+
+\item \textbf{\lean{phi\_foldr\_min}}: a monotone map is lax for
+  \lean{cmin}-folds:
+  $\phi(l.\mathrm{foldr}(\mathrm{cmin}, \mathrm{init})) \le
+  (l.\mathrm{map}\,\phi).\mathrm{foldr}(\mathrm{cmin}, \phi(\mathrm{init}))$.
+  Holds for any monotone $\phi$ without meet-preservation.
+
+\item \textbf{\lean{mapCongr}}: congruence for \lean{List.map} on members:
+  if $f(a) = g(a)$ for all $a \in l$ then $l.\mathrm{map}\,f = l.\mathrm{map}\,g$.
+\end{enumerate}
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem foldr_min_map_mono {alpha : Type} {f g : alpha -> T} {i1 i2 : T} :
+    forall (l : List alpha),
+    (forall a, a in l -> f a <= g a) -> i1 <= i2 ->
+    (l.map f).foldr cmin i1 <= (l.map g).foldr cmin i2
+
+theorem phi_foldr_min {T' : Type} [Chain T'] {phi : T -> T'}
+    (hmono : forall {a b : T}, a <= b -> phi a <= phi b) :
+    forall (l : List T) (init : T),
+    phi (l.foldr cmin init) <= (l.map phi).foldr cmin (phi init)
+
+theorem mapCongr {alpha beta : Type} {f g : alpha -> beta} :
+    forall (l : List alpha),
+    (forall a, a in l -> f a = g a) -> l.map f = l.map g
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- foldr_min_map_mono: pointwise f<=g, i1<=i2 =>
+--   foldr cmin i1 (map f l) <= foldr cmin i2 (map g l)
+-- phi_foldr_min: phi monotone =>
+--   phi (foldr cmin init l) <= foldr cmin (phi init) (map phi l)
+-- mapCongr: (forall a in l, f a == g a) => map f l == map g l
+\end{lstlisting}
+
+%===================================================================
+\section{Trust systems}
+%===================================================================
+
+\subsection{Structure: \lean{System}}
+
+\begin{defn}[Trust system]
+A \textbf{trust system} over claims $C$ graded in chain $T$ consists of:
+\begin{itemize}
+  \item a type \lean{Step} of checking steps,
+  \item $\mathrm{concl} : \lean{Step} \to C$ (the conclusion of each step),
+  \item $\mathrm{prems} : \lean{Step} \to \lean{List}\,C$ (finite premises),
+  \item $\mathrm{grade} : \lean{Step} \to T$ (the check strength received),
+  \item $\mathrm{stepsInto} : C \to \lean{List}\,\lean{Step}$ (all steps
+    concluding that claim --- finite, as the registry is a finite artifact),
+  \item coherence: $f \in \mathrm{stepsInto}(x) \iff \mathrm{concl}(f) = x$.
+\end{itemize}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+structure System (C : Type) (T : Type) [Chain T] where
+  Step       : Type
+  concl      : Step -> C
+  prems      : Step -> List C
+  grade      : Step -> T
+  stepsInto  : C -> List Step
+  mem_stepsInto : forall {x : C} {f : Step},
+    f in stepsInto x -> concl f = x
+  stepsInto_mem : forall f : Step, f in stepsInto (concl f)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data System c t = System
+  { step        :: [()]          -- just the count; we index by ()
+  , concl       :: () -> c
+  , prems       :: () -> [c]
+  , grade       :: () -> t
+  , stepsInto   :: c -> [()]
+  -- coherence conditions are Prop in Lean, omitted in Haskell
+  }
+-- In practice: Step is a concrete type like Bool or Evt.
+\end{lstlisting}
+
+\begin{fidelitynote}
+In Lean, \lean{Step} is a field of the structure and can vary between
+instances.  The Haskell approximation glosses over this type-level variation;
+in practice each instance uses a concrete \hask{Step} type (e.g., \hask{Bool}
+for the cyclic example, \hask{Evt} for trajectories).
+\end{fidelitynote}
+
+
+\subsection{Definition: \lean{System.Prem}}
+
+\begin{defn}[Premise relation]
+$y$ is a \textbf{premise} of $x$ in system $S$ if there exists a checking
+step $f \in \mathrm{stepsInto}(x)$ with $y \in \mathrm{prems}(f)$:
+\[
+  S.\mathrm{Prem}(y, x) \;\iff\;
+  \exists f,\; f \in \mathrm{stepsInto}(x) \wedge y \in \mathrm{prems}(f).
+\]
+Well-foundedness of this relation is the hypothesis of the certificate lemma.
+It is \emph{load-bearing}: the circular counterexample (\lean{cyc}) has
+$\neg\,\mathrm{WellFounded}(\mathrm{Prem})$.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def System.Prem (y x : C) : Prop :=
+  exists f, f in S.stepsInto x /\ y in S.prems f
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+prem :: System c t -> c -> c -> Bool
+prem s y x = any (\f -> y `elem` prems s f) (stepsInto s x)
+\end{lstlisting}
+
+
+\subsection{Definition: \lean{stepGrade}}
+
+\begin{defn}[Step grade under an assignment]
+Given an assignment $t : C \to T$, the \textbf{grade} of step $f$ under $t$
+is the meet of the step's grade with the assigned levels of all its premises:
+\[
+  \mathrm{stepGrade}(t, f) =
+  \bigl(\mathrm{prems}(f).\mathrm{map}(t)\bigr).\mathrm{foldr}(\mathrm{cmin},\;
+  \mathrm{grade}(f)).
+\]
+This is the ``weakest link'' value: the step is only as strong as its weakest
+premise's assigned trust, bounded by the step's own check grade.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def stepGrade (t : C -> T) (f : S.Step) : T :=
+  ((S.prems f).map t).foldr cmin (S.grade f)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+stepGrade :: System c t -> (c -> t) -> StepOf s -> t
+stepGrade s t f = foldr cmin (grade s f) (map t (prems s f))
+\end{lstlisting}
+
+%===================================================================
+\section{Canonical trust}
+%===================================================================
+
+\subsection{Definition: \lean{tau}}
+
+\begin{defn}[Canonical trust (fixpoint form)]
+Given a well-founded premise relation, the \textbf{canonical trust}
+$\tau : C \to T$ is defined by well-founded recursion:
+\[
+  \tau(x) = \bigvee_{f \in \mathrm{stepsInto}(x)} \mathrm{stepGrade}(\tau, f),
+\]
+where $\bigvee$ is the \lean{cmax}-fold with initial value $\bot$.
+The internal definition uses a \lean{dite} guard defaulting to $\bot$ off the
+premise relation (erased by \lean{tau\_eq}).
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+noncomputable def tau (wf : WellFounded S.Prem) : C -> T :=
+  wf.fix fun x rec =>
+    ((S.stepsInto x).map fun f =>
+      ((S.prems f).map fun y =>
+        if h : S.Prem y x then rec y h else Chain.bot).foldr
+          cmin (S.grade f)).foldr
+      cmax Chain.bot
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- tau s x = foldr cmax bot
+--             (map (\f -> foldr cmin (grade s f)
+--                           (map (tau s) (prems s f)))
+--               (stepsInto s x))
+-- Non-computable in Lean (Classical); in Haskell we assume termination.
+tau :: System c t -> c -> t
+tau s x = foldr cmax bot
+  [foldr cmin (grade s f) (map (tau s) (prems s f))
+  | f <- stepsInto s x]
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{tau\_eq}}
+
+\begin{thm}[Clean unfolding of $\tau$]
+\[
+  \tau(x) = \bigl(\mathrm{stepsInto}(x).\mathrm{map}(\mathrm{stepGrade}(\tau,
+  {-}))\bigr).\mathrm{foldr}(\mathrm{cmax}, \bot).
+\]
+This is the intended fixpoint equation; the \lean{dite} guard in the
+definition collapses to this on well-founded input.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem tau_eq (wf : WellFounded S.Prem) (x : C) :
+    tau S wf x =
+      ((S.stepsInto x).map (stepGrade S (tau S wf))).foldr
+        cmax Chain.bot
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- tau_eq: tau s x = foldr cmax bot (map (stepGrade s (tau s)) (stepsInto s x))
+\end{lstlisting}
+
+%===================================================================
+\section{Soundness: the certificate lemma (Lemma 2.2)}
+%===================================================================
+
+\subsection{Definition: \lean{Sound}}
+
+\begin{defn}[Sound assignment]
+An assignment $t : C \to T$ is \textbf{sound} if every claim trusted above
+$\bot$ has a node-local certificate: a checking step whose \lean{stepGrade}
+under $t$ dominates $t(x)$:
+\[
+  \mathrm{Sound}(t) \;\iff\;
+  \forall x : C,\; t(x) \ne \bot \;\Rightarrow\;
+  \exists f \in \mathrm{stepsInto}(x),\; t(x) \le \mathrm{stepGrade}(t, f).
+\]
+This is precisely the deployed boundary rule: the validator checks exactly
+this predicate at each node.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Sound (t : C -> T) : Prop :=
+  forall x : C, t x != Chain.bot ->
+    exists f, f in S.stepsInto x /\ t x <= stepGrade S t f
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+sound :: System c t -> (c -> t) -> Bool
+sound s t = all check (claims s)
+  where
+    check x = t x == bot ||
+              any (\f -> t x <= stepGrade s t f) (stepsInto s x)
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{sound\_le\_tau} (Lemma 2.2 ii)}
+
+\begin{thm}[Every sound assignment is bounded by $\tau$]
+If $t$ is sound, then $t(x) \le \tau(x)$ for all $x$:
+\[
+  \mathrm{Sound}(t) \;\Rightarrow\; \forall x,\; t(x) \le \tau(x).
+\]
+Node-local certificates imply the global bound; claiming above $\tau$ is
+trust inflation and must fail the certificate somewhere.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem sound_le_tau (wf : WellFounded S.Prem) {t : C -> T}
+    (hs : Sound S t) : forall x, t x <= tau S wf x
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- sound_le_tau: sound s t => forall x, t x <= tau s x
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{tau\_sound} (Lemma 2.2 i)}
+
+\begin{thm}[$\tau$ is sound]
+The canonical trust is itself sound:
+\[
+  \mathrm{Sound}(\tau).
+\]
+This uses \lean{foldr\_max\_cases} (attainment), hence linearity of the
+chain.  Together with \lean{sound\_le\_tau}: $\tau$ is the \emph{greatest}
+sound assignment.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem tau_sound (wf : WellFounded S.Prem) :
+    Sound S (tau S wf)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- tau_sound: sound s (tau s)
+\end{lstlisting}
+
+%===================================================================
+\section{Derivations: max-min semantics agrees with fixpoint}
+%===================================================================
+
+\subsection{Inductive type: \lean{Deriv}}
+
+\begin{defn}[Derivation]
+A \textbf{derivation} of claim $x$ is a checking step together with
+derivations of all its premises (a well-founded tree):
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+inductive Deriv (S : System C T) : C -> Type where
+  | node (f : S.Step) (sub : forall y, y in S.prems f -> Deriv S y) :
+      Deriv S (S.concl f)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data Deriv c t = Node (Step c t)
+                      (Map c (Deriv c t))   -- one sub-derivation per premise
+\end{lstlisting}
+
+
+\subsection{Definition: \lean{foldPrems}}
+
+\begin{defn}[Membership-aware premise fold]
+A variant of \lean{cmin}-fold over a list of claims, where the value function
+receives a membership proof.  Used to keep \lean{derivGrade} structurally
+recursive.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def foldPrems : (l : List C) -> (forall y, y in l -> T) -> T -> T
+  | [], _, init => init
+  | y :: t, g, init =>
+      cmin (g y (.head t))
+           (foldPrems t (fun z hz => g z (.tail y hz)) init)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+foldPrems :: [c] -> (c -> t) -> t -> t
+foldPrems [] _ init = init
+foldPrems (y:ys) g init = cmin (g y) (foldPrems ys g init)
+-- (Membership proof is erased in Haskell.)
+\end{lstlisting}
+
+
+\subsection{Definition: \lean{derivGrade}}
+
+\begin{defn}[Derivation grade]
+The \textbf{grade} of a derivation is the meet of every step grade in the
+tree --- the weakest link across all checking steps used:
+\[
+  \mathrm{derivGrade}(\lean{node}\,f\,\mathrm{sub}) =
+  \mathrm{foldPrems}\bigl(\mathrm{prems}(f),\;
+  y \mapsto \mathrm{derivGrade}(\mathrm{sub}(y)),\;
+  \mathrm{grade}(f)\bigr).
+\]
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+noncomputable def derivGrade : {x : C} -> Deriv S x -> T :=
+  fun d =>
+    Deriv.rec (motive := fun _ _ => T)
+      (fun f _ ih =>
+        foldPrems (S.prems f) ih (S.grade f)) d
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+derivGrade :: System c t -> Deriv c t -> t
+derivGrade s (Node f sub) =
+  foldPrems (prems s f) (derivGrade s . sub) (grade s f)
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{derivGrade\_node}}
+
+\begin{thm}[Computation rule for derivGrade]
+\[
+  \mathrm{derivGrade}(\lean{node}\,f\,\mathrm{sub}) =
+  \mathrm{foldPrems}(\mathrm{prems}(f),\;
+  y\,h_y \mapsto \mathrm{derivGrade}(\mathrm{sub}(y, h_y)),\;
+  \mathrm{grade}(f)).
+\]
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem derivGrade_node (f : S.Step)
+    (sub : forall y, y in S.prems f -> Deriv S y) :
+    derivGrade S (.node f sub) =
+      foldPrems (S.prems f)
+        (fun y hy => derivGrade S (sub y hy)) (S.grade f)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- derivGrade_node: derivGrade (Node f sub) =
+--   foldPrems (prems f) (derivGrade . sub) (grade f)
+-- This is just the definition; stated as a lemma for rewriting.
+\end{lstlisting}
+
+
+\subsection{Theorems: \lean{foldPrems\_le} and \lean{le\_foldPrems}}
+
+\begin{thm}[foldPrems vs cmin-fold]
+These bridge lemmas relate \lean{foldPrems} (which carries membership proofs)
+to the ordinary \lean{cmin}-fold over \lean{List.map}:
+\begin{align*}
+  &\text{If }\forall y\,(h : y \in l),\; g(y,h) \le t(y),\text{ then }
+  \mathrm{foldPrems}(l, g, \mathrm{init}) \le (l.\mathrm{map}\,t).\mathrm{foldr}(\mathrm{cmin}, \mathrm{init}).
+  && \text{(\lean{foldPrems\_le})}\\
+  &\text{If }\forall y\,(h : y \in l),\; t(y) \le g(y,h),\text{ then }
+  (l.\mathrm{map}\,t).\mathrm{foldr}(\mathrm{cmin}, \mathrm{init}) \le \mathrm{foldPrems}(l, g, \mathrm{init}).
+  && \text{(\lean{le\_foldPrems})}
+\end{align*}
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem foldPrems_le {t : C -> T} {init : T} :
+    forall (l : List C) (g : forall y, y in l -> T),
+    (forall y (hy : y in l), g y hy <= t y) ->
+    foldPrems l g init <= (l.map t).foldr cmin init
+
+theorem le_foldPrems {t : C -> T} {init : T} :
+    forall (l : List C) (g : forall y, y in l -> T),
+    (forall y (hy : y in l), t y <= g y hy) ->
+    (l.map t).foldr cmin init <= foldPrems l g init
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- foldPrems_le: g <= t pointwise => foldPrems l g init <= foldr cmin init (map t l)
+-- le_foldPrems: t <= g pointwise => foldr cmin init (map t l) <= foldPrems l g init
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{derivGrade\_le\_tau}}
+
+\begin{thm}[Every derivation's grade is below $\tau$]
+For any $x : C$ and derivation $d$ of $x$,
+\[
+  \mathrm{derivGrade}(d) \le \tau(x).
+\]
+$\tau$ dominates the max-min semantics from above.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem derivGrade_le_tau (wf : WellFounded S.Prem) :
+    forall {x : C} (d : Deriv S x),
+    derivGrade S d <= tau S wf x
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- derivGrade_le_tau: derivGrade d <= tau x
+-- for any derivation d of x.
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{tau\_le\_derivGrade}}
+
+\begin{thm}[$\tau$ is attained by some derivation]
+If $\tau(x) \ne \bot$, then there exists a derivation $d$ of $x$ with
+$\tau(x) \le \mathrm{derivGrade}(d)$.
+
+Together with \lean{derivGrade\_le\_tau}: $\tau(x)$ equals the supremum of
+derivation grades, so the fixpoint form and the derivation-sup form agree.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem tau_le_derivGrade (wf : WellFounded S.Prem) :
+    forall x : C, tau S wf x != Chain.bot ->
+    exists d : Deriv S x, tau S wf x <= derivGrade S d
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- tau_le_derivGrade: tau x /= bot =>
+--   exists derivation d of x with tau x <= derivGrade d
+\end{lstlisting}
+
+%===================================================================
+\section{Morphisms and transport of trust}
+%===================================================================
+
+\subsection{Structure: \lean{Mor}}
+
+\begin{defn}[Morphism of trust systems]
+A \textbf{morphism} $M : S \to S'$ between trust systems (over possibly
+different claim types $C, C'$ and chain types $T, T'$) consists of:
+\begin{itemize}
+  \item $\mathrm{onClaim} : C \to C'$,
+  \item $\mathrm{onStep} : S.\lean{Step} \to S'.\lean{Step}$,
+  \item $\phi : T \to T'$ (monotone, strict at bottom: $\phi(\bot) = \bot$),
+  \item premise compatibility: $S'.\mathrm{prems}(\mathrm{onStep}(f)) =
+    \mathrm{prems}(f).\mathrm{map}(\mathrm{onClaim})$,
+  \item grade laxity: $\phi(S.\mathrm{grade}(f)) \le
+    S'.\mathrm{grade}(\mathrm{onStep}(f))$,
+  \item step membership: $f \in \mathrm{stepsInto}(x) \Rightarrow
+    \mathrm{onStep}(f) \in \mathrm{stepsInto}'(\mathrm{onClaim}(x))$.
+\end{itemize}
+The strictness $\phi(\bot) = \bot$ is a correction to the prose
+Definition~3.1, discovered by this formalisation: without it, transport
+fails on underivable claims.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+structure Mor (S : System C T) (S' : System C' T') where
+  onClaim  : C -> C'
+  onStep   : S.Step -> S'.Step
+  phi      : T -> T'
+  phi_mono : forall {a b : T}, a <= b -> phi a <= phi b
+  phi_bot  : phi Chain.bot = Chain.bot
+  prems_eq : forall f, S'.prems (onStep f) = (S.prems f).map onClaim
+  grade_le : forall f, phi (S.grade f) <= S'.grade (onStep f)
+  steps_mem : forall {x : C} {f : S.Step},
+    f in S.stepsInto x -> onStep f in S'.stepsInto (onClaim x)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data Mor c t c' t' = Mor
+  { onClaim  :: c -> c'
+  , onStep   :: Step c t -> Step c' t'
+  , phi      :: t -> t'
+  -- phi_mono, phi_bot, prems_eq, grade_le, steps_mem are laws
+  }
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{tau\_transport} (Lemma 3.2)}
+
+\begin{thm}[Trust transports laxly along morphisms]
+For any morphism $M : S \to S'$ and well-founded premise relations,
+\[
+  \forall x : C,\quad
+  M.\phi(\tau_S(x)) \le \tau_{S'}(M.\mathrm{onClaim}(x)).
+\]
+Importing along a morphism never claims more than $\phi$ of the source's
+canonical trust.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem tau_transport {S : System C T} {S' : System C' T'}
+    (M : Mor S S')
+    (wf : WellFounded S.Prem) (wf' : WellFounded S'.Prem) :
+    forall x : C,
+    M.phi (tau S wf x) <= tau S' wf' (M.onClaim x)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- tau_transport: phi m (tau s x) <= tau s' (onClaim m x)
+-- for any morphism m :: Mor s s'.
+\end{lstlisting}
+
+%===================================================================
+\section{The circular-citation counterexample (Remark 2.3)}
+%===================================================================
+
+\subsection{Inductive type: \lean{Two}}
+
+\begin{defn}[Two-element chain]
+The two-level chain $\{\mathtt{lo}, \mathtt{hi}\}$ with $\mathtt{lo} < \mathtt{hi}$,
+$\bot = \mathtt{lo}$.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+inductive Two where
+  | lo
+  | hi
+deriving DecidableEq
+
+instance : Chain Two where
+  le a b := a = .lo \/ b = .hi
+  bot := .lo
+  -- le_refl, le_trans, le_antisymm, le_total, bot_le, dec all proved
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data Two = Lo | Hi deriving (Eq, Ord, Show, Bounded)
+-- Lo < Hi; bot = Lo.
+\end{lstlisting}
+
+
+\subsection{Definition: \lean{cyc}}
+
+\begin{defn}[Circular citation system]
+A trust system on \lean{Bool} claims: the only step into claim $x$ has the
+single premise $\neg x$, graded $\mathtt{hi}$.  This encodes a two-claim
+cycle: each claim is justified by the other.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def cyc : System Bool Two where
+  Step      := Bool
+  concl     := id
+  prems f   := [!f]
+  grade _   := .hi
+  stepsInto x := [x]
+  mem_stepsInto := ...
+  stepsInto_mem f := .head []
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+cyc :: System Bool Two
+cyc = System
+  { concl = id, prems = \f -> [not f]
+  , grade = const Hi, stepsInto = \x -> [x]
+  , ... }
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{cyc\_sound\_top}}
+
+\begin{thm}[Constant-$\mathtt{hi}$ is sound on \lean{cyc}]
+The assignment $x \mapsto \mathtt{hi}$ is sound: every node-local certificate
+passes.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem cyc_sound_top : Sound cyc (fun _ => Two.hi)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- sound cyc (const Hi) = True
+-- (Each step is its own certificate: grade hi, premise is the other claim
+--  also assigned hi.)
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{cyc\_no\_deriv}}
+
+\begin{thm}[No claim in \lean{cyc} has any derivation]
+\[
+  \forall x : \lean{Bool},\; \lean{Deriv}\,\lean{cyc}\,x \to \lean{False}.
+\]
+The max-min semantics is vacuous: there are no finite derivation trees.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem cyc_no_deriv : forall x : Bool, Deriv cyc x -> False
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Any attempt to build a Deriv for cyc loops forever.
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{cyc\_not\_wf}}
+
+\begin{thm}[\lean{cyc}'s premise relation is not well-founded]
+$\neg\,\lean{WellFounded}(\lean{cyc}.\lean{Prem})$.
+
+Therefore the certificate lemma does not apply to \lean{cyc} --- as it must
+not, since \lean{cyc\_sound\_top} shows that $\mathtt{hi}$ passes every
+local check while \lean{cyc\_no\_deriv} shows no derivation exists.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem cyc_not_wf : not WellFounded cyc.Prem
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- cyc's dependency graph has a cycle (true -> false -> true -> ...),
+-- so the premise relation is not well-founded.
+\end{lstlisting}
+
+%===================================================================
+\section{Consolidations}
+%===================================================================
+
+\subsection{Structure: \lean{Consolidation}}
+
+\begin{defn}[Consolidation]
+A \textbf{consolidation} between trust systems $S$ (over $C$) and $S'$ (over
+$C'$) over the \emph{same} check-chain $T$ consists of:
+
+\textit{Shapes forward:}
+\begin{itemize}
+  \item $\mathrm{onClaim} : C \to C'$,
+  \item $\mathrm{onStep} : S.\lean{Step} \to S'.\lean{Step}$,
+  \item premise compatibility and grade laxity $S.\mathrm{grade}(f) \le
+    S'.\mathrm{grade}(\mathrm{onStep}(f))$,
+  \item step membership.
+\end{itemize}
+
+\textit{Positions backward:} for each $x : C$, every target step
+$f' \in S'.\mathrm{stepsInto}(\mathrm{onClaim}(x))$ pulls back to a source
+step $\mathrm{posn}(f', h) \in S.\mathrm{stepsInto}(x)$, with premise
+correspondence and \emph{citation condition}: $S'.\mathrm{grade}(f') \le
+S.\mathrm{grade}(\mathrm{posn}(f', h))$.
+
+The citation condition captures the notion of a cached grade: the consolidated
+system records a grade at most as strong as the source's.  Note \lean{posn}
+is indexed by the preimage $x$: when consolidation merges claims, every
+justification must pull back on each side.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+structure Consolidation (S : System C T) (S' : System C' T) where
+  -- shapes forward
+  onClaim    : C -> C'
+  onStep     : S.Step -> S'.Step
+  prems_eq   : forall f, S'.prems (onStep f) = (S.prems f).map onClaim
+  grade_le   : forall f, S.grade f <= S'.grade (onStep f)
+  steps_mem  : forall {x : C} {f : S.Step},
+    f in S.stepsInto x -> onStep f in S'.stepsInto (onClaim x)
+  -- positions backward
+  posn       : forall {x : C} (f' : S'.Step),
+    f' in S'.stepsInto (onClaim x) -> S.Step
+  posn_mem   : forall {x : C} {f' : S'.Step}
+    (h : f' in S'.stepsInto (onClaim x)),
+    posn f' h in S.stepsInto x
+  posn_prems : forall {x : C} {f' : S'.Step}
+    (h : f' in S'.stepsInto (onClaim x)),
+    S'.prems f' = (S.prems (posn f' h)).map onClaim
+  posn_grade : forall {x : C} {f' : S'.Step}
+    (h : f' in S'.stepsInto (onClaim x)),
+    S'.grade f' <= S.grade (posn f' h)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data Consolidation c t c' = Consolidation
+  { onClaim   :: c -> c'
+  , onStep    :: Step c t -> Step c' t
+  , posn      :: c -> Step c' t -> Step c t
+  -- prems_eq, grade_le, steps_mem, posn_mem, posn_prems, posn_grade are laws
+  }
+\end{lstlisting}
+
+\begin{fidelitynote}
+The \lean{posn} field takes a membership proof $h : f' \in
+\mathrm{stepsInto}'(\mathrm{onClaim}(x))$ as an argument.  This is the
+dependent type that records \emph{which} preimage $x$ we are pulling back to.
+When consolidation merges multiple claims, \lean{posn} must be defined
+separately for each preimage; the Haskell approximation adds $x$ as an extra
+argument to \lean{posn}, but loses the membership-proof dependency.
+\end{fidelitynote}
+
+
+\subsection{Definition: \lean{Consolidation.toMor}}
+
+\begin{defn}[Forward half of consolidation is a morphism]
+The forward data of a consolidation $K : S \to S'$ at $\phi = \mathrm{id}$
+assembles into a morphism \lean{Mor S S'}.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Consolidation.toMor {S : System C T} {S' : System C' T}
+    (K : Consolidation S S') : Mor S S' where
+  onClaim   := K.onClaim
+  onStep    := K.onStep
+  phi       := id
+  phi_mono  := fun h => h
+  phi_bot   := rfl
+  prems_eq  := K.prems_eq
+  grade_le  := K.grade_le
+  steps_mem := K.steps_mem
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+toMor :: Consolidation c t c' -> Mor c t c' t
+toMor k = Mor (onClaim k) (onStep k) id
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{Consolidation.tau\_le}}
+
+\begin{thm}[Position map forbids trust inflation]
+A consolidation $K : S \to S'$ satisfies
+\[
+  \forall x : C,\quad \tau_{S'}(\mathrm{onClaim}(x)) \le \tau_S(x).
+\]
+The position map pulls every target justification back to a source
+justification, preventing the consolidated system from claiming more than
+the source.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Consolidation.tau_le {S : System C T} {S' : System C' T}
+    (K : Consolidation S S')
+    (wf : WellFounded S.Prem) (wf' : WellFounded S'.Prem) :
+    forall x : C, tau S' wf' (K.onClaim x) <= tau S wf x
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- tau_le: tau s' (onClaim k x) <= tau s x
+-- for all x, given consolidation k :: Consolidation s s'.
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{tau\_consolidate} (Theorem 3)}
+
+\begin{thm}[Consolidation preservation (Theorem 3)]
+A consolidation $K : S \to S'$ with a genuine position map preserves
+canonical trust on the nose:
+\[
+  \forall x : C,\quad \tau_{S'}(\mathrm{onClaim}(x)) = \tau_S(x).
+\]
+Forward inequality: shapes transport trust laxly (\lean{tau\_transport} at
+$\phi = \mathrm{id}$).  Backward inequality: positions pull every target
+justification back (\lean{tau\_le}).
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem tau_consolidate {S : System C T} {S' : System C' T}
+    (K : Consolidation S S')
+    (wf : WellFounded S.Prem) (wf' : WellFounded S'.Prem) :
+    forall x : C,
+    tau S' wf' (K.onClaim x) = tau S wf x
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- tau_consolidate: tau s' (onClaim k x) == tau s x
+-- for all x, given a full consolidation k (with position map).
+\end{lstlisting}
+
+%===================================================================
+\section{Composition of consolidations}
+%===================================================================
+
+\subsection{Definition: \lean{Consolidation.id}}
+
+\begin{defn}[Identity consolidation]
+The identity consolidation on $S$: shapes and positions both identity, grades
+exact ($S.\mathrm{grade}(f) \le S.\mathrm{grade}(f)$ by reflexivity).
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+protected def Consolidation.id (S : System C T) :
+    Consolidation S S where
+  onClaim := id
+  onStep  := id
+  prems_eq f := (List.map_id (S.prems f)).symm
+  grade_le f := Chain.le_refl (S.grade f)
+  steps_mem h := h
+  posn f' _ := f'
+  posn_mem h := h
+  posn_prems {_ f'} _ := (List.map_id (S.prems f')).symm
+  posn_grade {_ f'} _ := Chain.le_refl (S.grade f')
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+consolidationId :: Consolidation c t c
+consolidationId = Consolidation id id (\_ f' -> f')
+\end{lstlisting}
+
+
+\subsection{Definition: \lean{Consolidation.comp}}
+
+\begin{defn}[Composition of consolidations]
+Given $K : S \to S'$ and $L : S' \to S''$, their composite $K \cdot L :
+S \to S''$ has:
+\begin{itemize}
+  \item shapes: $\mathrm{onClaim} = L.\mathrm{onClaim} \circ K.\mathrm{onClaim}$,
+    $\mathrm{onStep} = L.\mathrm{onStep} \circ K.\mathrm{onStep}$;
+  \item positions: $\mathrm{posn}(f'', h) =
+    K.\mathrm{posn}(L.\mathrm{posn}(f'', h),\, L.\mathrm{posn\_mem}(h))$
+    (contravariant --- pull back through $L$ first, then through $K$);
+  \item grades: by transitivity of $\le$.
+\end{itemize}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+protected def Consolidation.comp
+    {S : System C T} {S' : System C' T} {S'' : System C'' T}
+    (K : Consolidation S S') (L : Consolidation S' S'') :
+    Consolidation S S'' where
+  onClaim x := L.onClaim (K.onClaim x)
+  onStep f  := L.onStep (K.onStep f)
+  prems_eq f := by rw [L.prems_eq, K.prems_eq, List.map_map]; rfl
+  grade_le f := Chain.le_trans (K.grade_le f) (L.grade_le (K.onStep f))
+  steps_mem h := L.steps_mem (K.steps_mem h)
+  posn f'' h  := K.posn (L.posn f'' h) (L.posn_mem h)
+  posn_mem h  := K.posn_mem (L.posn_mem h)
+  posn_prems h := by
+    rw [L.posn_prems h, K.posn_prems (L.posn_mem h), List.map_map]; rfl
+  posn_grade h := Chain.le_trans (L.posn_grade h)
+                    (K.posn_grade (L.posn_mem h))
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+consolidationComp :: Consolidation c t c'
+                  -> Consolidation c' t c''
+                  -> Consolidation c t c''
+consolidationComp k l = Consolidation
+  { onClaim = onClaim l . onClaim k
+  , onStep  = onStep l . onStep k
+  , posn    = \x f'' -> posn k (onClaim k x) (posn l (onClaim l (onClaim k x)) f'')
+  }
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{tau\_consolidate\_comp}}
+
+\begin{thm}[End-to-end preservation through a pipeline]
+For composable consolidations $K : S \to S'$ and $L : S' \to S''$:
+\[
+  \forall x : C,\quad
+  \tau_{S''}((K \cdot L).\mathrm{onClaim}(x)) = \tau_S(x).
+\]
+This factors as $\tau_{S''}(L.\mathrm{onClaim}(K.\mathrm{onClaim}(x)))
+= \tau_{S'}(K.\mathrm{onClaim}(x)) = \tau_S(x)$, so end-to-end trust
+preservation is the conjunction of the per-layer equations.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem tau_consolidate_comp
+    {S : System C T} {S' : System C' T} {S'' : System C'' T}
+    (K : Consolidation S S') (L : Consolidation S' S'')
+    (wf : WellFounded S.Prem)
+    (wf' : WellFounded S'.Prem)
+    (wf'' : WellFounded S''.Prem) :
+    forall x : C,
+    tau S'' wf'' ((K.comp L).onClaim x) = tau S wf x
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- tau_consolidate_comp:
+--   tau s'' (onClaim (comp k l) x) == tau s x
+-- for all x, composable consolidations k, l.
+\end{lstlisting}
+
+%===================================================================
+\section{The shape-only counterexample}
+%===================================================================
+
+\subsection{Definitions: \lean{ground} and \lean{layer4}}
+
+\begin{defn}[Shape-only counterexample]
+Two systems over \lean{Unit} claims, with the two-element chain \lean{Two}:
+
+\textbf{\lean{ground}}: one claim, one $\mathtt{hi}$-graded ground check
+(no premises).
+\[
+  \lean{Step} = \lean{Unit},\;
+  \mathrm{prems} = [],\;
+  \mathrm{grade} = \mathtt{hi},\;
+  \mathrm{stepsInto}(\langle\rangle) = [\langle\rangle].
+\]
+
+\textbf{\lean{layer4}}: same claim, no steps at all (the shape-only
+consolidated version: the claim survives but the check is dropped).
+\[
+  \lean{Step} = \lean{Empty},\;
+  \mathrm{stepsInto}(\langle\rangle) = [].
+\]
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def ground : System Unit Two where
+  Step := Unit
+  concl _ := ()
+  prems _ := []
+  grade _ := .hi
+  stepsInto _ := [()]
+  mem_stepsInto _ := rfl
+  stepsInto_mem _ := .head []
+
+def layer4 : System Unit Two where
+  Step := Empty
+  concl := Empty.elim
+  prems := Empty.elim
+  grade := Empty.elim
+  stepsInto _ := []
+  mem_stepsInto := fun h => nomatch h
+  stepsInto_mem := fun f => f.elim
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- ground: one ground check graded Hi; layer4: no steps.
+ground :: System () Two
+ground = System { step=[()] , concl=const ()
+                , prems=const [], grade=const Hi
+                , stepsInto=const [()] }
+
+data Void  -- empty type
+layer4 :: System () Two
+layer4 = System { step=[], concl=absurd
+                , prems=absurd, grade=absurd
+                , stepsInto=const [] }
+\end{lstlisting}
+
+
+\subsection{Theorems: \lean{ground\_wf} and \lean{layer4\_wf}}
+
+\begin{thm}[Well-foundedness of both systems]
+Both \lean{ground} and \lean{layer4} have well-founded premise relations
+(both empty).
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem ground_wf : WellFounded ground.Prem
+theorem layer4_wf : WellFounded layer4.Prem
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Both systems have empty premise relations; trivially well-founded.
+\end{lstlisting}
+
+
+\subsection{Theorems: \lean{ground\_tau\_hi} and \lean{layer4\_tau\_bot}}
+
+\begin{thm}[Trust degrades from \lean{hi} to \lean{bot} after shape-only consolidation]
+\[
+  \tau_{\lean{ground}}(\langle\rangle) = \mathtt{hi},
+  \qquad
+  \tau_{\lean{layer4}}(\langle\rangle) = \mathtt{lo} = \bot.
+\]
+This is the formal shadow of the \texttt{synthesis-layer4.md} failure: after
+four shape-only consolidation layers, machine-resolvable citations are gone,
+and canonical trust collapses to $\bot$.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem ground_tau_hi :
+    tau ground ground_wf () = Two.hi
+
+theorem layer4_tau_bot :
+    tau layer4 layer4_wf () = Two.lo
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- tau ground () == Hi    (ground check graded Hi, no premises)
+-- tau layer4 () == Lo    (no steps -> foldr cmax bot [] = bot)
+\end{lstlisting}
+
+%===================================================================
+\section{Translation conventions}
+%===================================================================
+
+\begin{enumerate}
+\item \textbf{Dependent types throughout.}  \lean{System.Step} varies between
+  instances; \lean{Consolidation.posn} depends on a membership proof;
+  \lean{Deriv S x} is indexed by the claim $x$.  All of these are
+  approximated by erasing the dependency in Haskell.
+
+\item \textbf{Noncomputable definitions.}  \lean{tau} and \lean{derivGrade}
+  are marked \lean{noncomputable} because they use \lean{Classical.choice}
+  (via \lean{WellFounded.fix} and \lean{Deriv.rec}).  In Haskell they are
+  written as recursive functions; termination is assumed.
+
+\item \textbf{The three roles of linearity.}  The \lean{Chain} hypothesis
+  (totality) is used at exactly three points: (a) \lean{cmax\_cases}
+  (attainment in \lean{tau\_sound}), (b) \lean{foldr\_max\_cases}
+  (attainment in \lean{tau\_le\_derivGrade}), and (c) antisymmetry in
+  \lean{tau\_le\_derivGrade}'s uniqueness argument.  All three fail for
+  general lattices.
+
+\item \textbf{Phi-bot as a correction.}  The \lean{phi\_bot} field of
+  \lean{Mor} ($\phi(\bot) = \bot$) is not in the original prose definition.
+  Without it, \lean{tau\_transport} fails for claims with no derivation
+  (where $\tau = \bot$) if $\phi(\bot) > \bot$ in the target chain.  This
+  is a genuine mathematical correction discovered by Lean.
+
+\item \textbf{Consolidation vs morphism.}  A \lean{Consolidation} is a
+  \lean{Mor} at $\phi = \mathrm{id}$ plus a backward position map.
+  The extra structure (positions backward) is what yields preservation
+  ($=$) rather than lax transport ($\le$).
+
+\item \textbf{Proof bodies omitted.}  Lean checks all proofs.
+\end{enumerate}
+
+\end{document}

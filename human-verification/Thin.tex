@@ -1,0 +1,503 @@
+\documentclass[11pt,a4paper]{article}
+\input{preamble}
+
+\title{Human Verification: \texttt{Containers.Thin}\\[4pt]
+  \large Polytrees and Thinness of the Network Directed Container}
+\author{Machine-generated from \texttt{lean/Thin.lean} for review by Neil Ghani}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document presents every definition and theorem \emph{statement} from the
+Lean~4 module \lean{Containers.Thin} in three parallel forms: the original
+Lean, a readable Haskell rendering, and precise mathematical English.  Proofs
+are omitted --- they are machine-checked by Lean.  The purpose is to let a
+human verifier confirm that the formalisation captures the intended
+mathematics.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%===================================================================
+\section{Overview}
+%===================================================================
+
+This file verifies Proposition~\emph{prop:tree} of the supply-chains paper: if
+$G$ is a \textbf{polytree} (underlying undirected graph is a forest), then the
+directed container $\mathrm{network}(G)$ is \textbf{thin} --- between any two
+nodes there is at most one directed path.
+
+The main results are:
+\begin{itemize}
+  \item \lean{thin\_of\_polytree}: in a polytree, any two directed paths
+        between the same endpoints are equal (thinness = path uniqueness).
+  \item \lean{endpoint\_equiv}: positions at $v$ in $\mathrm{network}(G)$
+        biject with reachable nodes from $v$.
+\end{itemize}
+
+All definitions and proofs are in Lean~4 core; no Mathlib.
+
+%===================================================================
+\section{Reachability and path structure}
+%===================================================================
+
+% --- 1. Reachable -------------------------------------------------
+\subsection{Definition: \lean{Digraph.Reachable}}
+
+\begin{defn}[Reachability]
+A vertex $w$ is \textbf{reachable} from $v$ in digraph $G$ if there exists a
+directed path from $v$ to $w$:
+\[
+  \mathrm{Reachable}(G, v, w) \;:\!\iff\; \mathrm{Nonempty}(\mathrm{Path}(G, v, w)).
+\]
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Reachable (G : Digraph) (v w : G.V) : Prop :=
+  Nonempty (Path G v w)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+type Reachable g v w = Bool   -- True iff there is a path from v to w
+reachable :: Digraph g => g -> Vertex -> Vertex -> Bool
+reachable g v w = not (null (allPaths g v w))
+\end{lstlisting}
+
+
+% --- 2. Path.isTrivial --------------------------------------------
+\subsection{Definition: \lean{Path.isTrivial}}
+
+\begin{defn}[Trivial path]
+A path $p$ is \textbf{trivial} (empty) when it was constructed by \lean{nil};
+a \lean{cons} path is always non-trivial:
+\[
+  \mathrm{isTrivial}(\mathrm{nil}\,v) = \top, \qquad
+  \mathrm{isTrivial}(\mathrm{cons}\,e\,p) = \bot.
+\]
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Path.isTrivial : {v w : G.V} -> Path G v w -> Prop
+  | _, _, .nil _ => True
+  | _, _, .cons _ _ => False
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+isTrivial :: Path -> Bool
+isTrivial []      = True   -- nil path
+isTrivial (_:_)   = False  -- cons path
+\end{lstlisting}
+
+
+% --- 3. Acyclic ---------------------------------------------------
+\subsection{Definition: \lean{Digraph.Acyclic}}
+
+\begin{defn}[Acyclic graph]
+A digraph $G$ is \textbf{acyclic} if every path from a vertex to itself is
+trivial (empty):
+\[
+  \mathrm{Acyclic}(G) \;:\!\iff\; \forall v : V,\;\forall p : \mathrm{Path}(G, v, v),\;
+  p.\mathrm{isTrivial}.
+\]
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Acyclic (G : Digraph) : Prop :=
+  forall (v : G.V) (p : Path G v v), p.isTrivial
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+isAcyclic :: Digraph g => g -> Bool
+isAcyclic g = all (\v -> isTrivial (shortestCycle g v)) (vertices g)
+-- Equivalently: the graph has no directed cycles.
+\end{lstlisting}
+
+
+% --- 4. EdgeDisjoint ----------------------------------------------
+\subsection{Definition: \lean{Digraph.EdgeDisjoint}}
+
+\begin{defn}[Edge-disjoint reachability]
+A digraph $G$ has \textbf{edge-disjoint reachability} if for any two distinct
+edges $e_1 \neq e_2$ with the same source, no vertex is reachable from both
+targets:
+\[
+  \mathrm{EdgeDisjoint}(G) \;:\!\iff\; \forall e_1, e_2 : E,\;
+  \mathrm{src}(e_1) = \mathrm{src}(e_2) \Rightarrow e_1 \neq e_2 \Rightarrow
+  \forall w,\; \neg(\mathrm{Reachable}(G, \mathrm{tgt}(e_1), w) \wedge
+  \mathrm{Reachable}(G, \mathrm{tgt}(e_2), w)).
+\]
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def EdgeDisjoint (G : Digraph) : Prop :=
+  forall (e1 e2 : G.E), G.src e1 = G.src e2 -> e1 != e2 ->
+    forall w, -(Reachable G (G.tgt e1) w /\ Reachable G (G.tgt e2) w)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+edgeDisjoint :: Digraph g => g -> Bool
+edgeDisjoint g = and
+  [ null (reachableSet g (tgt e1) `intersect` reachableSet g (tgt e2))
+  | e1 <- edges g, e2 <- edges g, e1 /= e2, src e1 == src e2 ]
+\end{lstlisting}
+
+
+% --- 5. Polytree --------------------------------------------------
+\subsection{Structure: \lean{Digraph.Polytree}}
+
+\begin{defn}[Polytree]
+A \textbf{polytree} is a digraph that is both acyclic and edge-disjoint:
+\[
+  \mathrm{Polytree}(G) \;:\!\iff\; \mathrm{Acyclic}(G) \wedge \mathrm{EdgeDisjoint}(G).
+\]
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+structure Polytree (G : Digraph) : Prop where
+  acyclic : Acyclic G
+  edgeDisjoint : EdgeDisjoint G
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data Polytree g = Polytree
+  { acyclic      :: Bool   -- isAcyclic g
+  , edgeDisjoint :: Bool   -- edgeDisjoint g
+  }
+\end{lstlisting}
+
+
+%===================================================================
+\section{Auxiliary lemmas and path decomposition}
+%===================================================================
+
+% --- 6. acyclic_no_cons -------------------------------------------
+\subsection{Lemma: \lean{acyclic\_no\_cons}}
+
+\begin{prop}[Acyclicity excludes cons self-loops]
+In an acyclic graph, if $e : E$ is an edge, there is no directed path from
+$\mathrm{tgt}(e)$ back to $\mathrm{src}(e)$:
+\[
+  \mathrm{Acyclic}(G) \Rightarrow \neg\,\mathrm{Path}(G,\, \mathrm{tgt}(e),\, \mathrm{src}(e)).
+\]
+\end{prop}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem acyclic_no_cons (hac : Acyclic G) (e : G.E) (p : Path G (G.tgt e) (G.src e)) :
+    False
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- In an acyclic graph, no back-edge path exists:
+-- acyclic_no_cons :: Acyclic g -> Edge -> Path (tgt e) (src e) -> Void
+\end{lstlisting}
+
+
+% --- 7. PathView --------------------------------------------------
+\subsection{Inductive type: \lean{PathView}}
+
+\begin{defn}[Path view]
+A \textbf{path view} from $v$ to $w$ is either:
+\begin{itemize}
+  \item a \textbf{trivial} view with a proof $h : v = w$, or
+  \item a \textbf{step}: an edge $e$ with $\mathrm{src}(e) = v$, followed by a
+        path $\mathrm{tail} : \mathrm{Path}(G, \mathrm{tgt}(e), w)$.
+\end{itemize}
+This packages the index equalities explicitly to enable clean pattern matching
+without triggering dependent-elimination issues.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+inductive PathView (G : Digraph) (v w : G.V) : Type
+  | trivial (h : v = w) : PathView G v w
+  | step (e : G.E) (he : G.src e = v) (tail : Path G (G.tgt e) w)
+      : PathView G v w
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data PathView v w
+  = Trivial    -- v = w
+  | Step Edge (Path w)   -- an edge followed by a path to w
+\end{lstlisting}
+
+
+% --- 8. Path.view / PathView.toPath / Path.view_toPath -----------
+\subsection{Definitions and theorem: \lean{Path.view}, \lean{PathView.toPath}, \lean{Path.view\_toPath}}
+
+\begin{defn}[View of a path]
+Every path can be viewed as trivial or a step:
+\begin{align*}
+  \mathrm{view}(\mathrm{nil}\,v) &= \mathrm{trivial}(\mathrm{rfl}), \\
+  \mathrm{view}(\mathrm{cons}\,e\,p) &= \mathrm{step}(e, \mathrm{rfl}, p).
+\end{align*}
+\end{defn}
+
+\begin{defn}[Path from a view]
+Recover the original path from its view:
+\begin{align*}
+  \mathrm{toPath}(\mathrm{trivial}\,h) &= h \triangleright \mathrm{nil}, \\
+  \mathrm{toPath}(\mathrm{step}\,e\,h_e\,p) &= h_e \triangleright \mathrm{cons}(e, p).
+\end{align*}
+\end{defn}
+
+\begin{thm}[View round-trips]
+For any path $p$, $\mathrm{toPath}(\mathrm{view}(p)) = p$.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Path.view : {v w : G.V} -> Path G v w -> PathView G v w
+  | _, _, .nil v => .trivial rfl
+  | _, _, .cons e p => .step e rfl p
+
+def PathView.toPath : {v w : G.V} -> PathView G v w -> Path G v w
+  | _, _, .trivial h => h [> .nil _
+  | _, _, .step e he p => he [> .cons e p
+
+theorem Path.view_toPath : {v w : G.V} -> (p : Path G v w) ->
+    p.view.toPath = p
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+viewPath :: Path v w -> PathView v w
+viewPath []     = Trivial
+viewPath (e:es) = Step e es
+
+toPath :: PathView v w -> Path v w
+toPath Trivial       = []
+toPath (Step e es) = e : es
+
+-- prop_view_roundtrip p = toPath (viewPath p) == p
+\end{lstlisting}
+
+
+%===================================================================
+\section{Main results}
+%===================================================================
+
+% --- 9. path_unique_of_polytree -----------------------------------
+\subsection{Theorem: \lean{path\_unique\_of\_polytree}}
+
+\begin{thm}[Path uniqueness in polytrees]
+In a polytree $G$, any two directed paths between the same endpoints are equal:
+\[
+  \mathrm{Polytree}(G) \;\Rightarrow\;
+  \forall v, w : V,\; \forall p, q : \mathrm{Path}(G, v, w),\; p = q.
+\]
+\emph{Proof strategy}: structural induction on $p$, decomposing $q$ via
+\lean{PathView} to avoid dependent-elimination issues.
+\begin{itemize}
+  \item \lean{nil}/\lean{trivial}: both paths are \lean{nil}.
+  \item \lean{nil}/\lean{step}: the step creates a directed cycle, contradicting
+        acyclicity.
+  \item \lean{cons}/\lean{trivial}: symmetric cycle contradiction.
+  \item \lean{cons} $e_1$ / \lean{step} $e_2$: if $e_1 = e_2$, apply the
+        induction hypothesis to the tails; if $e_1 \neq e_2$, edge-disjointness
+        is violated.
+\end{itemize}
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem path_unique_of_polytree (ht : Polytree G) :
+    {v w : G.V} -> (p q : Path G v w) -> p = q
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- prop_unique :: Polytree g -> Path v w -> Path v w -> Bool
+-- prop_unique ht p q = p == q
+--
+-- In a polytree, all paths between the same endpoints are identical.
+\end{lstlisting}
+
+
+% --- 10. thin_of_polytree -----------------------------------------
+\subsection{Theorem: \lean{thin\_of\_polytree}}
+
+\begin{thm}[Thinness of the network container]
+If $G$ is a polytree, then for any two vertices $v$ and $w$, the type
+$\mathrm{Path}(G, v, w)$ is a subsingleton (has at most one element):
+\[
+  \mathrm{Polytree}(G) \;\Rightarrow\;
+  \forall v, w : V,\; \mathrm{Subsingleton}(\mathrm{Path}(G, v, w)).
+\]
+This is the thinness condition on the directed container $\mathrm{network}(G)$:
+between any two nodes there is at most one path.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem thin_of_polytree (ht : Polytree G) (v w : G.V) :
+    Subsingleton (Path G v w)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- prop_thin :: Polytree g -> Vertex -> Vertex -> Bool
+-- prop_thin ht v w = length (allPaths g v w) <= 1
+\end{lstlisting}
+
+
+%===================================================================
+\section{Position bijection}
+%===================================================================
+
+% --- 11. Equiv' ---------------------------------------------------
+\subsection{Structure: \lean{Equiv'}}
+
+\begin{defn}[Equivalence (Mathlib-free)]
+An \textbf{equivalence} between types $\alpha$ and $\beta$ is a pair of inverse
+maps:
+\[
+  \mathrm{Equiv}'(\alpha, \beta) \;=\;
+  \{ (f, g, l, r) \mid f : \alpha \to \beta,\; g : \beta \to \alpha,\;
+    l : g \circ f = \mathrm{id},\; r : f \circ g = \mathrm{id} \}.
+\]
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+structure Equiv' (alpha beta : Type) where
+  toFun    : alpha -> beta
+  invFun   : beta -> alpha
+  left_inv  : forall a, invFun (toFun a) = a
+  right_inv : forall b, toFun (invFun b) = b
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data Equiv a b = Equiv
+  { toFun    :: a -> b
+  , invFun   :: b -> a
+  -- left_inv:  invFun . toFun = id
+  -- right_inv: toFun . invFun = id
+  }
+\end{lstlisting}
+
+
+% --- 12. Reachable.path -------------------------------------------
+\subsection{Definition: \lean{Reachable.path}}
+
+\begin{defn}[Choosing a path witness]
+Given a reachability proof $h_r : \mathrm{Reachable}(G, v, w)$, choose a
+path by classical choice:
+\[
+  h_r.\mathrm{path} \;=\; \mathrm{Classical.choice}(h_r).
+\]
+This is \lean{noncomputable} (no constructive witness is extracted).
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+noncomputable def Reachable.path {v w : G.V}
+    (hr : Reachable G v w) : Path G v w :=
+  Classical.choice hr
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Non-constructive: pick any path given a reachability certificate.
+-- In Haskell we would just compute one (e.g. BFS).
+reachablePath :: Reachable -> Path
+reachablePath = head . allPaths  -- pick arbitrarily
+\end{lstlisting}
+
+\begin{fidelitynote}
+In Lean, \lean{noncomputable} signals that the definition uses
+\lean{Classical.choice} and cannot be extracted to code.  In Haskell (or an
+actual implementation) a constructive path would be computed by BFS or DFS.
+\end{fidelitynote}
+
+
+% --- 13. endpoint_equiv -------------------------------------------
+\subsection{Definition: \lean{endpoint\_equiv}}
+
+\begin{defn}[Positions biject with reachable nodes]
+In a polytree $G$, positions at $v$ in $\mathrm{network}(G)$ --- which are
+pairs $(w, p)$ with $p : \mathrm{Path}(G, v, w)$ --- biject with reachable
+nodes from $v$:
+\[
+  \mathrm{endpoint\_equiv}(\mathrm{ht}, v) \;:\;
+  \Bigl(\Sigma_{w : V}\, \mathrm{Path}(G, v, w)\Bigr)
+  \;\simeq\;
+  \{w : V \mid \mathrm{Reachable}(G, v, w)\}.
+\]
+\begin{itemize}
+  \item Forward: $(w, p) \mapsto (w, \langle p \rangle)$ (pack into a
+        reachability proof).
+  \item Backward: $(w, h_r) \mapsto (w, h_r.\mathrm{path})$ (choose the
+        unique path via \lean{path\_unique\_of\_polytree}).
+\end{itemize}
+This is \lean{noncomputable} (it uses \lean{Classical.choice} via
+\lean{Reachable.path}).
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+noncomputable def endpoint_equiv (ht : Polytree G) (v : G.V) :
+    Equiv' ((w : G.V) * Path G v w) {w : G.V // Reachable G v w} where
+  toFun p := <|p.1, <|p.2|>|>
+  invFun w := <|w.1, w.2.path|>
+  left_inv p := ...
+  right_inv w := ...
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+endpoint_equiv :: Polytree g -> Vertex
+               -> Equiv (Vertex, Path) (Vertex, Bool {- reachable -})
+endpoint_equiv ht v = Equiv
+  { toFun  = \(w, p) -> (w, True)
+  , invFun = \(w, _) -> (w, uniquePath v w)  -- unique by polytree assumption
+  }
+\end{lstlisting}
+
+\begin{fidelitynote}
+The Lean statement uses a dependent $\Sigma$-type for positions and a
+subtype for reachable nodes.  Haskell approximates these with pairs and a
+boolean flag.  The key mathematical content --- the bijection between paths
+and reachable nodes in a polytree --- is preserved.
+\end{fidelitynote}
+
+
+%===================================================================
+\section{Translation conventions}
+%===================================================================
+
+\begin{enumerate}
+\item \textbf{Classical choice.}  \lean{endpoint\_equiv} uses
+  \lean{Classical.choice}; it is \lean{noncomputable}.  In a constructive
+  or implementation setting, one would compute a path by graph search.
+
+\item \textbf{Dependent types for positions.}  Positions in
+  $\mathrm{network}(G)$ are $\Sigma_{w}\,\mathrm{Path}(G, v, w)$; the
+  endpoint $w$ is \emph{determined} by the path.  Haskell approximates this
+  with a plain pair.
+
+\item \textbf{PathView.}  The \lean{PathView} type exists solely to avoid
+  dependent-elimination failures when matching on the second path in the
+  uniqueness proof.  It has no mathematical content beyond providing a clean
+  view of the path type.
+
+\item \textbf{Proof bodies omitted.}  Only statements are translated.
+\end{enumerate}
+
+\end{document}

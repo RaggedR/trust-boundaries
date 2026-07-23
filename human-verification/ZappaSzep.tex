@@ -1,0 +1,392 @@
+\documentclass[11pt,a4paper]{article}
+\input{preamble}
+
+\title{Human Verification: \texttt{Containers.ZappaSzep}\\[4pt]
+  \large Zappa--Sz\'{e}p Products: Cocycle Axioms $\Leftrightarrow$ Associativity}
+\author{Machine-generated from \texttt{lean/ZappaSzep.lean} for review by Neil Ghani}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document presents every definition and theorem \emph{statement} from the
+Lean~4 module \lean{Containers.ZappaSzep} in three parallel forms: the original
+Lean, a readable Haskell rendering, and precise mathematical English.  Proofs
+are omitted --- they are machine-checked by Lean.  The purpose is to let a
+human verifier confirm that the formalisation captures the intended
+mathematics.
+
+The file formalises the \emph{pairwise Zappa--Sz\'{e}p criterion}: given two
+monoids $L$ and $G$ with a left action $\triangleright : G \times L \to L$ and a
+restriction $\triangleleft : G \times L \to G$, the binary operation
+$(a,g) \cdot (b,h) = (a \cdot (g \triangleright b),\; (g \triangleleft b) \cdot h)$
+on $L \times G$ is associative \emph{if and only if} four cocycle axioms
+\lean{ZS1}--\lean{ZS4} hold (given unit compatibility).
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%===================================================================
+\section{Overview}
+%===================================================================
+
+The Zappa--Sz\'{e}p product is a non-abelian generalisation of the semidirect
+product.  Where a semidirect product requires one group to act on the other, the
+Zappa--Sz\'{e}p product requires a \emph{matched pair}: two \emph{mutual} actions
+satisfying four compatibility axioms.
+
+The main theorem establishes the equivalence:
+$\lean{ZS1} \wedge \lean{ZS2} \wedge \lean{ZS3} \wedge \lean{ZS4}
+\Leftrightarrow \mathrm{Assoc}$.
+The forward direction ($\Rightarrow$) uses no unit laws; the converse
+($\Leftarrow$) recovers each axiom by specialising associativity at unit elements.
+
+%===================================================================
+\section{Algebraic data}
+%===================================================================
+
+\subsection{Structure: \lean{MatchedPair}}
+
+\begin{defn}[Matched pair of monoids]
+A \textbf{matched pair} consists of:
+\begin{itemize}
+  \item two monoids $(L, \cdot_L, 1_L)$ and $(G, \cdot_G, 1_G)$,
+  \item a left action $\triangleright : G \times L \to L$
+        (``$G$ acts on $L$ from the left''), and
+  \item a restriction $\triangleleft : G \times L \to G$
+        (``$L$ acts on $G$ from the right''),
+\end{itemize}
+together with four \textbf{unit compatibility conditions}:
+\begin{align*}
+  \text{(U1a)}\quad & 1_G \triangleright a = a, &
+  \text{(U1b)}\quad & 1_G \triangleleft a = 1_G, \\
+  \text{(U2a)}\quad & g \triangleright 1_L = 1_L, &
+  \text{(U2b)}\quad & g \triangleleft 1_L = g.
+\end{align*}
+No cocycle axiom is assumed: \lean{ZS1}--\lean{ZS4} are the \emph{content} of the
+main theorem and are stated separately.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+structure MatchedPair where
+  L : Type
+  G : Type
+  mulL : L -> L -> L
+  oneL : L
+  mulG : G -> G -> G
+  oneG : G
+  mulL_assoc : forall a b c, mulL (mulL a b) c = mulL a (mulL b c)
+  oneL_mul   : forall a, mulL oneL a = a
+  mul_oneL   : forall a, mulL a oneL = a
+  mulG_assoc : forall g h k, mulG (mulG g h) k = mulG g (mulG h k)
+  oneG_mul   : forall g, mulG oneG g = g
+  mul_oneG   : forall g, mulG g oneG = g
+  lact       : G -> L -> L   -- notation lact g a = g |> a
+  ract       : G -> L -> G   -- notation ract g a = g <| a
+  lact_oneG  : forall a, lact oneG a = a
+  ract_oneG  : forall a, ract oneG a = oneG
+  lact_oneL  : forall g, lact g oneL = oneL
+  ract_oneL  : forall g, ract g oneL = g
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data MatchedPair l g = MatchedPair
+  { mulL    :: l -> l -> l
+  , oneL    :: l
+  , mulG    :: g -> g -> g
+  , oneG    :: g
+  , lact    :: g -> l -> l   -- g |> a
+  , ract    :: g -> l -> g   -- g <| a
+  -- plus proof obligations for associativity, units, and U1a/b, U2a/b
+  }
+\end{lstlisting}
+
+\begin{fidelitynote}
+In Lean, the monoid laws and unit-compatibility conditions are bundled as
+\emph{fields} of the structure (proofs are data at \lean{Prop} universe).
+The Haskell rendering cannot enforce them in the type; they become documentation
+or runtime-checked invariants.
+\end{fidelitynote}
+
+
+%===================================================================
+\section{The Zappa--Sz\'{e}p product}
+%===================================================================
+
+\subsection{Definition: \lean{MatchedPair.mul}}
+
+\begin{defn}[Zappa--Sz\'{e}p product operation]
+Given a matched pair $P$, define a binary operation on $L \times G$ by:
+\[
+  (a, g) \cdot (b, h)
+  \;=\;
+  \bigl(a \cdot_L (g \triangleright b),\;\; (g \triangleleft b) \cdot_G h\bigr).
+\]
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def MatchedPair.mul (x y : P.L * P.G) : P.L * P.G :=
+  (P.mulL x.1 (P.lact x.2 y.1), P.mulG (P.ract x.2 y.1) y.2)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+zsMul :: MatchedPair l g -> (l, g) -> (l, g) -> (l, g)
+zsMul p (a, g) (b, h) =
+  (mulL p a (lact p g b), mulG p (ract p g b) h)
+\end{lstlisting}
+
+
+%===================================================================
+\section{The four cocycle axioms}
+%===================================================================
+
+\subsection{Definition: \lean{MatchedPair.ZS1}}
+
+\begin{defn}[ZS1: left action over product]
+\[
+  g \triangleright (a \cdot_L b)
+  \;=\;
+  (g \triangleright a) \cdot_L ((g \triangleleft a) \triangleright b).
+\]
+The left action distributes over the product in $L$, twisted by the restriction.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def MatchedPair.ZS1 : Prop :=
+  forall (g : P.G) (a b : P.L),
+    P.lact g (P.mulL a b) = P.mulL (P.lact g a) (P.lact (P.ract g a) b)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+zs1 :: MatchedPair l g -> Bool  -- for all g a b:
+-- lact g (mulL a b) == mulL (lact g a) (lact (ract g a) b)
+\end{lstlisting}
+
+
+\subsection{Definition: \lean{MatchedPair.ZS2}}
+
+\begin{defn}[ZS2: left action of $G$]
+\[
+  (g \cdot_G h) \triangleright a
+  \;=\;
+  g \triangleright (h \triangleright a).
+\]
+The left action is an action of $G$ (i.e.\ a monoid homomorphism $G \to \mathrm{End}(L)$).
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def MatchedPair.ZS2 : Prop :=
+  forall (g h : P.G) (a : P.L),
+    P.lact (P.mulG g h) a = P.lact g (P.lact h a)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- zs2: lact (mulG g h) a == lact g (lact h a)
+\end{lstlisting}
+
+
+\subsection{Definition: \lean{MatchedPair.ZS3}}
+
+\begin{defn}[ZS3: restriction over product in $G$]
+\[
+  (g \cdot_G h) \triangleleft a
+  \;=\;
+  (g \triangleleft (h \triangleright a)) \cdot_G (h \triangleleft a).
+\]
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def MatchedPair.ZS3 : Prop :=
+  forall (g h : P.G) (a : P.L),
+    P.ract (P.mulG g h) a = P.mulG (P.ract g (P.lact h a)) (P.ract h a)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- zs3: ract (mulG g h) a == mulG (ract g (lact h a)) (ract h a)
+\end{lstlisting}
+
+
+\subsection{Definition: \lean{MatchedPair.ZS4}}
+
+\begin{defn}[ZS4: right action of $L$]
+\[
+  g \triangleleft (a \cdot_L b)
+  \;=\;
+  (g \triangleleft a) \triangleleft b.
+\]
+The restriction is a right action of $L$ on $G$.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def MatchedPair.ZS4 : Prop :=
+  forall (g : P.G) (a b : P.L),
+    P.ract g (P.mulL a b) = P.ract (P.ract g a) b
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- zs4: ract g (mulL a b) == ract (ract g a) b
+\end{lstlisting}
+
+
+\subsection{Definition: \lean{MatchedPair.Assoc}}
+
+\begin{defn}[Associativity of the Zappa--Sz\'{e}p product]
+The operation $\lean{mul}$ on $L \times G$ is associative:
+\[
+  \forall\, x, y, z : L \times G,\quad
+  (x \cdot y) \cdot z = x \cdot (y \cdot z).
+\]
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def MatchedPair.Assoc : Prop :=
+  forall x y z : P.L * P.G, P.mul (P.mul x y) z = P.mul x (P.mul y z)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+assocProp :: MatchedPair l g -> Bool  -- for all x y z:
+-- zsMul p (zsMul p x y) z == zsMul p x (zsMul p y z)
+\end{lstlisting}
+
+
+%===================================================================
+\section{Main theorems}
+%===================================================================
+
+\subsection{Theorem: \lean{MatchedPair.assoc\_of\_zs}}
+
+\begin{thm}[Forward direction: ZS1--ZS4 imply associativity]
+Suppose $P$ is a matched pair and the four cocycle axioms hold.
+Then the Zappa--Sz\'{e}p product is associative.
+
+Proof sketch: the $L$-coordinate follows from ZS1 (re-associating the action over
+a product) and ZS2 (the action law); the $G$-coordinate from ZS3 and ZS4.
+No unit law is used.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem MatchedPair.assoc_of_zs
+    (h1 : P.ZS1) (h2 : P.ZS2) (h3 : P.ZS3) (h4 : P.ZS4) :
+    P.Assoc
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+assocOfZS :: ZS1 p -> ZS2 p -> ZS3 p -> ZS4 p -> Assoc p
+-- Proof: equational, L-coord from ZS1+ZS2, G-coord from ZS3+ZS4.
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{MatchedPair.zs\_of\_assoc}}
+
+\begin{thm}[Converse direction: associativity implies ZS1--ZS4]
+If the Zappa--Sz\'{e}p product is associative, then all four cocycle axioms hold.
+
+Proof sketch: each axiom is recovered by specialising associativity at unit
+elements.  ZS1 and ZS2 come from the $L$-coordinate of specific instances;
+ZS3 and ZS4 from the $G$-coordinate.  The unit-compatibility fields of
+\lean{MatchedPair} are exactly what is needed to collapse the instances.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem MatchedPair.zs_of_assoc (H : P.Assoc) :
+    P.ZS1 /\ P.ZS2 /\ P.ZS3 /\ P.ZS4
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+zsOfAssoc :: Assoc p -> (ZS1 p, ZS2 p, ZS3 p, ZS4 p)
+-- Proof: specialise associativity at unit elements.
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{MatchedPair.zs\_iff\_assoc}}
+
+\begin{thm}[Main theorem: equivalence]
+For any matched pair $P$:
+\[
+  (\lean{ZS1} \wedge \lean{ZS2} \wedge \lean{ZS3} \wedge \lean{ZS4})
+  \;\Longleftrightarrow\;
+  \mathrm{Assoc}.
+\]
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem MatchedPair.zs_iff_assoc :
+    (P.ZS1 /\ P.ZS2 /\ P.ZS3 /\ P.ZS4) <-> P.Assoc :=
+  <|fun <|h1, h2, h3, h4|> => P.assoc_of_zs h1 h2 h3 h4, P.zs_of_assoc|>
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+zsIffAssoc :: (ZS1 p, ZS2 p, ZS3 p, ZS4 p) <-> Assoc p
+zsIffAssoc = (uncurry4 assocOfZS, zsOfAssoc)
+\end{lstlisting}
+
+
+%===================================================================
+\section{Sanity-check example}
+%===================================================================
+
+\subsection{Definition: \lean{natDirect}}
+
+\begin{defn}[Direct product of $(\mathbb{N},+,0)$ with itself]
+The \textbf{trivial matched pair}: $L = G = \mathbb{N}$, multiplication $+$, unit
+$0$, left action $g \triangleright a = a$ (trivial), restriction
+$g \triangleleft a = g$ (identity).
+
+This is the direct product: $(a,g) \cdot (b,h) = (a + b, g + h)$.
+The four cocycle axioms hold trivially, and \lean{zs\_iff\_assoc} recovers
+associativity of $(\mathbb{N}, +)$ --- a sanity check that \lean{MatchedPair} is
+inhabited.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def natDirect : MatchedPair where
+  L := Nat;  G := Nat
+  mulL := Nat.add;  oneL := 0
+  mulG := Nat.add;  oneG := 0
+  mulL_assoc := fun a b c => Nat.add_assoc a b c
+  oneL_mul   := fun a => Nat.zero_add a
+  mul_oneL   := fun a => Nat.add_zero a
+  mulG_assoc := fun a b c => Nat.add_assoc a b c
+  oneG_mul   := fun a => Nat.zero_add a
+  mul_oneG   := fun a => Nat.add_zero a
+  lact := fun _ a => a
+  ract := fun g _ => g
+  lact_oneG := fun _ => rfl;  ract_oneG := fun _ => rfl
+  lact_oneL := fun _ => rfl;  ract_oneL := fun _ => rfl
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+natDirect :: MatchedPair Int Int
+natDirect = MatchedPair
+  { mulL = (+), oneL = 0
+  , mulG = (+), oneG = 0
+  , lact = \_  a -> a   -- trivial action
+  , ract = \g  _ -> g   -- identity restriction
+  }
+\end{lstlisting}
+
+\end{document}

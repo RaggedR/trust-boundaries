@@ -1,0 +1,373 @@
+\documentclass[11pt,a4paper]{article}
+\input{preamble}
+\usepackage{stmaryrd}
+
+\title{Human Verification: \texttt{Composition}\\[4pt]
+  \large Container Composition $\triangleleft$ and its Monoidal Structure}
+\author{Machine-generated from \texttt{lean/Composition.lean} for review by Neil Ghani}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document presents every definition and theorem \emph{statement} from the
+Lean~4 module \lean{Composition} in three parallel forms: the original Lean,
+a readable Haskell rendering, and precise mathematical English.  Proofs are
+omitted --- they are machine-checked by Lean.
+
+The module equips the category $\mathbf{Cont}$ of containers with a
+\textbf{composition product} $\triangleleft$ whose extension satisfies
+$\llbracket G \triangleleft F \rrbracket = \llbracket G \rrbracket \circ
+\llbracket F \rrbracket$.  The unit is the identity container $I$.  The main
+results are the left and right unitors and the associator, each proved as an
+explicit isomorphism of containers.  A $\triangleleft$-comonoid is exactly a
+directed container.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%===================================================================
+\section{Overview}
+%===================================================================
+
+For containers $F = S \triangleleft P$ and $G = T \triangleleft Q$, their
+\textbf{composition} $G \triangleleft F$ (``$G$ outside, $F$ inside'') has
+\begin{itemize}
+  \item shapes $\Sigma_{t : T}(Q(t) \to S)$ --- an outer $G$-shape $t$ together
+    with an assignment of an inner $F$-shape to each $G$-position; and
+  \item positions at $(t, f)$ given by $\Sigma_{q : Q(t)} P(f(q))$ --- pick an
+    outer position $q$, then a position in the inner shape $f(q)$.
+\end{itemize}
+
+The key fact is that $\llbracket G \triangleleft F \rrbracket X \cong \llbracket
+G \rrbracket (\llbracket F \rrbracket X)$, made definitional by the
+\lean{compExt}/\lean{compExtInv} pair.
+
+%===================================================================
+\section{The composition product}
+%===================================================================
+
+\subsection{Definition: \lean{Container.comp}}
+
+\begin{defn}[Container composition]
+For containers $G$ and $F$, their composition $G \triangleleft F$ is the
+container with
+\[
+  \mathrm{Shape}(G \triangleleft F) = \Sigma_{t : G.\mathrm{Shape}}
+    \bigl(G.\mathrm{Pos}(t) \to F.\mathrm{Shape}\bigr),
+\]
+\[
+  \mathrm{Pos}(G \triangleleft F)(t, f) = \Sigma_{q : G.\mathrm{Pos}(t)}
+    F.\mathrm{Pos}(f(q)).
+\]
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.comp (G F : Container) : Container where
+  Shape := (t : G.Shape) * (G.Pos t -> F.Shape)
+  Pos := fun tf => (q : G.Pos tf.1) * F.Pos (tf.2 q)
+
+scoped infixr:70 " comp " => Container.comp
+-- (written with the unicode diamond operator in Lean source)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- G `outside` F:
+data CompShape g p_g f = CompShape g (p_g -> f)
+-- Positions at (t, assign):
+data CompPos p_g p_f t assign = CompPos (p_g t) (p_f (assign (p_g t)))
+-- Approximate (non-dependent):
+data Comp g p_g f p_f x = Comp g (p_g -> f) (p_g -> p_f -> x)
+\end{lstlisting}
+
+\begin{fidelitynote}
+The shape and position types depend on one another in a genuinely dependent
+way ($P_F$ is indexed by the value of the inner shape function $f(q)$).
+Haskell cannot express this; the rendering above is an approximation that
+loses the dependency.
+\end{fidelitynote}
+
+
+\subsection{Definition: \lean{Container.I}}
+
+\begin{defn}[Identity container]
+The \textbf{identity container} $I$ has one shape (the unit type) and one
+position.  Its extension is the identity functor: $\llbracket I \rrbracket X
+= X$.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.I : Container where
+  Shape := Unit
+  Pos := fun _ => Unit
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Identity functor: Id x = x.
+-- As a container: one shape (Unit), one position (Unit).
+newtype Id x = Id x
+\end{lstlisting}
+
+%===================================================================
+\section{Extension isomorphism}
+%===================================================================
+
+\subsection{Definition: \lean{Container.compExt} and \lean{Container.compExtInv}}
+
+\begin{defn}[Extension isomorphism]
+There is a natural bijection
+\[
+  \llbracket G \triangleleft F \rrbracket X \;\cong\; \llbracket G \rrbracket
+  \bigl(\llbracket F \rrbracket X\bigr),
+\]
+given by:
+\begin{align*}
+  \mathrm{compExt}\,\langle (t, f), \ell \rangle
+    &= \langle t,\; q \mapsto \langle f(q),\; r \mapsto \ell(q, r) \rangle \rangle, \\
+  \mathrm{compExtInv}\,\langle t, m \rangle
+    &= \langle (t,\; q \mapsto m(q).1),\; (q, r) \mapsto m(q).2(r) \rangle.
+\end{align*}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.compExt {G F : Container} {X : Type} :
+    Ext (G comp F) X -> Ext G (Ext F X) :=
+  fun p => <|p.1.1, fun q => <|p.1.2 q, fun r => p.2 <|q, r|>|>|>
+
+def Container.compExtInv {G F : Container} {X : Type} :
+    Ext G (Ext F X) -> Ext (G comp F) X :=
+  fun p => <|<|p.1, fun q => (p.2 q).1|>, fun qr => (p.2 qr.1).2 qr.2|>
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+compExt :: Comp g p_g f p_f x -> g -> (p_g -> (f, p_f -> x))
+compExt (Comp t assign lab) = (t, \q -> (assign q, \r -> lab q r))
+
+compExtInv :: (g, p_g -> (f, p_f -> x)) -> Comp g p_g f p_f x
+compExtInv (t, m) = Comp t (fst . m) (\q r -> snd (m q) r)
+\end{lstlisting}
+
+
+\subsection{Theorems: \lean{compExtInv\_compExt} and \lean{compExt\_compExtInv}}
+
+\begin{thm}[Extension isomorphism is an isomorphism]
+The maps \lean{compExt} and \lean{compExtInv} are mutually inverse:
+\begin{align*}
+  \mathrm{compExtInv} \circ \mathrm{compExt} &= \mathrm{id}, \\
+  \mathrm{compExt} \circ \mathrm{compExtInv} &= \mathrm{id}.
+\end{align*}
+Both round trips hold definitionally (proved by \lean{rfl} after
+\lean{cases}), because the position fibres agree definitionally.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.compExtInv_compExt {G F : Container} {X : Type}
+    (p : Ext (G comp F) X) :
+    Container.compExtInv (Container.compExt p) = p
+
+theorem Container.compExt_compExtInv {G F : Container} {X : Type}
+    (p : Ext G (Ext F X)) :
+    Container.compExt (Container.compExtInv p) = p
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- compExtInv . compExt = id   (and vice versa)
+-- Both hold by the eta-laws for pairs.
+\end{lstlisting}
+
+%===================================================================
+\section{Container isomorphisms}
+%===================================================================
+
+\subsection{Structure: \lean{ContainerIso}}
+
+\begin{defn}[Container isomorphism]
+An \textbf{isomorphism of containers} $C \cong D$ is a pair of container
+morphisms $\varphi : C \to D$ and $\psi : D \to C$ satisfying:
+\[
+  \varphi \circ \psi = \mathrm{id}_C \quad\text{and}\quad
+  \psi \circ \varphi = \mathrm{id}_D.
+\]
+(Composition here is morphism composition in $\mathbf{Cont}$.)
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+structure ContainerIso (C D : Container) where
+  hom : ContainerMorphism C D
+  inv : ContainerMorphism D C
+  hom_inv : hom.comp inv = ContainerMorphism.id C
+  inv_hom : inv.comp hom = ContainerMorphism.id D
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data ContainerIso c d = ContainerIso
+  { hom     :: Morph c d
+  , inv     :: Morph d c
+  , hom_inv :: hom `compMorph` inv == idMorph c   -- laws
+  , inv_hom :: inv `compMorph` hom == idMorph d
+  }
+\end{lstlisting}
+
+%===================================================================
+\section{Monoidal coherences}
+%===================================================================
+
+\subsection{Definition: \lean{Container.leftUnitor}}
+
+\begin{defn}[Left unitor]
+There is a canonical isomorphism of containers
+\[
+  \lambda_F : I \triangleleft F \;\cong\; F.
+\]
+A shape of $I \triangleleft F$ is $(\langle\rangle, f)$ with
+$f : \mathrm{Unit} \to F.\mathrm{Shape}$; the bijection with $F.\mathrm{Shape}$
+sends $f \mapsto f(\langle\rangle)$ and $s \mapsto (\lambda\, \_ \to s)$.
+Positions collapse by the same $\mathrm{Unit}$-projection.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.leftUnitor (F : Container) :
+    ContainerIso (Container.I comp F) F where
+  hom :=
+    { onShapes := fun tf => tf.2 ()
+      onPos := fun _ p => <|(), p|> }
+  inv :=
+    { onShapes := fun s => <|(), fun _ => s|>
+      onPos := fun _ qp => qp.2 }
+  hom_inv := rfl
+  inv_hom := rfl
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+leftUnitor :: ContainerIso (I `Comp` F) F
+-- hom: ((), f) |-> f (); pos: p |-> ((), p)
+-- inv: s     |-> ((), const s); pos: (q,p) |-> p
+\end{lstlisting}
+
+
+\subsection{Definition: \lean{Container.rightUnitor}}
+
+\begin{defn}[Right unitor]
+There is a canonical isomorphism of containers
+\[
+  \rho_F : F \triangleleft I \;\cong\; F.
+\]
+A shape of $F \triangleleft I$ is $(s, g)$ with $g : F.\mathrm{Pos}(s) \to
+\mathrm{Unit}$; the bijection projects onto $s$.  Positions collapse
+$\Sigma_{p : F.\mathrm{Pos}(s)} \mathrm{Unit} \cong F.\mathrm{Pos}(s)$.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.rightUnitor (F : Container) :
+    ContainerIso (F comp Container.I) F where
+  hom :=
+    { onShapes := fun sg => sg.1
+      onPos := fun _ p => <|p, ()|> }
+  inv :=
+    { onShapes := fun s => <|s, fun _ => ()|>
+      onPos := fun _ pu => pu.1 }
+  hom_inv := rfl
+  inv_hom := rfl
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+rightUnitor :: ContainerIso (F `Comp` I) F
+-- hom: (s, g) |-> s;   pos: p |-> (p, ())
+-- inv: s      |-> (s, const ()); pos: (p,()) |-> p
+\end{lstlisting}
+
+
+\subsection{Definition: \lean{Container.associator}}
+
+\begin{defn}[Associator]
+There is a canonical isomorphism of containers
+\[
+  \alpha_{H,G,F} : (H \triangleleft G) \triangleleft F \;\cong\;
+  H \triangleleft (G \triangleleft F).
+\]
+On shapes it curries/uncurries the inner shape assignment:
+a shape $((a, g), k)$ on the left (where $k : \Sigma_{u : H.\mathrm{Pos}(a)}
+G.\mathrm{Pos}(g(u)) \to F.\mathrm{Shape}$) corresponds to $(a, m)$ on the
+right (where $m(u) = \langle g(u),\, v \mapsto k(u, v) \rangle$).
+On positions it re-associates the nested dependent sum:
+$(( u, v ), p) \leftrightarrow (u, (v, p))$.
+
+Crucially, the position fibre $F.\mathrm{Pos}((m\,u).2\,v)$ equals
+$F.\mathrm{Pos}(k(u, v))$ \emph{definitionally}, so no transport is needed.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.associator (H G F : Container) :
+    ContainerIso ((H comp G) comp F) (H comp (G comp F)) where
+  hom :=
+    { onShapes := fun xk =>
+        <|xk.1.1, fun u => <|xk.1.2 u, fun v => xk.2 <|u, v|>|>|>
+      onPos := fun _ uvp => <|<|uvp.1, uvp.2.1|>, uvp.2.2|> }
+  inv :=
+    { onShapes := fun am =>
+        <|<|am.1, fun u => (am.2 u).1|>, fun y => (am.2 y.1).2 y.2|>
+      onPos := fun _ yp => <|yp.1.1, yp.1.2, yp.2|> }
+  hom_inv := ...  -- ContainerMorphism.ext' rfl (cases + rfl)
+  inv_hom := ...  -- ContainerMorphism.ext' rfl (cases + rfl)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+associator :: ContainerIso ((H `Comp` G) `Comp` F) (H `Comp` (G `Comp` F))
+-- hom shapes: ((a,g),k) |-> (a, \u -> (g u, \v -> k (u,v)))
+-- hom pos:    ((u,v),p) |-> (u,(v,p))
+-- inv shapes: (a,m)     |-> ((a, fst . m), \(u,v) -> snd (m u) v)
+-- inv pos:    (u,(v,p)) |-> ((u,v),p)
+\end{lstlisting}
+
+%===================================================================
+\section{The compositional payoff}
+%===================================================================
+
+The fact that $({\mathbf{Cont}}, \triangleleft, I)$ is a monoidal category
+(with the above coherences) means that a \textbf{$\triangleleft$-comonoid} in
+$\mathbf{Cont}$ --- a container $C$ equipped with a counit $C \to I$ and a
+comultiplication $C \to C \triangleleft C$ satisfying the comonoid laws ---
+is exactly a \textbf{directed container} (equivalently, a comonad on
+$\mathbf{Set}$ whose underlying functor is a container).  The comonoid laws
+unfold to the five directed-container axioms (D1--D5) formalised in
+\lean{Containers.Directed}.
+
+%===================================================================
+\section{Translation conventions}
+%===================================================================
+
+\begin{enumerate}
+\item \textbf{Dependent types.}  The position type in $G \triangleleft F$
+  depends on the shape value.  Haskell approximations drop this dependency.
+
+\item \textbf{Definitional equalities.}  The round trips for \lean{compExt} /
+  \lean{compExtInv} and for the associator both hold \emph{definitionally}
+  in Lean (proved by \lean{rfl} after \lean{cases}).  This is a key feature
+  of the Lean 4 type theory, not available in most proof assistants.
+
+\item \textbf{Unicode notation.}  Lean uses the diamond operator
+  $\triangleleft$ for container composition.  The listings use
+  \texttt{comp} as an ASCII placeholder.
+
+\item \textbf{Proof bodies omitted.}  Only statements are presented here.
+\end{enumerate}
+
+\end{document}

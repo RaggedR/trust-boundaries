@@ -1,0 +1,608 @@
+\documentclass[11pt,a4paper]{article}
+\input{preamble}
+
+\title{Human Verification: \texttt{Containers.Inventory}\\[4pt]
+  \large Inventory as an Update Monad}
+\author{Machine-generated from \texttt{lean/Inventory.lean} for review by Neil Ghani}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document presents every definition and theorem \emph{statement} from the
+Lean~4 module \lean{Containers.Inventory} in three parallel forms: the
+original Lean, a readable Haskell rendering, and precise mathematical English.
+Proofs are omitted --- they are machine-checked by Lean.  The purpose is to
+let a human verifier confirm that the formalisation captures the intended
+mathematics.
+
+The file verifies \S8 of the paper: directed containers with
+\emph{constant position sets} are exactly \emph{monoid actions}, and these
+co-interpret as \emph{update monads} $T X = S \to M \times X$.  Kleisli maps
+observe a stock level in $S$ and emit a movement in $M$.  Two paper remarks
+are machine-checked: abelianisation forgets audit-trail order, and monus
+clamps on $\mathbb{N}$ while $\mathbb{Z}$ admits backorders.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%===================================================================
+\section{Overview}
+%===================================================================
+
+In a directed container $\mathcal{D}$ where $\mathrm{Pos}(s) = M$ for all
+shapes $s$ (positions independent of shape), the shift $\mathbf{shift}(s,
+p, q)$ is genuinely a binary operation $M \times M \to M$ and does not depend
+on $s$.  The five directed-container laws then collapse exactly to the axioms
+of a monoid action: $M$ is the acting monoid, $S = \mathrm{Shape}$ is the set
+of states.
+
+The update monad $T_A X = A.S \to A.\mathrm{Mon}.M \times X$ is the
+co-interpretation of this directed container: a Kleisli map looks at the
+current state, emits a movement, and returns a value.
+
+
+%===================================================================
+\section{Monoid actions}
+%===================================================================
+
+% --- MonoidAction --------------------------------------------------
+\subsection{Structure: \lean{MonoidAction}}
+
+\begin{defn}[Bundled right monoid action]
+A \textbf{bundled right monoid action} $A$ consists of:
+\begin{itemize}
+  \item a monoid $A.\lean{Mon}$ of \emph{stock movements};
+  \item a type $A.S$ of \emph{states} (stock levels);
+  \item an action $A.\lean{act} : A.S \to A.\lean{Mon}.M \to A.S$;
+  \item a proof of \lean{act\_one}: $A.\lean{act}(s, 1) = s$; and
+  \item a proof of \lean{act\_mul}: $A.\lean{act}(A.\lean{act}(s, m), m') =
+    A.\lean{act}(s, m \cdot m')$.
+\end{itemize}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+structure MonoidAction where
+  Mon     : Monoid'
+  S       : Type
+  act     : S -> Mon.M -> S
+  act_one : forall s, act s Mon.one = s
+  act_mul : forall s m m', act (act s m) m' = act s (Mon.mul m m')
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- A right monoid action:
+class Monoid m => Action s m where
+  act :: s -> m -> s
+  -- act_one: act s mempty = s
+  -- act_mul: act (act s m) m' = act s (mappend m m')
+\end{lstlisting}
+
+
+%===================================================================
+\section{Constant-position directed containers}
+%===================================================================
+
+% --- ConstDC -------------------------------------------------------
+\subsection{Structure: \lean{ConstDC}}
+
+\begin{defn}[Constant-position directed container]
+A \textbf{constant-position directed container} $C$ has:
+\begin{itemize}
+  \item a type $C.S$ of shapes (states);
+  \item a single position type $C.M$ (independent of the shape);
+  \item $C.\lean{sub} : C.S \to C.M \to C.S$ (state transition);
+  \item $C.\lean{root} : C.M$ (unit movement); and
+  \item $C.\lean{shift} : C.M \to C.M \to C.M$ (movement composition).
+\end{itemize}
+Five laws (c1--c5) correspond to the directed-container laws D1--D5 with all
+shape-dependent transports removed: the D2/D5 casts vanish because position
+types are constant.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+structure ConstDC where
+  S     : Type
+  M     : Type
+  sub   : S -> M -> S
+  root  : M
+  shift : M -> M -> M
+  c1 : forall s, sub s root = s
+  c2 : forall m, shift root m = m
+  c3 : forall m, shift m root = m
+  c4 : forall s p q, sub s (shift p q) = sub (sub s p) q
+  c5 : forall p q r, shift (shift p q) r = shift p (shift q r)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data ConstDC s m = ConstDC
+  { cdcSub   :: s -> m -> s
+  , cdcRoot  :: m
+  , cdcShift :: m -> m -> m
+  -- c1..c5 as law comments
+  }
+\end{lstlisting}
+
+\begin{fidelitynote}
+The key insight of this section is that with constant positions, the shift
+$C.\lean{shift} : C.M \to C.M \to C.M$ is a genuine binary operation on a
+single set $M$ --- giving a monoid $(M, C.\lean{shift}, C.\lean{root})$ with
+laws c2/c3/c5.  For varying $\mathrm{Pos}(s)$, the shift is only a fibrewise
+composition and no global monoid exists.  This is the \emph{sound} case of
+``the monoid that wasn't'' (noted in the dream journal).
+\end{fidelitynote}
+
+
+% --- ConstDC.toAction / MonoidAction.toConst ----------------------
+\subsection{Definitions: \lean{ConstDC.toAction} and \lean{MonoidAction.toConst}}
+
+\begin{defn}[Dictionary between \lean{ConstDC} and \lean{MonoidAction}]
+The two structures are definitionally isomorphic:
+\begin{itemize}
+  \item $\lean{ConstDC.toAction}(C)$: the monoid is $(C.M, C.\lean{shift},
+    C.\lean{root})$; the action is $C.\lean{sub}$; laws c2/c3/c5 give monoid
+    laws; laws c1/c4 give action laws.
+  \item $\lean{MonoidAction.toConst}(A)$: $S = A.S$, $M = A.\lean{Mon}.M$,
+    $\lean{sub} = A.\lean{act}$, $\lean{root} = A.\lean{Mon}.\lean{one}$,
+    $\lean{shift} = A.\lean{Mon}.\lean{mul}$.
+\end{itemize}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def ConstDC.toAction (C : ConstDC) : MonoidAction where
+  Mon := { M := C.M, mul := C.shift, one := C.root,
+           mul_assoc := C.c5, one_mul := C.c2, mul_one := C.c3 }
+  S := C.S; act := C.sub
+  act_one := C.c1
+  act_mul := fun s m m' => (C.c4 s m m').symm
+
+def MonoidAction.toConst (A : MonoidAction) : ConstDC where
+  S := A.S; M := A.Mon.M
+  sub := A.act; root := A.Mon.one; shift := A.Mon.mul
+  c1 := A.act_one; c2 := A.Mon.one_mul; c3 := A.Mon.mul_one
+  c4 := fun s p q => (A.act_mul s p q).symm
+  c5 := A.Mon.mul_assoc
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+toAction :: ConstDC s m -> (s, m, m -> m -> m)
+toAction c = (cdcSub c, cdcRoot c, cdcShift c)
+
+toConst :: Action s m => s -> m -> ConstDC s m
+toConst _ _ = ConstDC act mempty mappend
+\end{lstlisting}
+
+
+% --- round trips ---------------------------------------------------
+\subsection{Theorems: \lean{MonoidAction.toConst\_toAction} and \lean{ConstDC.toAction\_toConst}}
+
+\begin{thm}[Dictionary round trips]
+The dictionaries are mutually inverse (definitionally):
+\begin{enumerate}
+  \item $A.\lean{toConst}.\lean{toAction} = A$.
+  \item $C.\lean{toAction}.\lean{toConst} = C$.
+\end{enumerate}
+Both hold by \lean{rfl} (structure eta and proof irrelevance).
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem MonoidAction.toConst_toAction (A : MonoidAction) :
+    A.toConst.toAction = A := rfl
+
+theorem ConstDC.toAction_toConst (C : ConstDC) :
+    C.toAction.toConst = C := rfl
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- toConst . toAction = id
+-- toAction . toConst = id
+\end{lstlisting}
+
+
+% --- transport_const ----------------------------------------------
+\subsection{Theorem: \lean{transport\_const}}
+
+\begin{thm}[Constant-fibre transport is identity]
+If the motive of a transport is constant (does not depend on the shape),
+then the transport is the identity:
+\[
+  \forall\, h : s = t,\; q : M,\quad \mathrm{transport}_{M}(h, q) = q.
+\]
+This is the key lemma explaining why D2/D5 casts vanish in the constant-
+position setting.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem transport_const {S M : Type} :
+    forall {s t : S} (h : s = t) (q : M),
+    @Eq.rec S s (fun _ _ => M) q t h = q
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- In Haskell, transport along equalities does not exist
+-- (no propositional equality at the term level).
+-- This theorem is vacuously true: there is no Eq.rec to reason about.
+\end{lstlisting}
+
+
+% --- ConstDC.toDirected / MonoidAction.toDC -----------------------
+\subsection{Definitions: \lean{ConstDC.toDirected} and \lean{MonoidAction.toDC}}
+
+\begin{defn}[Embedding into DirectedContainer]
+$\lean{ConstDC.toDirected}(C)$ embeds a constant-position directed container
+into the general \lean{DirectedContainer} type by setting $\mathrm{Pos}(s) :=
+C.M$ for all shapes $s$.  D1--D5 are exactly c1--c5 (with D2 and D5
+augmented by \lean{transport\_const} to handle the casts).
+
+$\lean{MonoidAction.toDC}(A) := A.\lean{toConst}.\lean{toDirected}$ is the
+corresponding \lean{DirectedContainer} for a monoid action.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def ConstDC.toDirected (C : ConstDC) : DirectedContainer where
+  Shape := C.S; Pos := fun _ => C.M
+  root := fun _ => C.root
+  sub := C.sub
+  shift := fun _ p q => C.shift p q
+  d1 := C.c1; d4 := C.c4; d3 := fun _ p => C.c3 p
+  d2 := fun s q =>
+    (C.c2 q).trans (transport_const (C.c1 s) q).symm
+  d5 := fun s p q q' =>
+    (congrArg (C.shift (C.shift p q))
+              (transport_const (C.c4 s p q).symm q')).trans
+      (C.c5 p q q')
+
+def MonoidAction.toDC (A : MonoidAction) : DirectedContainer :=
+  A.toConst.toDirected
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+toDC :: Action s m => s -> DirectedContainer s m
+toDC _ = DirectedContainer
+  { dcPos   = const mempty  -- position type is always M
+  , dcRoot  = mempty
+  , dcSub   = act
+  , dcShift = \_ -> mappend
+  }
+\end{lstlisting}
+
+
+%===================================================================
+\section{The update monad}
+%===================================================================
+
+% --- Update --------------------------------------------------------
+\subsection{Definition: \lean{Update}}
+
+\begin{defn}[Update monad]
+The \textbf{update monad} of a monoid action $A$ is:
+\[
+  T_A\, X \;=\; A.S \to A.\lean{Mon}.M \times X.
+\]
+A value of type $T_A\, X$ is a \emph{Kleisli map}: it observes a current
+state in $A.S$, emits a movement in $A.\lean{Mon}.M$, and returns a value
+in $X$.  This is the co-interpretation of the constant-position directed
+container $A.\lean{toDC}$ (Ahman--Uustalu, \emph{Update monads}).
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Update (A : MonoidAction) (X : Type) : Type :=
+  A.S -> A.Mon.M * X
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+newtype Update s m x = Update { runUpdate :: s -> (m, x) }
+-- cf. Data.Functor.Product
+\end{lstlisting}
+
+
+% --- pure / bind ----------------------------------------------------
+\subsection{Definitions: \lean{Update.pure} and \lean{Update.bind}}
+
+\begin{defn}[Monad operations]
+\begin{itemize}
+  \item $\lean{pure}(A, x) : T_A\, X$ --- emit no movement, return $x$:
+    $\lean{pure}(A, x)(s) = (1, x)$.
+  \item $\lean{bind}(t, k) : T_A\, Y$ for $t : T_A\, X$, $k : X \to T_A\, Y$
+    --- run $t$, apply the emitted movement to the state, run $k$ on the
+    updated state, multiply the two movements:
+    \[
+      \lean{bind}(t, k)(s) \;=\;
+      \bigl(t(s).\mathbf{1} \cdot k(t(s).\mathbf{2})(A.\lean{act}(s,\, t(s).\mathbf{1})).\mathbf{1},\;
+      k(t(s).\mathbf{2})(A.\lean{act}(s,\, t(s).\mathbf{1})).\mathbf{2}\bigr).
+    \]
+\end{itemize}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def pure (A : MonoidAction) (x : X) : Update A X :=
+  fun _ => (A.Mon.one, x)
+
+def bind (t : Update A X) (k : X -> Update A Y) : Update A Y :=
+  fun s =>
+    (A.Mon.mul (t s).1 (k (t s).2 (A.act s (t s).1)).1,
+     (k (t s).2 (A.act s (t s).1)).2)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+instance (Monoid m, Action s m) => Monad (Update s m) where
+  return x = Update $ \_ -> (mempty, x)
+  Update t >>= k = Update $ \s ->
+    let (m,  x) = t s
+        (m', y) = runUpdate (k x) (act s m)
+    in  (mappend m m', y)
+\end{lstlisting}
+
+
+% --- Monad laws ----------------------------------------------------
+\subsection{Theorems: monad laws}
+
+\begin{thm}[Monad laws for \lean{Update}]
+\begin{enumerate}
+  \item \textbf{Left unit}: $\lean{bind}(\lean{pure}(A, x), k) = k(x)$.
+    Uses \lean{act\_one} (the state is unchanged by the unit movement)
+    and \lean{one\_mul}.
+  \item \textbf{Right unit}: $\lean{bind}(t, \lean{pure}(A)) = t$.
+    Uses \lean{mul\_one}.
+  \item \textbf{Associativity}: $\lean{bind}(\lean{bind}(t, k), h) =
+    \lean{bind}(t, \lambda x.\, \lean{bind}(k(x), h))$.
+    Uses \lean{act\_mul} and \lean{mul\_assoc}.
+\end{enumerate}
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem pure_bind (x : X) (k : X -> Update A Y) :
+    bind (pure A x) k = k x
+
+theorem bind_pure (t : Update A X) : bind t (pure A) = t
+
+theorem bind_assoc (t : Update A X) (k : X -> Update A Y)
+    (h : Y -> Update A Z) :
+    bind (bind t k) h = bind t (fun x => bind (k x) h)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Standard monad laws:
+-- return x >>= k      = k x         (left unit)
+-- t >>= return        = t            (right unit)
+-- (t >>= k) >>= h     = t >>= (\x -> k x >>= h)   (associativity)
+\end{lstlisting}
+
+
+%===================================================================
+\section{Paper remarks, machine-checked}
+%===================================================================
+
+% --- abelianization -----------------------------------------------
+\subsection{Example: abelianisation forgets audit-trail order}
+
+\begin{prop}[Abelianisation forgets order]
+Two movement words with the same net balance can differ as audit trails, and
+can have different operational consequences.  Specifically:
+\[
+  \mathrm{net}[\mathrm{receipt}(2), \mathrm{issue}(1)]
+  \;=\; \mathrm{net}[\mathrm{issue}(1), \mathrm{receipt}(2)]
+\]
+(both equal 1), yet $[\mathrm{receipt}(2), \mathrm{issue}(1)] \neq
+[\mathrm{issue}(1), \mathrm{receipt}(2)]$ as lists.  The second word passes
+through a shortage (from zero stock) that the first never sees.
+\end{prop}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+example :
+    net [.receipt 2, .issue 1] = net [.issue 1, .receipt 2] /\
+    ([Movement.receipt 2, .issue 1] != [.issue 1, .receipt 2]) := by
+  decide
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- net [Receipt 2, Issue 1] = net [Issue 1, Receipt 2]  -- both = 1
+-- but [Receipt 2, Issue 1] /= [Issue 1, Receipt 2]     -- as lists
+\end{lstlisting}
+
+
+% --- monus clamps / Z admits backorders ---------------------------
+\subsection{Theorems: monus clamps; $\mathbb{Z}$ admits backorders}
+
+\begin{prop}[Monus clamps on $\mathbb{N}$]
+Truncated subtraction on $\mathbb{N}$ silently discards unmet demand:
+$\exists s, m : \mathbb{N},\; (s - m) + m \neq s$.
+Witness: $s = 0$, $m = 1$.
+\end{prop}
+
+\begin{thm}[$\mathbb{Z}$ admits backorders]
+For all $s, m : \mathbb{Z}$, $(s - m) + m = s$.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+example : exists s m : Nat, (s - m) + m != s := <|0, 1, by decide|>
+
+theorem int_sub_add_cancel : forall s m : Int, (s - m) + m = s := by
+  intro s m; omega
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Nat monus: (0 - 1) + 1 = 0 /= 0+1 = 1  -- no, (0 - 1) = 0 in Nat
+-- so  (0 - 1) + 1 = 1 /= 0   -- True: Nat monus clamps
+monusClamps :: Bool
+monusClamps = ((0 :: Word) - 1) + 1 /= 0  -- True
+
+-- Int: (s - m) + m = s always
+intCancel :: Integer -> Integer -> Bool
+intCancel s m = (s - m) + m == s
+\end{lstlisting}
+
+
+%===================================================================
+\section{Concrete instance: two-product warehouse}
+%===================================================================
+
+% --- intPairMonoid / inventory -----------------------------------
+\subsection{Definitions: \lean{intPairMonoid} and \lean{inventory}}
+
+\begin{defn}[Integer-pair monoid and inventory action]
+The \textbf{integer-pair monoid} is $(\mathbb{Z} \times \mathbb{Z}, +, (0,0))$
+(componentwise addition).  The \textbf{inventory action} is the right action
+of $\mathbb{Z}^2$ on $\mathbb{Z}^2$ by componentwise addition:
+$\lean{act}((s_1, s_2), (m_1, m_2)) = (s_1 + m_1, s_2 + m_2)$.
+Negative stock levels represent backorders (accepted-but-unfulfilled demand).
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+@[reducible] def intPairMonoid : Monoid' where
+  M := Int * Int
+  mul a b := (a.1 + b.1, a.2 + b.2)
+  one := (0, 0)
+  ...
+
+@[reducible] def inventory : MonoidAction where
+  Mon := intPairMonoid
+  S := Int * Int
+  act s m := (s.1 + m.1, s.2 + m.2)
+  ...
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+type Stock = (Integer, Integer)
+
+instance Semigroup Stock where
+  (a1, a2) <> (b1, b2) = (a1+b1, a2+b2)
+
+instance Monoid Stock where
+  mempty = (0, 0)
+
+instance Action Stock Stock where
+  act (s1, s2) (m1, m2) = (s1+m1, s2+m2)
+\end{lstlisting}
+
+
+% --- warehouseDC / policy -----------------------------------------
+\subsection{Definitions: \lean{warehouseDC}, \lean{receive}, and \lean{policy}}
+
+\begin{defn}[Warehouse DC, replenishment policy]
+The \textbf{warehouse directed container} \lean{warehouseDC} $:=
+\lean{inventory}.\lean{toDC}$ is the directed container with stock levels as
+shapes and $\mathbb{Z}^2$-movements as positions.
+
+\lean{receive}$(m) : T_{\lean{inventory}}\, ()$ is a Kleisli map that
+unconditionally emits the movement $m$.
+
+The \textbf{order-up-to replenishment policy} is a Kleisli map: for each
+product, if stock is below~5, order up to~10:
+\[
+  \lean{policy}((), s) \;=\; \bigl((\text{if } s_1 < 5 \text{ then } 10 - s_1
+  \text{ else } 0,\; \text{if } s_2 < 5 \text{ then } 10 - s_2 \text{ else } 0),\;
+  ()\bigr).
+\]
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def warehouseDC : DirectedContainer := inventory.toDC
+
+@[reducible] def receive (m : Int * Int) : Update inventory Unit :=
+  fun _ => (m, ())
+
+@[reducible] def policy : Unit -> Update inventory Unit :=
+  fun _ s =>
+    ((if s.1 < 5 then 10 - s.1 else 0,
+      if s.2 < 5 then 10 - s.2 else 0), ())
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+type WarehouseM = Update Stock Stock
+
+receive :: Stock -> WarehouseM ()
+receive m = Update $ \_ -> (m, ())
+
+policy :: () -> WarehouseM ()
+policy () = Update $ \(s1, s2) ->
+  ((if s1 < 5 then 10 - s1 else 0,
+    if s2 < 5 then 10 - s2 else 0), ())
+\end{lstlisting}
+
+
+\subsection{Sanity checks (examples checked by \lean{decide})}
+
+\begin{prop}[Policy with product 1 low, product 2 high]
+With stocks $(2, 7)$ (product~1 below reorder, product~2 above):
+\begin{itemize}
+  \item the policy emits $(8, 0)$ (order~8 of product~1, nothing of~2);
+  \item applying the emitted order brings stocks to $(10, 7)$.
+\end{itemize}
+\end{prop}
+
+\begin{prop}[Kleisli composition threads state]
+Receiving 3 units of product~1 before the policy, starting from stocks
+$(1, 7)$: the policy sees stock~4 (= $1 + 3$) and orders~6; total emitted
+movement is $(9, 0)$.
+\end{prop}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+example : (policy () (2, 7)).1 = (8, 0) := by decide
+example : inventory.act (2, 7) (policy () (2, 7)).1 = (10, 7) := by decide
+example :
+    Update.bind (receive (3, 0)) (fun _ => policy ()) (1, 7)
+      = ((9, 0), ()) := by decide
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- runUpdate (policy ()) (2, 7) = ((8, 0), ())
+-- act (2,7) (8,0) = (10,7)
+-- runUpdate (receive (3,0) >>= (\_ -> policy ())) (1,7) = ((9,0),())
+\end{lstlisting}
+
+
+%===================================================================
+\section{Translation conventions}
+%===================================================================
+
+\begin{enumerate}
+\item \textbf{Bundled vs.\ typeclass.}  Lean uses bundled records for
+  \lean{Monoid'} and \lean{MonoidAction}; Haskell uses typeclasses.  The
+  mathematical content is the same.
+
+\item \textbf{Transport in D2/D5.}  In the general directed-container
+  formalism, D2 and D5 involve transports along shape equalities.  In the
+  constant-position case, these transports are the identity (\lean{transport\_const}),
+  so c2 and c5 are the bare monoid laws without casts.
+
+\item \textbf{Backorders as negative stock.}  The paper notes that $\mathbb{N}$
+  monus clamps while $\mathbb{Z}$ is honest.  The Lean formalisation uses
+  $\mathbb{Z}$ throughout the warehouse instance.
+
+\item \textbf{Proof bodies omitted.}  Only definitions and theorem
+  \emph{statements} are translated.  Lean checks the proofs; the human
+  verifier checks that the \emph{statements} match the intended mathematics.
+\end{enumerate}
+
+\end{document}

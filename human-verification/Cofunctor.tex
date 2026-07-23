@@ -1,0 +1,722 @@
+\documentclass[11pt,a4paper]{article}
+\input{preamble}
+
+\title{Human Verification: \texttt{Containers.Cofunctor}\\[4pt]
+  \large Morphisms of Directed Containers Are Cofunctors: $\mathbf{DCont} \cong \mathbf{Cof}$}
+\author{Machine-generated from \texttt{lean/Cofunctor.lean} for review by Neil Ghani}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document presents every definition and theorem \emph{statement} from the
+Lean~4 module \lean{Containers.Cofunctor} in three parallel forms: the original
+Lean, a readable Haskell rendering, and precise mathematical English.  Proofs
+are omitted --- they are machine-checked by Lean.  The purpose is to let a
+human verifier confirm that the formalisation captures the intended mathematics.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%===================================================================
+\section{Overview}
+%===================================================================
+
+This file formalises the \emph{morphism level} of the directed-container/small-
+category dictionary (Ahman--Chapman--Uustalu; Shapiro--Spivak): the morphisms
+native to directed containers are \textbf{cofunctors} (also called
+\emph{retrofunctors}), not ordinary functors.
+
+\paragraph{The dictionary.}
+Every directed container $C$ presents a small category $\mathrm{cat}(C)$:
+\begin{itemize}
+  \item objects are shapes $C.\mathrm{Shape}$;
+  \item a morphism out of $s$ is a position $p : P(s)$, with codomain
+        $s \downarrow p$;
+  \item the identity at $s$ is the root $o(s)$;
+  \item composition $q \circ p$ is the shift $p \oplus q$.
+\end{itemize}
+
+\paragraph{The variance point.}
+A container morphism $(f, f^\sharp)$ carries $f : \mathrm{Shape}_C \to
+\mathrm{Shape}_D$ \emph{forwards} but $f^\sharp_s : P_D(f(s)) \to P_C(s)$
+\emph{backwards}.  A functor would need $P_C(s) \to P_D(f(s))$ --- the wrong
+variance.  With compatibility laws M0/M1/M2, the pair $(f, f^\sharp)$ is
+precisely a \textbf{cofunctor} (C0/C1/C2) of the presented categories.
+
+\paragraph{Main results.}
+\begin{enumerate}
+  \item $\mathbf{DContMorphism}(C,D) \cong \mathbf{Cofunctor}(C,D)$ as sets ---
+        the two structures carry identical data; the round-trips are
+        definitional equalities.
+  \item Cofunctors form a \emph{strict} category $\mathbf{Cof}$ (laws hold by
+        \lean{rfl}).
+  \item The assignment $\Phi = ({\cdot}).\mathrm{toCofunctor}$ preserves
+        identities and composition, hence is an isomorphism of categories
+        $\mathbf{DCont} \cong \mathbf{Cof}$.
+\end{enumerate}
+
+
+%===================================================================
+\section{Dictionary vocabulary}
+%===================================================================
+
+These three definitions name the data of the presented category in terms of the
+directed-container fields, enabling the statement of the cofunctor laws without
+directly mentioning \lean{root}/\lean{sub}/\lean{shift}.
+
+% --- 1. DirectedContainer.idHom --------------------------------------
+\subsection{Definition: \lean{DirectedContainer.idHom}}
+
+\begin{defn}[Identity morphism in the presented category]
+The \textbf{identity} at $s$ in $\mathrm{cat}(C)$ is the root position $o(s)$.
+\[
+  \mathrm{idHom}(C)(s) \;:=\; C.\mathrm{root}(s) \;\in\; P(s).
+\]
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def DirectedContainer.idHom (C : DirectedContainer) (s : C.Shape) :
+    C.Pos s := C.root s
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+idHom :: DirectedContainer s p => s -> p
+idHom s = root s
+\end{lstlisting}
+
+
+% --- 2. DirectedContainer.cod -----------------------------------------
+\subsection{Definition: \lean{DirectedContainer.cod}}
+
+\begin{defn}[Codomain of a morphism]
+The \textbf{codomain} of a morphism $p : P(s)$ (out of $s$) is the sub-shape
+$s \downarrow p$:
+\[
+  \mathrm{cod}(C)(s)(p) \;:=\; C.\mathrm{sub}(s)(p).
+\]
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def DirectedContainer.cod (C : DirectedContainer) (s : C.Shape)
+    (p : C.Pos s) : C.Shape := C.sub s p
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+cod :: DirectedContainer s p => s -> p -> s
+cod s p = sub s p
+\end{lstlisting}
+
+
+% --- 3. DirectedContainer.after ---------------------------------------
+\subsection{Definition: \lean{DirectedContainer.after}}
+
+\begin{defn}[Composition in the presented category]
+The \textbf{composite} $q \circ p$ (``$q$ after $p$''), where $p$ is a
+morphism out of $s$ and $q$ is a morphism out of $s \downarrow p$, is the
+shift $p \oplus q$:
+\[
+  \mathrm{after}(C)(s)(p)(q) \;:=\; C.\mathrm{shift}(s)(p)(q) \;\in\; P(s).
+\]
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def DirectedContainer.after (C : DirectedContainer) (s : C.Shape)
+    (p : C.Pos s) (q : C.Pos (C.sub s p)) : C.Pos s := C.shift s p q
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+after :: DirectedContainer s p => s -> p -> p -> p
+after s p q = shift s p q
+\end{lstlisting}
+
+
+%===================================================================
+\section{Morphisms of directed containers}
+%===================================================================
+
+% --- 4. DContMorphism ------------------------------------------------
+\subsection{Structure: \lean{DContMorphism}}
+
+\begin{defn}[Morphism of directed containers]
+A \textbf{directed-container morphism} $C \to D$ is a pair $(f, f^\sharp)$
+with:
+\begin{itemize}
+  \item $f : \mathrm{Shape}_C \to \mathrm{Shape}_D$ --- a forward shape map;
+  \item $f^\sharp_s : P_D(f(s)) \to P_C(s)$ for each $s$ --- a contravariant
+        position map;
+\end{itemize}
+satisfying:
+\begin{itemize}
+  \item[M0.] $f(s \downarrow f^\sharp_s(h)) = f(s) \downarrow_D h$
+             \hfill (preserves codomains over $f$);
+  \item[M1.] $f^\sharp_s(o_D(f(s))) = o_C(s)$
+             \hfill (preserves roots);
+  \item[M2.] $f^\sharp_s(h \oplus_D k)
+             = f^\sharp_s(h) \oplus_C f^\sharp_{s \downarrow f^\sharp_s(h)}
+               (\mathrm{M0}^{-1} \triangleright k)$
+             \hfill (compatible with shifts, with transport along M0).
+\end{itemize}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+structure DContMorphism (C D : DirectedContainer) where
+  f      : C.Shape -> D.Shape
+  fSharp : (s : C.Shape) -> D.Pos (f s) -> C.Pos s
+  m0 : forall (s : C.Shape) (h : D.Pos (f s)),
+    f (C.sub s (fSharp s h)) = D.sub (f s) h
+  m1 : forall (s : C.Shape),
+    fSharp s (D.root (f s)) = C.root s
+  m2 : forall (s : C.Shape) (h : D.Pos (f s))
+              (k : D.Pos (D.sub (f s) h)),
+    fSharp s (D.shift (f s) h k)
+      = C.shift s (fSharp s h)
+          (fSharp (C.sub s (fSharp s h)) ((m0 s h).symm |-> k))
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data DContMorph c d = DContMorph
+  { dF      :: c -> d
+  , dFSharp :: c -> d -> c   -- fSharp s h : C.Pos s  (backward)
+  -- Laws (as QuickCheck properties):
+  -- M0: dF (sub c s (dFSharp m s h)) == sub d (dF m s) h
+  -- M1: dFSharp m s (root d (dF m s)) == root c s
+  -- M2: dFSharp m s (shift d (dF m s) h k)
+  --       == shift c s (dFSharp m s h) (dFSharp m (sub c s (dFSharp m s h)) k)
+  --     (transport invisible in Haskell)
+  }
+\end{lstlisting}
+
+\begin{fidelitynote}
+Law M2 in Lean carries the transport $(\mathrm{M0}^{-1} \triangleright k)$,
+which coerces $k : P_D(f(s) \downarrow_D h)$ to $P_D(f(s \downarrow_C
+f^\sharp_s(h)))$ (these types differ because M0 is not definitional).  In
+Haskell, positions are a single type, so this transport is invisible and M2
+simply asserts that $f^\sharp$ is a homomorphism for $\mathrm{shift}$.
+\end{fidelitynote}
+
+
+%===================================================================
+\section{Cofunctors}
+%===================================================================
+
+% --- 5. Cofunctor -----------------------------------------------------
+\subsection{Structure: \lean{Cofunctor}}
+
+\begin{defn}[Cofunctor]
+A \textbf{cofunctor} $\varphi : \mathrm{cat}(C) \to \mathrm{cat}(D)$ consists
+of:
+\begin{itemize}
+  \item an object map $\mathrm{obj} : \mathrm{Shape}_C \to \mathrm{Shape}_D$;
+  \item a \emph{lift}: for each $s$ and each morphism $h$ out of
+        $\mathrm{obj}(s)$ in $\mathrm{cat}(D)$, a morphism
+        $\mathrm{lift}_s(h)$ out of $s$ in $\mathrm{cat}(C)$;
+\end{itemize}
+satisfying:
+\begin{itemize}
+  \item[C0.] $\mathrm{obj}(\mathrm{cod}_C(s, \mathrm{lift}_s(h)))
+             = \mathrm{cod}_D(\mathrm{obj}(s), h)$
+             \hfill (lift preserves codomains);
+  \item[C1.] $\mathrm{lift}_s(\mathrm{idHom}_D(\mathrm{obj}(s)))
+             = \mathrm{idHom}_C(s)$
+             \hfill (lift sends identities to identities);
+  \item[C2.] $\mathrm{lift}_s(\mathrm{after}_D(\mathrm{obj}(s), h, k))
+             = \mathrm{after}_C(s, \mathrm{lift}_s(h),
+               \mathrm{lift}_{\mathrm{cod}_C(s,\mathrm{lift}_s(h))}
+               (\mathrm{C0}^{-1} \triangleright k))$
+             \hfill (lift is compatible with composition).
+\end{itemize}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+structure Cofunctor (C D : DirectedContainer) where
+  obj  : C.Shape -> D.Shape
+  lift : (s : C.Shape) -> D.Pos (obj s) -> C.Pos s
+  c0 : forall (s : C.Shape) (h : D.Pos (obj s)),
+    obj (C.cod s (lift s h)) = D.cod (obj s) h
+  c1 : forall (s : C.Shape),
+    lift s (D.idHom (obj s)) = C.idHom s
+  c2 : forall (s : C.Shape) (h : D.Pos (obj s))
+              (k : D.Pos (D.cod (obj s) h)),
+    lift s (D.after (obj s) h k)
+      = C.after s (lift s h)
+          (lift (C.cod s (lift s h)) ((c0 s h).symm |-> k))
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data Cofunctor c d = Cofunctor
+  { obj  :: c -> d
+  , lift :: c -> d -> c   -- lift s h : Pos_C s (backward map)
+  -- Laws:
+  -- C0: obj (cod c s (lift phi s h)) == cod d (obj phi s) h
+  -- C1: lift phi s (idHom d (obj phi s)) == idHom c s
+  -- C2: lift phi s (after d (obj phi s) h k)
+  --       == after c s (lift phi s h) (lift phi (cod c s (lift phi s h)) k)
+  }
+\end{lstlisting}
+
+
+%===================================================================
+\section{The bijection $\mathbf{DCont}(C,D) \cong \mathbf{Cof}(C,D)$}
+%===================================================================
+
+% --- 6. DContMorphism.toCofunctor ------------------------------------
+\subsection{Definition: \lean{DContMorphism.toCofunctor}}
+
+\begin{defn}[Forward direction of the bijection]
+Every directed-container morphism $(f, f^\sharp)$ yields a cofunctor: set
+$\mathrm{obj} = f$, $\mathrm{lift} = f^\sharp$, and carry the laws
+M0/M1/M2 verbatim as C0/C1/C2.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def DContMorphism.toCofunctor {C D : DirectedContainer}
+    (m : DContMorphism C D) : Cofunctor C D :=
+  <|m.f, m.fSharp, m.m0, m.m1, m.m2|>
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+toCofunctor :: DContMorph c d -> Cofunctor c d
+toCofunctor m = Cofunctor (dF m) (dFSharp m)
+-- Laws M0/M1/M2 become C0/C1/C2 directly.
+\end{lstlisting}
+
+
+% --- 7. Cofunctor.toDContMorphism ------------------------------------
+\subsection{Definition: \lean{Cofunctor.toDContMorphism}}
+
+\begin{defn}[Backward direction of the bijection]
+Every cofunctor $(\mathrm{obj}, \mathrm{lift})$ yields a directed-container
+morphism: set $f = \mathrm{obj}$, $f^\sharp = \mathrm{lift}$, and carry
+C0/C1/C2 verbatim as M0/M1/M2.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Cofunctor.toDContMorphism {C D : DirectedContainer}
+    (phi : Cofunctor C D) : DContMorphism C D :=
+  <|phi.obj, phi.lift, phi.c0, phi.c1, phi.c2|>
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+toDContMorphism :: Cofunctor c d -> DContMorph c d
+toDContMorphism phi = DContMorph (obj phi) (lift phi)
+\end{lstlisting}
+
+
+% --- 8. toCofunctor_toDContMorphism ----------------------------------
+\subsection{Theorem: \lean{toCofunctor\_toDContMorphism}}
+
+\begin{thm}[Round-trip, morphism direction]
+The composite $\mathrm{toCofunctor} \circ \mathrm{toDContMorphism}$ is the
+identity on $\mathbf{DContMorphism}(C,D)$:
+\[
+  m.\mathrm{toCofunctor}.\mathrm{toDContMorphism} \;=\; m.
+\]
+Holds definitionally (\lean{rfl}) --- the two conversions are transparent
+record re-packagings.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem toCofunctor_toDContMorphism {C D : DirectedContainer}
+    (m : DContMorphism C D) :
+    m.toCofunctor.toDContMorphism = m
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- toDContMorphism (toCofunctor m) = m
+-- (trivially: both are record re-packagings of the same fields)
+\end{lstlisting}
+
+
+% --- 9. toDContMorphism_toCofunctor ----------------------------------
+\subsection{Theorem: \lean{toDContMorphism\_toCofunctor}}
+
+\begin{thm}[Round-trip, cofunctor direction]
+The composite $\mathrm{toDContMorphism} \circ \mathrm{toCofunctor}$ is the
+identity on $\mathbf{Cofunctor}(C,D)$:
+\[
+  \varphi.\mathrm{toDContMorphism}.\mathrm{toCofunctor} \;=\; \varphi.
+\]
+Together with the previous theorem this establishes the hom-set bijection
+$\mathbf{DCont}(C,D) \cong \mathbf{Cof}(C,D)$.  Both directions hold
+definitionally.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem toDContMorphism_toCofunctor {C D : DirectedContainer}
+    (phi : Cofunctor C D) :
+    phi.toDContMorphism.toCofunctor = phi
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- toCofunctor (toDContMorphism phi) = phi
+\end{lstlisting}
+
+
+%===================================================================
+\section{Dependent bookkeeping for composition}
+%===================================================================
+
+% --- 10. Cofunctor.comp_transport ------------------------------------
+\subsection{Theorem: \lean{Cofunctor.comp\_transport}}
+
+\begin{thm}[Transport commutation for composite lifts]
+Let $\psi : \mathrm{cat}(D) \to \mathrm{cat}(E)$ be a cofunctor, let
+$e : y = x$ in $D.\mathrm{Shape}$, and let $e_2 : \psi.\mathrm{obj}(x) = z$.
+Then:
+\[
+  e^{-1} \triangleright
+  \bigl(\psi.\mathrm{lift}(x, e_2^{-1} \triangleright k)\bigr)
+  \;=\;
+  \psi.\mathrm{lift}\bigl(y,\; (e_2 \circ \mathrm{cong}(\psi.\mathrm{obj}, e))^{-1}
+    \triangleright k\bigr).
+\]
+This is the transport identity that makes the composite shift law C2 typecheck
+in the definition of \lean{Cofunctor.comp}.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Cofunctor.comp_transport {D E : DirectedContainer}
+    (psi : Cofunctor D E)
+    {x y : D.Shape} (e : y = x) {z : E.Shape} (e2 : psi.obj x = z)
+    (k : E.Pos z) :
+    e.symm |-> (psi.lift x (e2.symm |-> k))
+      = psi.lift y (((congrArg psi.obj e).trans e2).symm |-> k)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- This is pure dependent bookkeeping with no Haskell analogue.
+-- In Haskell all types are non-dependent so transports are invisible.
+\end{lstlisting}
+
+\begin{fidelitynote}
+This lemma is the sole piece of genuinely dependent proof infrastructure
+unique to the composition of cofunctors.  It packages the transport that arises
+when the codomain law C0 for the composite involves two chained equalities.
+In Haskell, composition of the lift maps is simply
+$\mathrm{lift}_\varphi(s, \mathrm{lift}_\psi(\varphi(s), m))$ with no
+transport, because all shape equalities are invisible.
+\end{fidelitynote}
+
+
+%===================================================================
+\section{The category $\mathbf{Cof}$ of cofunctors}
+%===================================================================
+
+% --- 11. Cofunctor.id ------------------------------------------------
+\subsection{Definition: \lean{Cofunctor.id}}
+
+\begin{defn}[Identity cofunctor]
+The \textbf{identity cofunctor} on $\mathrm{cat}(C)$ has object map
+$\mathrm{id}$ and lift $\mathrm{id}$.  All three laws hold definitionally.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Cofunctor.id (C : DirectedContainer) : Cofunctor C C where
+  obj  := fun s => s
+  lift := fun _ p => p
+  c0   := fun _ _ => rfl
+  c1   := fun _ => rfl
+  c2   := fun _ _ _ => rfl
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+idCofunctor :: Cofunctor c c
+idCofunctor = Cofunctor id (\_ p -> p)
+\end{lstlisting}
+
+
+% --- 12. Cofunctor.comp ----------------------------------------------
+\subsection{Definition: \lean{Cofunctor.comp}}
+
+\begin{defn}[Composition of cofunctors]
+Given cofunctors $\varphi : \mathrm{cat}(C) \to \mathrm{cat}(D)$ and
+$\psi : \mathrm{cat}(D) \to \mathrm{cat}(E)$, their \textbf{composite}
+$\psi \circ \varphi : \mathrm{cat}(C) \to \mathrm{cat}(E)$ has:
+\[
+  (\psi \circ \varphi).\mathrm{obj} \;=\; \psi.\mathrm{obj} \circ \varphi.\mathrm{obj},
+\]
+\[
+  (\psi \circ \varphi).\mathrm{lift}(s, m)
+  \;=\; \varphi.\mathrm{lift}(s,\; \psi.\mathrm{lift}(\varphi.\mathrm{obj}(s), m)).
+\]
+Object maps compose forwards; lifts compose \emph{backwards}.  The composite
+codomain law chains C0 for $\varphi$ and $\psi$; the composite shift law
+requires \lean{Cofunctor.comp\_transport}.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Cofunctor.comp {C D E : DirectedContainer}
+    (phi : Cofunctor C D) (psi : Cofunctor D E) : Cofunctor C E where
+  obj  := fun s => psi.obj (phi.obj s)
+  lift := fun s m => phi.lift s (psi.lift (phi.obj s) m)
+  c0   := fun s h =>
+    (congrArg psi.obj (phi.c0 s (psi.lift (phi.obj s) h))).trans
+      (psi.c0 (phi.obj s) h)
+  c1   := fun s =>
+    (congrArg (phi.lift s) (psi.c1 (phi.obj s))).trans (phi.c1 s)
+  c2   := by
+    intro s h k
+    rw [psi.c2 (phi.obj s) h k, phi.c2 s (psi.lift (phi.obj s) h) _,
+      Cofunctor.comp_transport psi (phi.c0 s (psi.lift (phi.obj s) h))
+        (psi.c0 (phi.obj s) h) k]
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+compCofunctor :: Cofunctor c d -> Cofunctor d e -> Cofunctor c e
+compCofunctor phi psi = Cofunctor
+  { obj  = obj psi . obj phi
+  , lift = \s m -> lift phi s (lift psi (obj phi s) m)
+  }
+-- Laws for the composite follow from those of phi and psi.
+\end{lstlisting}
+
+
+% --- 13. Cofunctor.id_comp ------------------------------------------
+\subsection{Theorem: \lean{Cofunctor.id\_comp}}
+
+\begin{thm}[Left unit law for $\mathbf{Cof}$]
+For every cofunctor $\varphi : \mathrm{cat}(C) \to \mathrm{cat}(D)$,
+\[
+  \mathrm{id}_C \circ \varphi \;=\; \varphi.
+\]
+Holds definitionally (\lean{rfl}).
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Cofunctor.id_comp {C D : DirectedContainer}
+    (phi : Cofunctor C D) :
+    (Cofunctor.id C).comp phi = phi
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- compCofunctor idCofunctor phi = phi
+\end{lstlisting}
+
+
+% --- 14. Cofunctor.comp_id ------------------------------------------
+\subsection{Theorem: \lean{Cofunctor.comp\_id}}
+
+\begin{thm}[Right unit law for $\mathbf{Cof}$]
+For every cofunctor $\varphi : \mathrm{cat}(C) \to \mathrm{cat}(D)$,
+\[
+  \varphi \circ \mathrm{id}_D \;=\; \varphi.
+\]
+Holds definitionally (\lean{rfl}).
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Cofunctor.comp_id {C D : DirectedContainer}
+    (phi : Cofunctor C D) :
+    phi.comp (Cofunctor.id D) = phi
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- compCofunctor phi idCofunctor = phi
+\end{lstlisting}
+
+
+% --- 15. Cofunctor.comp_assoc ----------------------------------------
+\subsection{Theorem: \lean{Cofunctor.comp\_assoc}}
+
+\begin{thm}[Associativity in $\mathbf{Cof}$]
+For every composable triple $\varphi, \psi, \chi$,
+\[
+  (\chi \circ \psi) \circ \varphi \;=\; \chi \circ (\psi \circ \varphi).
+\]
+Holds definitionally (\lean{rfl}) --- $\mathbf{Cof}$ is a \emph{strict}
+category.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Cofunctor.comp_assoc {C D E F : DirectedContainer}
+    (phi : Cofunctor C D) (psi : Cofunctor D E) (chi : Cofunctor E F) :
+    (phi.comp psi).comp chi = phi.comp (psi.comp chi)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- compCofunctor (compCofunctor phi psi) chi
+--   = compCofunctor phi (compCofunctor psi chi)
+\end{lstlisting}
+
+
+%===================================================================
+\section{Identity and composition for $\mathbf{DCont}$}
+%===================================================================
+
+These definitions transport identity and composition from $\mathbf{Cof}$ to
+$\mathbf{DCont}$ via the bijection, confirming that $\mathbf{DCont}$ itself is
+also a category.
+
+% --- 16. DContMorphism.id --------------------------------------------
+\subsection{Definition: \lean{DContMorphism.id}}
+
+\begin{defn}[Identity directed-container morphism]
+The identity morphism of directed containers at $C$, obtained by transporting
+\lean{Cofunctor.id} along the bijection.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def DContMorphism.id (C : DirectedContainer) : DContMorphism C C :=
+  (Cofunctor.id C).toDContMorphism
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+idDCont :: DContMorph c c
+idDCont = toDContMorphism idCofunctor
+\end{lstlisting}
+
+
+% --- 17. DContMorphism.comp ------------------------------------------
+\subsection{Definition: \lean{DContMorphism.comp}}
+
+\begin{defn}[Composition of directed-container morphisms]
+Composition in $\mathbf{DCont}$, obtained by transporting
+\lean{Cofunctor.comp} along the bijection.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def DContMorphism.comp {C D E : DirectedContainer}
+    (m : DContMorphism C D) (n : DContMorphism D E) : DContMorphism C E :=
+  (m.toCofunctor.comp n.toCofunctor).toDContMorphism
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+compDCont :: DContMorph c d -> DContMorph d e -> DContMorph c e
+compDCont m n =
+  toDContMorphism (compCofunctor (toCofunctor m) (toCofunctor n))
+\end{lstlisting}
+
+
+%===================================================================
+\section{Functoriality of the isomorphism $\Phi$}
+%===================================================================
+
+These two theorems show that the assignment $\Phi = ({\cdot}).\mathrm{toCofunctor}$
+--- which is already a bijection on hom-sets and identity on objects --- also
+preserves identities and composition.  Together they make $\Phi$ an isomorphism
+of categories $\mathbf{DCont} \cong \mathbf{Cof}$.
+
+% --- 18. DContMorphism.toCofunctor_id --------------------------------
+\subsection{Theorem: \lean{DContMorphism.toCofunctor\_id}}
+
+\begin{thm}[$\Phi$ preserves identities]
+\[
+  \Phi(\mathrm{id}_C^{\mathbf{DCont}}) \;=\; \mathrm{id}_C^{\mathbf{Cof}}.
+\]
+Holds definitionally (\lean{rfl}).
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem DContMorphism.toCofunctor_id (C : DirectedContainer) :
+    (DContMorphism.id C).toCofunctor = Cofunctor.id C
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- toCofunctor idDCont = idCofunctor
+\end{lstlisting}
+
+
+% --- 19. DContMorphism.toCofunctor_comp ------------------------------
+\subsection{Theorem: \lean{DContMorphism.toCofunctor\_comp}}
+
+\begin{thm}[$\Phi$ preserves composition]
+For every composable pair $m : C \to D$, $n : D \to E$,
+\[
+  \Phi(n \circ m) \;=\; \Phi(n) \circ \Phi(m).
+\]
+Holds definitionally (\lean{rfl}).  Being identity-on-objects, bijective on
+every hom-set, and functorial, $\Phi$ is an isomorphism of categories
+$\mathbf{DCont} \cong \mathbf{Cof}$.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem DContMorphism.toCofunctor_comp {C D E : DirectedContainer}
+    (m : DContMorphism C D) (n : DContMorphism D E) :
+    (m.comp n).toCofunctor = m.toCofunctor.comp n.toCofunctor
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- toCofunctor (compDCont m n)
+--   = compCofunctor (toCofunctor m) (toCofunctor n)
+\end{lstlisting}
+
+
+%===================================================================
+\section{Translation conventions}
+%===================================================================
+
+\begin{enumerate}
+\item \textbf{Cofunctors vs.\ functors.}  A cofunctor $\varphi : \mathcal{C}
+  \to \mathcal{D}$ maps objects in the same direction as a functor, but maps
+  morphisms in the \emph{opposite} direction: it lifts a morphism out of
+  $\varphi(s)$ in $\mathcal{D}$ to a morphism out of $s$ in $\mathcal{C}$.
+  This backward morphism map corresponds directly to the contravariant position
+  map $f^\sharp_s : P_D(f(s)) \to P_C(s)$ of a container morphism.
+
+\item \textbf{Definitional strictness.}  All category laws for $\mathbf{Cof}$
+  (\lean{id\_comp}, \lean{comp\_id}, \lean{comp\_assoc}) and the hom-set
+  bijection (\lean{toCofunctor\_toDContMorphism},
+  \lean{toDContMorphism\_toCofunctor}) hold by \lean{rfl}.  This reflects the
+  fact that M0/M1/M2 and C0/C1/C2 are \emph{the same axioms} under a mere
+  renaming, so the conversion functions are transparent record projections.
+
+\item \textbf{Transport in M2/C2.}  The shift compatibility law M2 (and its
+  cofunctor counterpart C2) carries a transport $(\mathrm{M0}^{-1} \triangleright
+  k)$, exactly as D5 transports along D4 in \lean{Containers.Directed}.  The
+  helper \lean{Cofunctor.comp\_transport} packages the additional transport
+  arising in the composite shift law.
+
+\item \textbf{Isomorphism of categories.}  The final result is an isomorphism
+  $\mathbf{DCont} \cong \mathbf{Cof}$, established component by component:
+  identity on objects, bijective on hom-sets (by the round-trip theorems), and
+  functorial (by \lean{toCofunctor\_id} and \lean{toCofunctor\_comp}).
+
+\item \textbf{Haskell fidelity.}  The Haskell renderings lose the dependent
+  typing (all positions are a single type parameter) and hence all transports.
+  The categorical content --- that DCont morphisms are cofunctors, that
+  cofunctors form a category, and that the bijection is functorial --- is fully
+  visible.
+\end{enumerate}
+
+\end{document}

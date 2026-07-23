@@ -1,0 +1,357 @@
+\documentclass[11pt,a4paper]{article}
+\input{preamble}
+\usepackage{stmaryrd}
+
+\title{Human Verification: \texttt{Sequential}\\[4pt]
+  \large The Sequential Operator $\triangleleft$ and its Monoidal Structure}
+\author{Machine-generated from \texttt{lean/Sequential.lean} for review by Neil Ghani}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document presents every definition and theorem \emph{statement} from the
+Lean~4 module \lean{Sequential} in three parallel forms: the original Lean,
+a readable Haskell rendering, and precise mathematical English.  Proofs are
+omitted --- they are machine-checked by Lean.
+
+The module is a near-duplicate of \lean{Composition.lean}, re-exposing the
+same monoidal structure under the name ``sequential operator'' rather than
+``composition product''.  The mathematical content is identical; only the
+terminology and the names of a few definitions differ (\lean{Container.seq}
+vs \lean{Container.comp}, \lean{seqExt} vs \lean{compExt}).  A fidelity note
+at the end records the relationship.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%===================================================================
+\section{Overview}
+%===================================================================
+
+The sequential operator $\triangleleft$ on containers has the same formula as
+the composition product of \lean{Composition.lean}: for $F = S \triangleleft
+P$ and $G = T \triangleleft Q$,
+\begin{itemize}
+  \item shapes of $G \triangleleft F$: $\Sigma_{t : T}(Q(t) \to S)$, and
+  \item positions at $(t, f)$: $\Sigma_{q : Q(t)} P(f(q))$.
+\end{itemize}
+The extension satisfies $\llbracket G \triangleleft F \rrbracket = \llbracket
+G \rrbracket \circ \llbracket F \rrbracket$.  The monoidal unit is the same
+identity container $I$.  The coherence isomorphisms (left/right unitors,
+associator) have identical statements and proofs.
+
+The module's docstring frames the same structure as the ``sequential
+operator'' to emphasise the operational reading: $G \triangleleft F$ is ``run
+$F$, then run $G$ on the result'', and a $\triangleleft$-comonoid is a
+directed container.
+
+%===================================================================
+\section{The sequential operator}
+%===================================================================
+
+\subsection{Definition: \lean{Container.seq}}
+
+\begin{defn}[Sequential operator]
+For containers $G$ and $F$, their \textbf{sequential composition}
+$G \triangleleft F$ (``$G$ outside, $F$ inside'') is:
+\[
+  \mathrm{Shape}(G \triangleleft F) = \Sigma_{t : G.\mathrm{Shape}}
+    \bigl(G.\mathrm{Pos}(t) \to F.\mathrm{Shape}\bigr),
+\]
+\[
+  \mathrm{Pos}(G \triangleleft F)(t, f) = \Sigma_{q : G.\mathrm{Pos}(t)}
+    F.\mathrm{Pos}(f(q)).
+\]
+The extension satisfies $\llbracket G \triangleleft F \rrbracket X \cong
+\llbracket G \rrbracket(\llbracket F \rrbracket X)$.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.seq (G F : Container) : Container where
+  Shape := (t : G.Shape) * (G.Pos t -> F.Shape)
+  Pos := fun tf => (q : G.Pos tf.1) * F.Pos (tf.2 q)
+
+scoped infixr:70 " seq " => Container.seq
+-- (written with the unicode diamond operator in Lean source)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- G `seq` F: shapes = (t, p_g t -> s_f), positions = (p_g t, p_f (f q))
+-- Same as Container.comp; see fidelity note.
+data Seq g p_g f p_f x = Seq g (p_g -> f) (p_g -> p_f -> x)
+\end{lstlisting}
+
+\begin{fidelitynote}
+\lean{Container.seq} and \lean{Container.comp} (from \lean{Composition.lean})
+are definitionally identical --- same formula, same type.  The duplication
+appears to be a development artifact, with \lean{Sequential.lean} providing
+an alternative narrative framing of the same monoidal structure.  The
+verifier should treat the two files as presenting the same mathematics.
+\end{fidelitynote}
+
+
+\subsection{Definition: \lean{Container.I}}
+
+\begin{defn}[Identity container]
+The identity container $I$ has one shape and one position; its extension is
+the identity functor.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.I : Container where
+  Shape := Unit
+  Pos := fun _ => Unit
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+newtype Id x = Id x   -- one shape, one position
+\end{lstlisting}
+
+%===================================================================
+\section{Extension isomorphism}
+%===================================================================
+
+\subsection{Definitions: \lean{Container.seqExt} and \lean{Container.seqExtInv}}
+
+\begin{defn}[Extension isomorphism for the sequential operator]
+There is a natural bijection
+\[
+  \mathrm{seqExt} : \llbracket G \triangleleft F \rrbracket X \;\xrightarrow{\;\sim\;}
+  \llbracket G \rrbracket\bigl(\llbracket F \rrbracket X\bigr),
+\]
+\[
+  \mathrm{seqExtInv} : \llbracket G \rrbracket\bigl(\llbracket F \rrbracket X\bigr)
+  \;\xrightarrow{\;\sim\;} \llbracket G \triangleleft F \rrbracket X.
+\]
+The formulas are identical to those of \lean{compExt} / \lean{compExtInv}.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.seqExt {G F : Container} {X : Type} :
+    Ext (G seq F) X -> Ext G (Ext F X) :=
+  fun p => <|p.1.1, fun q => <|p.1.2 q, fun r => p.2 <|q, r|>|>|>
+
+def Container.seqExtInv {G F : Container} {X : Type} :
+    Ext G (Ext F X) -> Ext (G seq F) X :=
+  fun p => <|<|p.1, fun q => (p.2 q).1|>, fun qr => (p.2 qr.1).2 qr.2|>
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+seqExt :: Seq g p_g f p_f x -> (g, p_g -> (f, p_f -> x))
+seqExt (Seq t assign lab) = (t, \q -> (assign q, \r -> lab q r))
+
+seqExtInv :: (g, p_g -> (f, p_f -> x)) -> Seq g p_g f p_f x
+seqExtInv (t, m) = Seq t (fst . m) (\q r -> snd (m q) r)
+\end{lstlisting}
+
+
+\subsection{Theorems: \lean{seqExtInv\_seqExt} and \lean{seqExt\_seqExtInv}}
+
+\begin{thm}[Extension isomorphism is an isomorphism]
+\[
+  \mathrm{seqExtInv} \circ \mathrm{seqExt} = \mathrm{id},
+  \qquad
+  \mathrm{seqExt} \circ \mathrm{seqExtInv} = \mathrm{id}.
+\]
+Both hold definitionally (by \lean{rfl} after \lean{cases}).
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.seqExtInv_seqExt {G F : Container} {X : Type}
+    (p : Ext (G seq F) X) :
+    Container.seqExtInv (Container.seqExt p) = p
+
+theorem Container.seqExt_seqExtInv {G F : Container} {X : Type}
+    (p : Ext G (Ext F X)) :
+    Container.seqExt (Container.seqExtInv p) = p
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- seqExtInv . seqExt = id   (and vice versa)
+-- Both hold by eta-laws for pairs.
+\end{lstlisting}
+
+%===================================================================
+\section{Container isomorphisms}
+%===================================================================
+
+\subsection{Structure: \lean{ContainerIso}}
+
+\begin{defn}[Container isomorphism]
+An isomorphism in $\mathbf{Cont}$: a pair of mutually inverse container
+morphisms.  (Identical definition to \lean{Composition.lean}.)
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+structure ContainerIso (C D : Container) where
+  hom : ContainerMorphism C D
+  inv : ContainerMorphism D C
+  hom_inv : hom.comp inv = ContainerMorphism.id C
+  inv_hom : inv.comp hom = ContainerMorphism.id D
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data ContainerIso c d = ContainerIso
+  { hom :: Morph c d
+  , inv :: Morph d c
+  -- hom_inv and inv_hom are equational laws
+  }
+\end{lstlisting}
+
+%===================================================================
+\section{Monoidal coherences}
+%===================================================================
+
+\subsection{Definition: \lean{Container.leftUnitor}}
+
+\begin{defn}[Left unitor]
+$\lambda_F : I \triangleleft F \cong F$.  A shape $(\langle\rangle, f)$ of
+$I \triangleleft F$ bijects with $F.\mathrm{Shape}$ via $f \mapsto f(\langle\rangle)$.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.leftUnitor (F : Container) :
+    ContainerIso (Container.I seq F) F where
+  hom :=
+    { onShapes := fun tf => tf.2 ()
+      onPos := fun _ p => <|(), p|> }
+  inv :=
+    { onShapes := fun s => <|(), fun _ => s|>
+      onPos := fun _ qp => qp.2 }
+  hom_inv := rfl
+  inv_hom := rfl
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+leftUnitor :: ContainerIso (I `Seq` F) F
+-- Same as in Composition.lean.
+\end{lstlisting}
+
+
+\subsection{Definition: \lean{Container.rightUnitor}}
+
+\begin{defn}[Right unitor]
+$\rho_F : F \triangleleft I \cong F$.  Shapes project onto $F.\mathrm{Shape}$;
+positions collapse $\Sigma_{p : F.\mathrm{Pos}(s)} \mathrm{Unit} \cong F.\mathrm{Pos}(s)$.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.rightUnitor (F : Container) :
+    ContainerIso (F seq Container.I) F where
+  hom :=
+    { onShapes := fun sg => sg.1
+      onPos := fun _ p => <|p, ()|> }
+  inv :=
+    { onShapes := fun s => <|s, fun _ => ()|>
+      onPos := fun _ pu => pu.1 }
+  hom_inv := rfl
+  inv_hom := rfl
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+rightUnitor :: ContainerIso (F `Seq` I) F
+-- Same as in Composition.lean.
+\end{lstlisting}
+
+
+\subsection{Definition: \lean{Container.associator}}
+
+\begin{defn}[Associator]
+$\alpha_{H,G,F} : (H \triangleleft G) \triangleleft F \cong H \triangleleft (G \triangleleft F)$.
+On shapes: curries the inner assignment.  On positions: re-associates the
+nested dependent sum $((u, v), p) \leftrightarrow (u, (v, p))$.  No transport
+needed (position fibres agree definitionally).
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.associator (H G F : Container) :
+    ContainerIso ((H seq G) seq F) (H seq (G seq F)) where
+  hom :=
+    { onShapes := fun xk =>
+        <|xk.1.1, fun u => <|xk.1.2 u, fun v => xk.2 <|u, v|>|>|>
+      onPos := fun _ uvp => <|<|uvp.1, uvp.2.1|>, uvp.2.2|> }
+  inv :=
+    { onShapes := fun am =>
+        <|<|am.1, fun u => (am.2 u).1|>, fun y => (am.2 y.1).2 y.2|>
+      onPos := fun _ yp => <|yp.1.1, yp.1.2, yp.2|> }
+  hom_inv := ...   -- ContainerMorphism.ext' rfl (cases + rfl)
+  inv_hom := ...   -- ContainerMorphism.ext' rfl (cases + rfl)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+associator :: ContainerIso ((H `Seq` G) `Seq` F) (H `Seq` (G `Seq` F))
+-- Same formulas as in Composition.lean.
+\end{lstlisting}
+
+%===================================================================
+\section{The compositional payoff}
+%===================================================================
+
+A \textbf{$\triangleleft$-comonoid} in $(\mathbf{Cont}, \triangleleft, I)$ is
+a container $C$ with a counit $\varepsilon : C \to I$ and a comultiplication
+$\delta : C \to C \triangleleft C$, satisfying the comonoid laws.  This is
+exactly a \textbf{directed container} (a comonad on $\mathbf{Set}$ whose
+functor is a container).  The sequential framing makes the operational
+reading explicit: a directed container is a container that can be
+``stepped'', with the comonad structure recording how steps compose.
+
+%===================================================================
+\section{Relationship to \lean{Composition.lean}}
+%===================================================================
+
+\begin{fidelitynote}
+\lean{Sequential.lean} and \lean{Composition.lean} define mathematically
+identical structures: \lean{Container.seq} $=$ \lean{Container.comp},
+\lean{seqExt} $=$ \lean{compExt}, and so on.  The files differ only in
+terminology and narrative framing:
+\begin{itemize}
+  \item \lean{Composition.lean} emphasises $\llbracket G \triangleleft F
+    \rrbracket = \llbracket G \rrbracket \circ \llbracket F \rrbracket$ as
+    functor composition;
+  \item \lean{Sequential.lean} emphasises the sequential reading and the
+    comonoid/directed-container connection.
+\end{itemize}
+In a production codebase these would be merged into one file.  As written,
+they coexist by declaring the notation in separate scopes; the notation
+\texttt{infixr:70 " $\triangleleft$ "} is declared twice, once per file.
+\end{fidelitynote}
+
+%===================================================================
+\section{Translation conventions}
+%===================================================================
+
+\begin{enumerate}
+\item \textbf{Proof bodies omitted.}  Lean machine-checks all proofs.
+
+\item \textbf{Definitional round trips.}  All four round-trip equalities for
+  \lean{seqExt}/\lean{seqExtInv} and the two unitor/associator laws hold
+  by \lean{rfl} after \lean{cases}, using only definitional reduction.
+
+\item \textbf{Unicode notation.}  The Lean source uses the diamond operator
+  $\triangleleft$ (\texttt{\\triangleleft}).  The listings use
+  \texttt{seq} as an ASCII placeholder.
+
+\item \textbf{Dependent type limitation.}  Haskell approximations drop
+  the dependency of position type on shape value.
+\end{enumerate}
+
+\end{document}

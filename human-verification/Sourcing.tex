@@ -1,0 +1,554 @@
+\documentclass[11pt,a4paper]{article}
+\input{preamble}
+
+\title{Human Verification: \texttt{Containers.Sourcing}\\[4pt]
+  \large Sourcing as a Functor from Routed BOMs to the Opposite Network}
+\author{Machine-generated from \texttt{lean/Sourcing.lean} for review by Neil Ghani}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document presents every definition and theorem \emph{statement} from the
+Lean~4 module \lean{Containers.Sourcing} in three parallel forms: the original
+Lean, a readable Haskell rendering, and precise mathematical English.  Proofs
+are omitted --- they are machine-checked by Lean.  The purpose is to let a
+human verifier confirm that the formalisation captures the intended
+mathematics.
+
+The file verifies Construction~\texttt{con:sourcing} (\S6 of the paper): the
+sourcing assignment --- ``each product is made somewhere, each component
+occurrence travels an inbound route to its point of use'' --- is a covariant
+functor of directed containers from the directed container of
+\emph{routed BOMs} to the \emph{opposite shipping network}.  The file ends
+with the UAE steel rebar BOM as a worked example.
+
+A formalization caveat (flagged to Robin and Neil): the paper's domain is
+\emph{all} product-labelled trees, but for a general tree the sourcing
+position map requires routes that may not exist.  The fix adopted here is to
+carry routing choices \emph{on the shapes}: a routed BOM bundles each BOM
+edge with the inbound route of its component.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%===================================================================
+\section{Overview}
+%===================================================================
+
+The \textbf{opposite digraph} $G^{\mathrm{op}}$ of $G$ swaps source and
+target: a path in $G^{\mathrm{op}}$ from $v$ to $u$ is a path in $G$ from $u$
+to $v$.  Positions of $\mathcal{N}(G^{\mathrm{op}})$ at $v$ are
+\emph{inbound routes} --- paths of $G$ ending at $v$.
+
+A \textbf{routed BOM} over products $P$ and graph $G$, indexed by its
+producing facility $v$, is a product-labelled tree whose every edge carries
+the inbound route (in $G^{\mathrm{op}}$) of that component to its parent.
+Occurrences navigate this tree; the sourcing functor maps each occurrence to
+its total inbound route (by appending the routes along the path from root to
+occurrence).
+
+
+%===================================================================
+\section{The opposite digraph}
+%===================================================================
+
+% --- Digraph.op ----------------------------------------------------
+\subsection{Definition: \lean{Digraph.op}}
+
+\begin{defn}[Opposite digraph]
+The \textbf{opposite} of a digraph $G$ is the digraph $G^{\mathrm{op}}$ with
+the same nodes and edges, but with source and target swapped:
+$G^{\mathrm{op}}.\mathrm{src} = G.\mathrm{tgt}$ and
+$G^{\mathrm{op}}.\mathrm{tgt} = G.\mathrm{src}$.
+
+Positions of $\mathcal{N}(G^{\mathrm{op}})$ at $v$ are pairs $(u, \rho)$
+where $\rho$ is a path in $G$ from $u$ to $v$ --- the \emph{inbound routes}
+arriving at $v$.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+@[reducible] def Digraph.op (G : Digraph) : Digraph where
+  V := G.V
+  E := G.E
+  src := G.tgt
+  tgt := G.src
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+op :: Digraph v e -> Digraph v e
+op g = Digraph { src = tgt g, tgt = src g }
+-- A path in (op g) from v to u is a G-path from u to v.
+\end{lstlisting}
+
+
+%===================================================================
+\section{Routed BOMs}
+%===================================================================
+
+% --- Bom -----------------------------------------------------------
+\subsection{Inductive type: \lean{Bom}}
+
+\begin{defn}[Routed BOM tree]
+A \textbf{routed BOM} $\lean{Bom}(P, G, v)$ over products $P$ and graph $G$,
+indexed by producing facility $v$, is an inductive tree:
+\[
+  \lean{node}(\mathrm{prod},\, v,\, n,\, \mathrm{sites},\, \mathrm{routes},\, \mathrm{children})
+\]
+where:
+\begin{itemize}
+  \item $\mathrm{prod} : P$ is the product label at this node;
+  \item $v : G.V$ is the facility producing \lean{prod};
+  \item $n : \mathbb{N}$ is the number of direct components;
+  \item $\mathrm{sites} : \mathrm{Fin}(n) \to G.V$ gives the producing facility
+    of each component;
+  \item $\mathrm{routes}(i) : \mathrm{Path}_{G^{\mathrm{op}}}(v, \mathrm{sites}(i))$
+    is the inbound route of component $i$ (a $G$-path from $\mathrm{sites}(i)$
+    to $v$, reversed);
+  \item $\mathrm{children}(i) : \lean{Bom}(P, G, \mathrm{sites}(i))$ is the
+    sub-BOM for component $i$.
+\end{itemize}
+Raw materials are nodes with $n = 0$ (no children).
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+inductive Bom (P : Type) (G : Digraph) : G.V -> Type where
+  | node (prod : P) (v : G.V) (n : Nat) (sites : Fin n -> G.V)
+      (routes : (i : Fin n) -> Digraph.Path G.op v (sites i))
+      (children : (i : Fin n) -> Bom P G (sites i)) : Bom P G v
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data Bom p v e = Node
+  { prodLabel :: p
+  , site      :: v
+  , children  :: [(v, [e], Bom p v e)]
+    -- each child: (site, inbound route, sub-BOM)
+  }
+\end{lstlisting}
+
+\begin{fidelitynote}
+In Lean, \lean{Bom P G v} is indexed by the producing facility $v$, so the
+type system enforces that routes and children are consistently sited.  In
+Haskell, $v$ is a type parameter (not an index), so this constraint is a
+runtime property only.
+\end{fidelitynote}
+
+
+% --- Bom.Occ -------------------------------------------------------
+\subsection{Inductive type: \lean{Bom.Occ}}
+
+\begin{defn}[Occurrence]
+An \textbf{occurrence} in a routed BOM $t : \lean{Bom}(P, G, v)$ is a
+descending path from the root:
+\begin{itemize}
+  \item $\lean{here} : \lean{Occ}(t)$ --- the root occurrence;
+  \item $\lean{inside}(i, p) : \lean{Occ}(t)$ where $t =
+    \lean{node}(\ldots, \mathrm{children})$, $i : \mathrm{Fin}(n)$, and
+    $p : \lean{Occ}(\mathrm{children}(i))$ --- an occurrence inside the $i$-th
+    child.
+\end{itemize}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+inductive Occ : {v : G.V} -> Bom P G v -> Type where
+  | here   {v : G.V} {t : Bom P G v} : Occ t
+  | inside {prod : P} {v : G.V} {n : Nat} {sites : Fin n -> G.V}
+      {routes : (i : Fin n) -> Digraph.Path G.op v (sites i)}
+      {children : (i : Fin n) -> Bom P G (sites i)}
+      (i : Fin n) (p : Occ (children i)) :
+      Occ (.node prod v n sites routes children)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data Occ = Here | Inside Int Occ
+  -- Here: root occurrence
+  -- Inside i p: occurrence p in the i-th child
+\end{lstlisting}
+
+
+% --- Bom.sub / Bom.shift ------------------------------------------
+\subsection{Definitions: \lean{Bom.sub} and \lean{Bom.shift}}
+
+\begin{defn}[Sub-BOM and occurrence shift]
+Given $t : \lean{Bom}(P, G, v)$ and $p : \lean{Occ}(t)$:
+\begin{itemize}
+  \item $\lean{sub}(t, p) : (u : G.V) \times \lean{Bom}(P, G, u)$ is the
+    sub-BOM at occurrence $p$ (with its producing facility).
+  \item $\lean{shift}(t, p, q) : \lean{Occ}(t)$ for $q :
+    \lean{Occ}(\lean{sub}(t, p).\mathbf{2})$ is the concatenation: an occurrence
+    $q$ inside the sub-BOM at $p$, seen from the root of $t$.
+\end{itemize}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def sub : {v : G.V} -> (t : Bom P G v) -> Occ t
+    -> (u : G.V) * Bom P G u
+  | v, t, .here => <|v, t|>
+  | _, .node _ _ _ _ _ children, .inside i p => (children i).sub p
+
+def shift : {v : G.V} -> (t : Bom P G v) -> (p : Occ t)
+    -> Occ (t.sub p).2 -> Occ t
+  | _, _, .here, q => q
+  | _, .node _ _ _ _ _ children, .inside i p, q =>
+      .inside i ((children i).shift p q)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+subBom :: Bom p v e -> Occ -> (v, Bom p v e)
+subBom t Here = (site t, t)
+subBom (Node _ _ children) (Inside i p) =
+  subBom (thd (children !! i)) p
+
+shift :: Bom p v e -> Occ -> Occ -> Occ
+shift _ Here q = q
+shift (Node _ _ children) (Inside i p) q =
+  Inside i (shift (thd (children !! i)) p q)
+\end{lstlisting}
+
+
+% --- DC laws -------------------------------------------------------
+\subsection{Theorems: \lean{Bom.shift\_root}, \lean{Bom.sub\_shift}, \lean{Bom.shift\_assoc}}
+
+\begin{thm}[BOM directed-container laws]
+For a routed BOM $t : \lean{Bom}(P, G, v)$:
+\begin{enumerate}
+  \item \textbf{D3} (\lean{shift\_root}): $\lean{shift}(t, p, \lean{here}) = p$
+    for all $p$.
+  \item \textbf{D4} (\lean{sub\_shift}): $\lean{sub}(t, \lean{shift}(t, p, q))
+    = \lean{sub}(\lean{sub}(t, p).\mathbf{2}, q)$ (sub-BOMs nest along the shift ---
+    multi-level costing is coherent).
+  \item \textbf{D5} (\lean{shift\_assoc}): the shift is associative (modulo
+    transport along D4).
+\end{enumerate}
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem shift_root : {v : G.V} -> (t : Bom P G v) -> (p : Occ t) ->
+    t.shift p .here = p
+
+theorem sub_shift : {v : G.V} -> (t : Bom P G v) -> (p : Occ t) ->
+    (q : Occ (t.sub p).2) -> t.sub (t.shift p q) = (t.sub p).2.sub q
+
+theorem shift_assoc : {v : G.V} -> (t : Bom P G v) -> (p : Occ t) ->
+    (q : Occ (t.sub p).2) ->
+    (r : Occ ((t.sub p).2.sub q).2) ->
+    t.shift (t.shift p q) ((t.sub_shift p q).symm cast r)
+      = t.shift p ((t.sub p).2.shift q r)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- D3: shift t p Here = p
+-- D4: sub (shift t p q) = sub (sub t p) q
+-- D5: shift (shift t p q) r = shift t p (shift (sub t p) q r)
+\end{lstlisting}
+
+
+%===================================================================
+\section{The BOM directed container}
+%===================================================================
+
+\subsection{Definition: \lean{bom}}
+
+\begin{defn}[BOM directed container]
+The directed container \lean{bom}$(P, G)$ has:
+\begin{align*}
+  \mathrm{Shape} &= \textstyle\sum_{v : G.V} \lean{Bom}(P, G, v), \\
+  \mathrm{Pos}(v, t) &= \lean{Occ}(t), \\
+  \mathrm{root}(v, t) &= \lean{here}, \\
+  \mathrm{sub}((v, t), p) &= t.\lean{sub}(p), \\
+  \mathrm{shift}((v, t), p, q) &= t.\lean{shift}(p, q).
+\end{align*}
+This is exactly Construction~\texttt{con:bom}'s directed container of rooted
+trees, with labels, sites, and routes riding along the occurrences.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def bom (P : Type) (G : Digraph) : DirectedContainer where
+  Shape := (v : G.V) * Bom P G v
+  Pos s := Bom.Occ s.2
+  root _ := .here
+  sub s p := s.2.sub p
+  shift s p q := s.2.shift p q
+  d1 _ := rfl
+  d4 s p q := s.2.sub_shift p q
+  d2 _ _ := rfl
+  d3 s p := s.2.shift_root p
+  d5 s p q r := s.2.shift_assoc p q r
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- The BOM DC: shapes are rooted BOM trees (with facility),
+-- positions are occurrences.
+data BomDC p v e = BomDC
+  { bomShape :: (v, Bom p v e)
+  , bomPos   :: Occ
+  }
+\end{lstlisting}
+
+
+%===================================================================
+\section{The sourcing functor}
+%===================================================================
+
+% --- Bom.routeOf --------------------------------------------------
+\subsection{Definition: \lean{Bom.routeOf}}
+
+\begin{defn}[Inbound route of an occurrence]
+The \textbf{inbound route} $\lean{routeOf}(t, p)$ of occurrence $p$ in BOM $t$
+at facility $v$ is a path in $G^{\mathrm{op}}$ from $v$ to the sub-BOM's
+facility, built by appending the routes along the path from root to $p$:
+\begin{itemize}
+  \item $\lean{routeOf}(t, \lean{here}) = \mathrm{nil}_{G^{\mathrm{op}}}(v)$ (empty inbound route);
+  \item $\lean{routeOf}(\lean{node}(\ldots, \mathrm{routes}, \mathrm{children}),
+    \lean{inside}(i, p)) = \mathrm{routes}(i) \mathbin{+\!\!+} \lean{routeOf}(\mathrm{children}(i), p)$.
+\end{itemize}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def routeOf : {v : G.V} -> (t : Bom P G v) -> (p : Occ t) ->
+    Digraph.Path G.op v (t.sub p).1
+  | v, _, .here => Digraph.Path.nil (G := G.op) v
+  | _, .node _ _ _ _ routes children, .inside i p =>
+      (routes i).append ((children i).routeOf p)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+routeOf :: Bom p v e -> Occ -> [e]
+routeOf _ Here = []
+routeOf (Node _ _ children) (Inside i p) =
+  route (children !! i) ++ routeOf (thd (children !! i)) p
+  where route (_, r, _) = r
+\end{lstlisting}
+
+
+% --- routeOf_shift -----------------------------------------------
+\subsection{Theorem: \lean{Bom.routeOf\_shift} (Consolidation)}
+
+\begin{thm}[Consolidation --- F2 of the sourcing functor]
+For all $t : \lean{Bom}(P, G, v)$, $p : \lean{Occ}(t)$, and $q :
+\lean{Occ}(\lean{sub}(t, p).\mathbf{2})$:
+\begin{align*}
+  &\bigl(\lean{sub}(t, \lean{shift}(t, p, q)).\mathbf{1},\;
+    \lean{routeOf}(t, \lean{shift}(t, p, q))\bigr) \\
+  &\quad=\;
+  \bigl((\lean{sub}(t, p).\mathbf{2}.\lean{sub}(q)).\mathbf{1},\;
+    \lean{routeOf}(t, p) \mathbin{+\!\!+}
+    \lean{sub}(t, p).\mathbf{2}.\lean{routeOf}(q)\bigr).
+\end{align*}
+The route of a concatenated occurrence is the concatenation of the routes.
+Operationally: ore reaches the rolling mill \emph{only via} the reduction
+plant and the melt shop.  This is the key coherence law (F2) for the sourcing
+functor.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem routeOf_shift : {v : G.V} -> (t : Bom P G v) -> (p : Occ t) ->
+    (q : Occ (t.sub p).2) ->
+    (<|(t.sub (t.shift p q)).1, t.routeOf (t.shift p q)|>
+        : (u : G.V) * Digraph.Path G.op v u)
+      = <|((t.sub p).2.sub q).1,
+          (t.routeOf p).append ((t.sub p).2.routeOf q)|>
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- consolidation:
+-- routeOf t (shift t p q) = routeOf t p ++ routeOf (sub t p) q
+propConsolidation :: Bom p v e -> Occ -> Occ -> Bool
+propConsolidation t p q =
+  routeOf t (shift t p q) == routeOf t p ++ routeOf (subBomTree t p) q
+  where subBomTree t p = snd (subBom t p)
+\end{lstlisting}
+
+
+% --- sourcing -------------------------------------------------------
+\subsection{Definition: \lean{sourcing}}
+
+\begin{defn}[Sourcing functor (Construction \texttt{con:sourcing})]
+The \textbf{sourcing functor} is a covariant directed-container functor
+\[
+  \lean{sourcing}(P, G) :
+  \lean{DContFunctor}(\lean{bom}(P, G),\; \mathcal{N}(G^{\mathrm{op}}))
+\]
+with:
+\begin{itemize}
+  \item on shapes: $(v, t) \mapsto v$ (the producing facility of the root product);
+  \item on positions: $(v, t, p) \mapsto (\lean{sub}(t, p).\mathbf{1},\;
+    \lean{routeOf}(t, p))$ (the component's facility and its inbound route).
+\end{itemize}
+Laws F0 ($\mathrm{sub}$ compatibility) and F1 (root preservation) hold by
+\lean{rfl}; F2 (shift compatibility) is \lean{routeOf\_shift}.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def sourcing (P : Type) (G : Digraph) :
+    DContFunctor (bom P G) (Digraph.network G.op) where
+  onShapes s := s.1
+  onPos s p := <|(s.2.sub p).1, s.2.routeOf p|>
+  f0 _ _ := rfl
+  f1 _ := rfl
+  f2 s p q := s.2.routeOf_shift p q
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+sourcing :: DContFunctor (BomDC p v e) (Network v e)
+sourcing = DContFunctor
+  { onShapes = \(v, _) -> v
+  , onPos    = \(_, t) p -> (fst (subBom t p), routeOf t p)
+  -- F0, F1 by definition; F2 is consolidation
+  }
+\end{lstlisting}
+
+
+%===================================================================
+\section{UAE steel instance}
+%===================================================================
+
+\subsection{Products, sites, and graph}
+
+\begin{defn}[UAE steel supply chain]
+The UAE steel supply chain (\S6 of the paper) has:
+\begin{itemize}
+  \item products: \lean{orePellets}, \lean{dri}, \lean{scrap}, \lean{billet},
+    \lean{rebar};
+  \item sites: \lean{oreBerth}, \lean{reductionPlant}, \lean{meltShop},
+    \lean{rollingMill};
+  \item legs: \lean{ob2rp} (ore berth $\to$ reduction plant), \lean{rp2ms}
+    (reduction plant $\to$ melt shop), \lean{ms2rm} (melt shop $\to$ rolling mill).
+\end{itemize}
+The shipping graph is a directed path of length~3.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+inductive Product
+  | orePellets | dri | scrap | billet | rebar
+
+inductive Site
+  | oreBerth | reductionPlant | meltShop | rollingMill
+
+inductive Leg
+  | ob2rp | rp2ms | ms2rm
+
+@[reducible] def graph : Digraph where
+  V := Site; E := Leg
+  src := Leg.src; tgt := Leg.tgt
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data Product = OrePellets | Dri | Scrap | Billet | Rebar
+data Site    = OreBerth | ReductionPlant | MeltShop | RollingMill
+data Leg     = Ob2rp | Rp2ms | Ms2rm
+\end{lstlisting}
+
+
+\subsection{Sanity checks (examples checked by \lean{rfl})}
+
+\begin{prop}[Sourcing maps steel shape to its facility]
+$({\lean{sourcing}}(P, G)).\lean{onShapes}(\lean{steelShape}) = \lean{rollingMill}$
+--- the rebar BOM is produced at the rolling mill.
+\end{prop}
+
+\begin{prop}[Ore occurrence inbound route]
+The ore-pellet occurrence in the rebar BOM is sourced by the three-leg inbound
+route: rolling mill $\leftarrow$ melt shop $\leftarrow$ reduction plant $\leftarrow$
+ore berth.
+\end{prop}
+
+\begin{prop}[Scrap inbound route]
+The scrap occurrence is sourced by the one-leg inbound route: rolling mill
+$\leftarrow$ melt shop (scrap is received at the melt shop, not shipped in from
+a remote site).
+\end{prop}
+
+\begin{prop}[Consolidation instance]
+Sourcing the concatenated occurrence billet-then-ore equals shifting the
+billet's inbound route by the ore's inbound route in the opposite network:
+\begin{align*}
+  &\lean{sourcing}.f\bigl(\lean{steelShape},\;
+    \lean{shift}(\lean{rebarBom}, \lean{billetOcc}, \lean{oreInBillet})\bigr) \\
+  &\quad=\;
+  \mathcal{N}(G^{\mathrm{op}}).\lean{shift}\bigl(\lean{rollingMill},\;
+    \lean{sourcing}.f(\lean{steelShape}, \lean{billetOcc}),\;
+    \lean{sourcing}.f(\lean{billetBom}, \lean{oreInBillet})\bigr).
+\end{align*}
+All checked by \lean{rfl}.
+\end{prop}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+example : (sourcing Product graph).onShapes steelShape = rollingMill := rfl
+
+example : (sourcing Product graph).onPos steelShape oreOcc
+    = <|oreBerth, (inb ms2rm).append ((inb rp2ms).append
+          ((inb ob2rp).append
+           (Digraph.Path.nil (G := graph.op) oreBerth)))|> := rfl
+
+example : (sourcing Product graph).onPos steelShape scrapOcc
+    = <|meltShop, (inb ms2rm).append
+          (Digraph.Path.nil (G := graph.op) meltShop)|> := rfl
+
+example : (sourcing Product graph).onPos steelShape
+      (rebarBom.shift billetOcc oreInBillet)
+    = (Digraph.network graph.op).shift rollingMill
+        ((sourcing Product graph).onPos steelShape billetOcc)
+        ((sourcing Product graph).onPos <|meltShop, billetBom|>
+           oreInBillet) := rfl
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- sourcingShape rebarShape = RollingMill
+-- sourcingPos rebarShape oreOcc
+--   = (OreBerth, [Ms2rm, Rp2ms, Ob2rp])  (reversed legs: inbound)
+-- sourcingPos rebarShape scrapOcc
+--   = (MeltShop, [Ms2rm])
+-- consolidation instance: rfl in Lean
+\end{lstlisting}
+
+
+%===================================================================
+\section{Translation conventions}
+%===================================================================
+
+\begin{enumerate}
+\item \textbf{Indexed inductive type.}  \lean{Bom P G v} is indexed by the
+  producing facility $v$.  In Haskell, $v$ is a type parameter; the indexing
+  guarantee is lost.
+
+\item \textbf{Opposite paths as inbound routes.}  A $G^{\mathrm{op}}$-path from
+  $v$ to $u$ is physically a $G$-path from $u$ to $v$ (same edge list, swapped
+  endpoints).  In Haskell, we represent both as the same list type and note the
+  direction convention.
+
+\item \textbf{Routes on shapes (formalization caveat).}  The paper's BOM shapes
+  are bare product-labelled trees; here, they carry routing choices.  See the
+  module docstring for why this is necessary.
+
+\item \textbf{Proof bodies omitted.}  Only definitions and theorem
+  \emph{statements} are translated.  Lean checks the proofs; the human
+  verifier checks that the \emph{statements} match the intended mathematics.
+\end{enumerate}
+
+\end{document}

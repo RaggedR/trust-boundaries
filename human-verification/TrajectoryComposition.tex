@@ -1,0 +1,295 @@
+\documentclass[11pt,a4paper]{article}
+\input{preamble}
+
+\title{Human Verification: \texttt{TrajectoryComposition}\\[4pt]
+  \large Composing Trajectory Evaluation with Trust Evaluation}
+\author{Machine-generated from \texttt{lean/TrajectoryComposition.lean} for review by Neil Ghani}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document presents every definition and theorem \emph{statement} from the
+Lean~4 module \lean{TrajectoryComposition} in three parallel forms: the original
+Lean, a readable Haskell rendering, and precise mathematical English.  Proofs
+are omitted --- they are machine-checked by Lean.
+
+The module defines a grade-level map $\psi : \mathtt{TLevel} \to
+\mathtt{TrustLevel}$ from the five-level trajectory chain to the seven-level
+deployed trust chain, verifies that $\psi$ is a chain morphism (monotone,
+bottom-preserving), and applies the lax transport theorem
+(\lean{tau\_transport} from \lean{Trust.lean}) to concrete trajectories.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%===================================================================
+\section{Overview}
+%===================================================================
+
+The module bridges two trust chains.  On one side is the five-level trajectory
+chain \lean{TLevel} (defined in \lean{Trajectory.lean}): $\mathtt{unsupported}
+< \mathtt{shallow} < \mathtt{independent} < \mathtt{crossVerified} <
+\mathtt{mechChecked}$.  On the other is the seven-level deployed agent chain
+\lean{TrustLevel} used in production registries: $\mathtt{unchecked} <
+\mathtt{speculative} < \mathtt{computed} < \mathtt{proved} <
+\mathtt{peerReviewed} < \mathtt{published} < \mathtt{leanVerified}$.
+
+The map $\psi$ translates: $\mathtt{unsupported} \mapsto \mathtt{unchecked}$,
+$\mathtt{shallow} \mapsto \mathtt{computed}$, $\mathtt{independent} \mapsto
+\mathtt{proved}$, $\mathtt{crossVerified} \mapsto \mathtt{peerReviewed}$,
+$\mathtt{mechChecked} \mapsto \mathtt{leanVerified}$.
+
+%===================================================================
+\section{The trust chain}
+%===================================================================
+
+\subsection{Inductive type: \lean{TrustLevel} (local copy)}
+
+\begin{defn}[Deployed trust levels]
+A seven-element chain mirroring \lean{TrustBoundary.TrustLevel}:
+\[
+  \mathtt{unchecked} < \mathtt{speculative} < \mathtt{computed} <
+  \mathtt{proved} < \mathtt{peerReviewed} < \mathtt{published} <
+  \mathtt{leanVerified}.
+\]
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+inductive TrustLevel where
+  | unchecked
+  | speculative
+  | computed
+  | proved
+  | peerReviewed
+  | published
+  | leanVerified
+deriving DecidableEq, Repr
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data TrustLevel
+  = Unchecked | Speculative | Computed | Proved
+  | PeerReviewed | Published | LeanVerified
+  deriving (Eq, Ord, Show)
+\end{lstlisting}
+
+\begin{fidelitynote}
+This type is defined locally in \lean{Trajectory} namespace, mirroring the
+one in \lean{TrustBoundary.lean}.  The \lean{Chain TrustLevel} instance here
+is also proved locally.
+\end{fidelitynote}
+
+
+\subsection{Definition: \lean{TrustLevel.le} and \lean{Chain TrustLevel}}
+
+\begin{defn}[Order on \lean{TrustLevel}]
+The order is defined case-by-case, establishing the chain
+$\mathtt{unchecked} \le \cdots \le \mathtt{leanVerified}$.  The
+\lean{Chain TrustLevel} instance has $\bot = \mathtt{unchecked}$.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def TrustLevel.le : TrustLevel -> TrustLevel -> Prop
+  | .unchecked, _ => True
+  | .speculative, .unchecked => False
+  | .speculative, _ => True
+  -- ... (remaining cases follow the chain order)
+  | .leanVerified, .leanVerified => True
+  | .leanVerified, _ => False
+
+instance : Chain TrustLevel where
+  bot := .unchecked
+  -- reflexivity, transitivity, antisymmetry, totality, bot_le, dec all proved
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Derived Ord suffices; bot = Unchecked.
+\end{lstlisting}
+
+%===================================================================
+\section{The trajectory-trust morphism}
+%===================================================================
+
+\subsection{Definition: \lean{psi}}
+
+\begin{defn}[Grade translation map]
+The function $\psi : \mathtt{TLevel} \to \mathtt{TrustLevel}$ translates
+trajectory grades to deployed trust grades:
+\begin{align*}
+  \psi(\mathtt{unsupported})  &= \mathtt{unchecked}, \\
+  \psi(\mathtt{shallow})       &= \mathtt{computed}, \\
+  \psi(\mathtt{independent})   &= \mathtt{proved}, \\
+  \psi(\mathtt{crossVerified}) &= \mathtt{peerReviewed}, \\
+  \psi(\mathtt{mechChecked})   &= \mathtt{leanVerified}.
+\end{align*}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def psi : TLevel -> TrustLevel
+  | .unsupported  => .unchecked
+  | .shallow       => .computed
+  | .independent   => .proved
+  | .crossVerified => .peerReviewed
+  | .mechChecked   => .leanVerified
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+psi :: TLevel -> TrustLevel
+psi Unsupported  = Unchecked
+psi Shallow       = Computed
+psi Independent   = Proved
+psi CrossVerified = PeerReviewed
+psi MechChecked   = LeanVerified
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{psi\_bot}}
+
+\begin{thm}[$\psi$ preserves bottom]
+\[
+  \psi(\bot_{\mathtt{TLevel}}) = \bot_{\mathtt{TrustLevel}},
+  \quad\text{i.e.,}\quad
+  \psi(\mathtt{unsupported}) = \mathtt{unchecked}.
+\]
+This is the strictness-at-bottom condition required for $\psi$ to be a valid
+trust-system morphism (see \lean{Mor.phi\_bot} in \lean{Trust.lean}).
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem psi_bot :
+    psi (Chain.bot : TLevel) = (Chain.bot : TrustLevel)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- psi Unsupported == Unchecked   -- True by definition
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{psi\_mono}}
+
+\begin{thm}[$\psi$ is monotone]
+For all $a, b : \mathtt{TLevel}$,
+\[
+  a \le b \implies \psi(a) \le \psi(b).
+\]
+Together with \lean{psi\_bot}, this makes $\psi$ a valid \lean{phi}
+component of a \lean{Mor} in the sense of \lean{Trust.lean}.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem psi_mono : forall {a b : TLevel}, a <= b -> psi a <= psi b
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- psi is order-preserving: a <= b ==> psi a <= psi b
+-- Follows from the chain structure and the explicit case table of psi.
+\end{lstlisting}
+
+%===================================================================
+\section{Concrete transport results}
+%===================================================================
+
+\subsection{Theorem: \lean{psi\_circularTraj\_bot}}
+
+\begin{thm}[Circular trajectory maps to unchecked under $\psi$]
+For every event $e : \mathtt{Evt}$,
+\[
+  \psi\bigl(\tau(\mathtt{circularTraj},\, e)\bigr) = \mathtt{unchecked}.
+\]
+This follows immediately from \lean{circularTraj\_tau\_bot} and
+\lean{psi\_bot}.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem psi_circularTraj_bot : forall (e : Evt),
+    psi (tau circularTraj circularTraj_wf e) = TrustLevel.unchecked
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- psi (tau circularTraj e) == Unchecked  for all e
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{psi\_honest\_e4}}
+
+\begin{thm}[Honest trajectory's verify event maps to proved]
+\[
+  \psi\bigl(\tau(\mathtt{honestTraj},\, e_4)\bigr) = \mathtt{proved}.
+\]
+Recall from \lean{Trajectory.lean} that $\tau(\mathtt{honestTraj},\, e_4) =
+\mathtt{independent}$, and $\psi(\mathtt{independent}) = \mathtt{proved}$.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem psi_honest_e4 :
+    psi (tau honestTraj honestTraj_wf Evt.e4) = TrustLevel.proved
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- psi (tau honestTraj E4) == Proved
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{psi\_honest\_e3}}
+
+\begin{thm}[Honest trajectory's claim event maps to computed]
+\[
+  \psi\bigl(\tau(\mathtt{honestTraj},\, e_3)\bigr) = \mathtt{computed}.
+\]
+Recall that $\tau(\mathtt{honestTraj},\, e_3) = \mathtt{shallow}$, and
+$\psi(\mathtt{shallow}) = \mathtt{computed}$.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem psi_honest_e3 :
+    psi (tau honestTraj honestTraj_wf Evt.e3) = TrustLevel.computed
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- psi (tau honestTraj E3) == Computed
+\end{lstlisting}
+
+%===================================================================
+\section{Translation conventions}
+%===================================================================
+
+\begin{enumerate}
+\item \textbf{Proof bodies omitted.}  Lean machine-checks all proofs.
+
+\item \textbf{Local type duplication.}  \lean{TrustLevel} is defined
+  independently here (mirroring \lean{TrustBoundary.TrustLevel}) to keep the
+  file self-contained and avoid namespace friction.  A future refactor could
+  import from \lean{TrustBoundary.lean} instead.
+
+\item \textbf{The morphism condition.}  \lean{psi\_bot} and \lean{psi\_mono}
+  are exactly the \lean{phi\_bot} and \lean{phi\_mono} fields required to
+  extend $\psi$ to a \lean{Mor} between trust systems.  The transport theorem
+  (\lean{tau\_transport}) then applies: importing along such a morphism never
+  claims more than $\psi$ of the source's canonical trust.
+
+\item \textbf{Concrete transport.}  Rather than constructing a full
+  \lean{Mor} record (which would require matching step-sets and premise maps
+  between the trajectory and trust systems), the module applies results from
+  \lean{Trajectory.lean} directly, composing with $\psi$ pointwise.
+\end{enumerate}
+
+\end{document}

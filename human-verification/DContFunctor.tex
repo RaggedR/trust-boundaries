@@ -1,0 +1,295 @@
+\documentclass[11pt,a4paper]{article}
+\input{preamble}
+
+\title{Human Verification: \texttt{Containers.DContFunctor}\\[4pt]
+  \large Covariant Functors of Directed Containers}
+\author{Machine-generated from \texttt{lean/DContFunctor.lean} for review by Neil Ghani}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document presents every definition and theorem \emph{statement} from the
+Lean~4 module \lean{Containers.DContFunctor} in three parallel forms: the
+original Lean, a readable Haskell rendering, and precise mathematical English.
+Proofs are omitted --- they are machine-checked by Lean.  The purpose is to
+let a human verifier confirm that the formalisation captures the intended
+mathematics.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%===================================================================
+\section{Overview}
+%===================================================================
+
+This file defines \textbf{covariant functors of directed containers} --- the
+morphism notion needed for Construction~\emph{con:sourcing} in the supply-chains
+paper.  Contrast with \lean{DContMorphism} (in \lean{Containers.DContCat}),
+whose position map is \emph{contravariant} and corresponds to a \emph{cofunctor}
+of the induced categories.
+
+A \lean{DContFunctor C D} is a \emph{functor} $\mathcal{C}(C) \to \mathcal{C}(D)$:
+\begin{itemize}
+  \item the shape map $f : S_C \to S_D$ acts on objects \emph{covariantly};
+  \item the position map $f^\flat_s : P_C(s) \to P_D(f(s))$ acts on morphisms
+        \emph{covariantly} (positions go \emph{forward});
+  \item F0 says the codomain of $f^\flat_s(p)$ is $f(s \downarrow p)$;
+  \item F1 says roots (identities) are preserved;
+  \item F2 says shifts (compositions) are preserved, with a transport along F0.
+\end{itemize}
+
+The file also establishes that \lean{DContFunctor} forms a category (identity,
+composition, and the three category laws, all by \lean{rfl}).
+
+%===================================================================
+\section{The \lean{DContFunctor} structure}
+%===================================================================
+
+% --- 1. DContFunctor ----------------------------------------------
+\subsection{Structure: \lean{DContFunctor}}
+
+\begin{defn}[Covariant functor of directed containers]
+A \textbf{covariant directed-container functor} $F : C \to D$ consists of:
+\begin{itemize}
+  \item a \emph{covariant} shape map $f : S_C \to S_D$;
+  \item a \emph{covariant} position map $f^\flat_s : P_C(s) \to P_D(f(s))$;
+\end{itemize}
+satisfying:
+\begin{itemize}
+  \item \textbf{F0:} $f(C \!\downarrow_s\! p) = D \!\downarrow_{f(s)}\! f^\flat_s(p)$
+        (codomain preserved);
+  \item \textbf{F1:} $f^\flat_s(o_C(s)) = o_D(f(s))$ (roots preserved);
+  \item \textbf{F2:} $f^\flat_s(p \oplus_C q) = f^\flat_s(p) \oplus_D
+        (\mathrm{F0} \triangleright f^\flat_{C \downarrow_s p}(q))$
+        (shifts preserved, with transport along F0).
+\end{itemize}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+structure DContFunctor (C D : DirectedContainer) where
+  onShapes : C.Shape -> D.Shape
+  onPos : (s : C.Shape) -> C.Pos s -> D.Pos (onShapes s)
+  f0 : forall (s : C.Shape) (p : C.Pos s),
+    onShapes (C.sub s p) = D.sub (onShapes s) (onPos s p)
+  f1 : forall s : C.Shape, onPos s (C.root s) = D.root (onShapes s)
+  f2 : forall (s : C.Shape) (p : C.Pos s) (q : C.Pos (C.sub s p)),
+    onPos s (C.shift s p q)
+      = D.shift (onShapes s) (onPos s p)
+          (f0 s p [> onPos (C.sub s p) q)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data DContFunctor c d = DContFunctor
+  { onShapes :: Shape c -> Shape d        -- covariant
+  , onPos    :: Shape c -> Pos c -> Pos d -- covariant (positions go forward)
+  -- F0: onShapes (sub_C s p) = sub_D (onShapes s) (onPos s p)
+  -- F1: onPos s (root_C s) = root_D (onShapes s)
+  -- F2: onPos s (shift_C s p q)
+  --       = shift_D (onShapes s) (onPos s p)
+  --           (onPos (sub_C s p) q)
+  --   (transport along F0 is suppressed in Haskell)
+  }
+\end{lstlisting}
+
+\begin{fidelitynote}
+The key difference from \lean{DContMorphism}: \lean{onPos} maps $P_C(s)$ to
+$P_D(f(s))$ (forward), whereas in a \lean{DContMorphism}, \lean{onPos} maps
+$P_D(f(s))$ to $P_C(s)$ (backward).  In F2, the inner position
+$f^\flat_{C \downarrow s}(q)$ lives over $f(C \!\downarrow_s\! p)$, but
+$D.\mathrm{shift}$ requires it over $D \!\downarrow_{f(s)}\! f^\flat_s(p)$;
+the transport $\mathrm{F0} \triangleright$ bridges these two equal shapes.
+This transport is invisible in Haskell.
+\end{fidelitynote}
+
+
+%===================================================================
+\section{Identity and composition}
+%===================================================================
+
+% --- 2. DContFunctor.id -------------------------------------------
+\subsection{Definition: \lean{DContFunctor.id}}
+
+\begin{defn}[Identity functor]
+The identity covariant functor on $C$: both maps are $\mathrm{id}$.
+All three laws hold by $\mathrm{rfl}$ (the F2 transport is along $\mathrm{rfl}$
+and vanishes definitionally).
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def DContFunctor.id (C : DirectedContainer) : DContFunctor C C where
+  onShapes s := s
+  onPos _ p := p
+  f0 _ _ := rfl
+  f1 _ := rfl
+  f2 _ _ _ := rfl
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+idDCF :: DContFunctor c c
+idDCF = DContFunctor id (\_ p -> p)
+\end{lstlisting}
+
+
+% --- 3. onPos_transport -------------------------------------------
+\subsection{Lemma: \lean{DContFunctor.onPos\_transport}}
+
+\begin{prop}[Transport commutes with the position map]
+Let $F : C \to D$ and let $e : a = b$ be a shape equality in $C$.  Then
+\[
+  F.\mathrm{onPos}_b(e \triangleright p)
+  \;=\;
+  \mathrm{congrArg}(F.\mathrm{onShapes}, e) \triangleright F.\mathrm{onPos}_a(p).
+\]
+That is, pushing a position forward after transporting along $e$ equals
+transporting the image along the image equality.
+\end{prop}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem onPos_transport {C D : DirectedContainer} (phi : DContFunctor C D)
+    {a b : C.Shape} (e : a = b) (p : C.Pos a) :
+    phi.onPos b (e [> p) = congrArg phi.onShapes e [> phi.onPos a p
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Trivial in Haskell: transport is identity.
+-- onPos b p = onPos a p  (since a = b implies same type)
+\end{lstlisting}
+
+
+% --- 4. transport_trans -------------------------------------------
+\subsection{Lemma: \lean{DContFunctor.transport\_trans}}
+
+\begin{prop}[Two transports equal one]
+For any type family $P : \alpha \to \mathbf{Type}$, equalities $h_1 : x = y$
+and $h_2 : y = z$, and element $p : P(x)$:
+\[
+  h_2 \triangleright (h_1 \triangleright p) \;=\; (h_1 \cdot h_2) \triangleright p.
+\]
+\end{prop}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem transport_trans {alpha : Type} {P : alpha -> Type} {x y z : alpha}
+    (h1 : x = y) (h2 : y = z) (p : P x) :
+    h2 [> h1 [> p = (h1.trans h2) [> p
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Trivial in Haskell (transport is identity).
+\end{lstlisting}
+
+
+% --- 5. DContFunctor.comp -----------------------------------------
+\subsection{Definition: \lean{DContFunctor.comp}}
+
+\begin{defn}[Composition of covariant functors]
+Given $F : C \to D$ and $G : D \to E$, their composite $G \circ F : C \to E$
+has:
+\begin{align*}
+  \mathrm{onShapes}(s) &= G.\mathrm{onShapes}(F.\mathrm{onShapes}(s)), \\
+  \mathrm{onPos}_s(p) &= G.\mathrm{onPos}_{F.\mathrm{onShapes}(s)}(F.\mathrm{onPos}_s(p)).
+\end{align*}
+Both maps compose forwards.  F0 is the composite of the factors' F0s; F1 uses
+two rewrites; F2 uses both factors' F2s followed by the two transport lemmas.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def DContFunctor.comp {C D E : DirectedContainer}
+    (phi : DContFunctor C D) (psi : DContFunctor D E) : DContFunctor C E where
+  onShapes s := psi.onShapes (phi.onShapes s)
+  onPos s p := psi.onPos (phi.onShapes s) (phi.onPos s p)
+  f0 s p := (congrArg psi.onShapes (phi.f0 s p)).trans
+    (psi.f0 (phi.onShapes s) (phi.onPos s p))
+  f1 s := by rw [phi.f1, psi.f1]
+  f2 s p q := by
+    rw [phi.f2, psi.f2, psi.onPos_transport (phi.f0 s p), transport_trans]
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+compDCF :: DContFunctor c d -> DContFunctor d e -> DContFunctor c e
+compDCF phi psi = DContFunctor
+  { onShapes = onShapes psi . onShapes phi
+  , onPos    = \s p -> onPos psi (onShapes phi s) (onPos phi s p)
+  }
+\end{lstlisting}
+
+
+%===================================================================
+\section{Category laws for \lean{DContFunctor}}
+%===================================================================
+
+% --- 6. id_comp / comp_id / comp_assoc ----------------------------
+\subsection{Theorems: identity and associativity}
+
+\begin{thm}[Left unit]
+For any $F : C \to D$, $\mathrm{comp}(\mathrm{id}_C, F) = F$ (by \lean{rfl}).
+\end{thm}
+
+\begin{thm}[Right unit]
+For any $F : C \to D$, $\mathrm{comp}(F, \mathrm{id}_D) = F$ (by \lean{rfl}).
+\end{thm}
+
+\begin{thm}[Associativity]
+For $F : B \to C$, $G : C \to D$, $H : D \to E$:
+\[
+  (H \circ G) \circ F \;=\; H \circ (G \circ F) \quad\text{(by \lean{rfl})}.
+\]
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem DContFunctor.id_comp {C D : DirectedContainer}
+    (phi : DContFunctor C D) : comp (id C) phi = phi
+
+theorem DContFunctor.comp_id {C D : DirectedContainer}
+    (phi : DContFunctor C D) : comp phi (id D) = phi
+
+theorem DContFunctor.comp_assoc {B C D E : DirectedContainer}
+    (phi : DContFunctor B C) (psi : DContFunctor C D) (chi : DContFunctor D E) :
+    comp (comp phi psi) chi = comp phi (comp psi chi)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- prop_id_comp phi = compDCF idDCF phi == phi
+-- prop_comp_id phi = compDCF phi idDCF == phi
+-- prop_assoc phi psi chi =
+--   compDCF (compDCF phi psi) chi == compDCF phi (compDCF psi chi)
+\end{lstlisting}
+
+
+%===================================================================
+\section{Translation conventions}
+%===================================================================
+
+\begin{enumerate}
+\item \textbf{Covariant vs.\ contravariant.}  \lean{DContFunctor.onPos} maps
+  $P_C(s) \to P_D(f(s))$ (forward); \lean{DContMorphism.onPos} maps
+  $P_D(f(s)) \to P_C(s)$ (backward).  This is the defining distinction
+  between functors and cofunctors of directed containers.
+
+\item \textbf{F2 transport.}  The inner position in F2 must be transported
+  along F0 before \lean{D.shift} can consume it.  All three category laws
+  (\lean{rfl}) confirm that these transports compose cleanly.
+
+\item \textbf{Design choice: direct definition.}  \lean{DContFunctor} is
+  defined directly on containers (not via \lean{toSmallCat}), avoiding the
+  round-trip gap and keeping transports $\mathrm{rfl}$-cheap for containers
+  like \lean{network G} whose \lean{sub} is a projection.
+
+\item \textbf{Proof bodies omitted.}  Only statements are translated.
+\end{enumerate}
+
+\end{document}

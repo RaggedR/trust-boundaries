@@ -1,0 +1,809 @@
+\documentclass[11pt,a4paper]{article}
+\input{preamble}
+
+\title{Human Verification: \texttt{Containers.Cont}\\[4pt]
+  \large The Category of Containers: Identity, Composition, and Finite (Co)Products}
+\author{Machine-generated from \texttt{lean/Cont.lean} for review by Neil Ghani}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document presents every definition and theorem \emph{statement} from the
+Lean~4 module \lean{Containers.Cont} in three parallel forms: the original
+Lean, a readable Haskell rendering, and precise mathematical English.  Proofs
+are omitted --- they are machine-checked by Lean.  The purpose is to let a
+human verifier confirm that the formalisation captures the intended mathematics.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%===================================================================
+\section{Overview}
+%===================================================================
+
+This file builds on \texttt{Containers.Basic} to equip containers and their
+morphisms with the structure of a \emph{category} $\mathbf{Cont}$.
+
+\begin{itemize}
+  \item \textbf{Objects} are containers $C = (S \triangleleft P)$.
+  \item \textbf{Morphisms} $(S \triangleleft P) \to (S' \triangleleft P')$ are
+        container morphisms: a forward shape map $f : S \to S'$ together with a
+        \emph{contravariant} position map $f^\sharp_s : P'(f(s)) \to P(s)$ for
+        each $s$.
+\end{itemize}
+
+The key insight is that the contravariance of the position map makes all three
+category laws hold \emph{definitionally} (by \lean{rfl}) --- no transports are
+needed.  This contrasts sharply with the directed-container file, where genuine
+dependent transports appear.
+
+The file also establishes binary coproducts and products in $\mathbf{Cont}$,
+completing the algebra of container constructors.
+
+%===================================================================
+\section{Identity and composition}
+%===================================================================
+
+% --- 1. ContainerMorphism.id ----------------------------------------
+\subsection{Definition: \lean{ContainerMorphism.id}}
+
+\begin{defn}[Identity morphism]
+The \textbf{identity} container morphism on $C = (S \triangleleft P)$ is the
+pair $(\mathrm{id}_S,\, \mathrm{id}_{P(s)})$: identity on shapes and identity
+on positions.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def ContainerMorphism.id (C : Container) : ContainerMorphism C C where
+  onShapes := id
+  onPos := fun _ => id
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+idMorph :: Morph s p s p
+idMorph = Morph id (\_ -> id)
+\end{lstlisting}
+
+
+% --- 2. ContainerMorphism.comp --------------------------------------
+\subsection{Definition: \lean{ContainerMorphism.comp}}
+
+\begin{defn}[Composition of container morphisms]
+Given morphisms $\varphi = (u, g) : C \to D$ and $\psi = (v, h) : D \to E$,
+their \textbf{composite} $\psi \circ \varphi : C \to E$ is
+\[
+  (\psi \circ \varphi)_{\text{shapes}} \;=\; v \circ u, \qquad
+  (\psi \circ \varphi)^\sharp_s \;=\; g_s \circ h_{u(s)}.
+\]
+Shape maps compose forwards; position maps compose \emph{backwards}, with
+$\psi$'s pullback applied first, then $\varphi$'s.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def ContainerMorphism.comp {C D E : Container}
+    (phi : ContainerMorphism C D) (psi : ContainerMorphism D E) :
+    ContainerMorphism C E where
+  onShapes := fun s => psi.onShapes (phi.onShapes s)
+  onPos := fun s => phi.onPos s o. psi.onPos (phi.onShapes s)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+compMorph :: Morph s p t q -> Morph t q u r -> Morph s p u r
+compMorph (Morph u g) (Morph v h) =
+  Morph (v . u) (\s -> g s . h (u s))
+\end{lstlisting}
+
+
+%===================================================================
+\section{Extensionality}
+%===================================================================
+
+% --- 3. ContainerMorphism.ext ----------------------------------------
+\subsection{Theorem: \lean{ContainerMorphism.ext}}
+
+\begin{thm}[Extensionality (HEq form)]
+Two container morphisms $\varphi, \psi : C \to D$ are equal if their shape maps
+are equal and their position maps are heterogeneously equal ($\lean{HEq}$):
+\[
+  \varphi.\mathrm{onShapes} = \psi.\mathrm{onShapes}
+  \;\wedge\;
+  \varphi.\mathrm{onPos} \approx \psi.\mathrm{onPos}
+  \;\implies\;
+  \varphi = \psi.
+\]
+The heterogeneous equality is necessary because the type of
+$\varphi.\mathrm{onPos}$ depends on $\varphi.\mathrm{onShapes}$; after
+substituting the shape equality, it collapses to ordinary equality.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem ContainerMorphism.ext {C D : Container} :
+    forall {phi psi : ContainerMorphism C D},
+      phi.onShapes = psi.onShapes -> HEq phi.onPos psi.onPos -> phi = psi
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- In Haskell there is no dependent type on onPos, so ordinary
+-- structural equality suffices: equal onShapes and equal onPos
+-- implies equal Morph values.
+\end{lstlisting}
+
+\begin{fidelitynote}
+The use of \lean{HEq} (heterogeneous equality) is forced by the dependent typing
+of \lean{onPos}: its type mentions \lean{onShapes}, so two position maps that
+live in \emph{different} function types cannot be compared with \lean{=} until
+the shape equality is substituted.  This subtlety disappears in Haskell where
+position maps are not dependent.
+\end{fidelitynote}
+
+
+% --- 4. ContainerMorphism.ext' -----------------------------------------
+\subsection{Theorem: \lean{ContainerMorphism.ext'}}
+
+\begin{thm}[Extensionality (pointwise form)]
+A more convenient extensionality principle: given that the shape maps agree
+($\lean{hs} : \varphi.\mathrm{onShapes} = \psi.\mathrm{onShapes}$), two morphisms
+are equal whenever their position maps agree after transporting positions along
+\lean{hs}.  When the shape maps agree \emph{definitionally}, the transport is
+the identity and the hypothesis holds by \lean{rfl}.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem ContainerMorphism.ext' {C D : Container} :
+    forall {phi psi : ContainerMorphism C D} (hs : phi.onShapes = psi.onShapes),
+      (forall s p, phi.onPos s p = psi.onPos s (congrFun hs s |-> p)) -> phi = psi
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Again, in Haskell ordinary pointwise equality of the fields suffices.
+-- (equal onShapes and pointwise-equal onPos) => equal Morph values.
+\end{lstlisting}
+
+\begin{fidelitynote}
+The expression \lean{congrFun hs s} $\triangleright$ \lean{p} transports the position $p$ along the
+shape equality: it coerces $p : P'(\varphi(s))$ to $P'(\psi(s))$ so that both
+sides of the position-map equation live in the same type.  This is purely a
+Lean book-keeping device with no Haskell analogue.
+\end{fidelitynote}
+
+
+%===================================================================
+\section{Category laws}
+%===================================================================
+
+% --- 5. ContainerMorphism.id_comp ------------------------------------
+\subsection{Theorem: \lean{ContainerMorphism.id\_comp}}
+
+\begin{thm}[Left unit law]
+For every morphism $\varphi : C \to D$,
+\[
+  \mathrm{id}_C \circ \varphi \;=\; \varphi.
+\]
+This holds definitionally (by \lean{rfl}).
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem ContainerMorphism.id_comp {C D : Container}
+    (phi : ContainerMorphism C D) :
+    (ContainerMorphism.id C).comp phi = phi
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Left unit law:  compMorph idMorph phi = phi
+\end{lstlisting}
+
+
+% --- 6. ContainerMorphism.comp_id ------------------------------------
+\subsection{Theorem: \lean{ContainerMorphism.comp\_id}}
+
+\begin{thm}[Right unit law]
+For every morphism $\varphi : C \to D$,
+\[
+  \varphi \circ \mathrm{id}_D \;=\; \varphi.
+\]
+This holds definitionally (by \lean{rfl}).
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem ContainerMorphism.comp_id {C D : Container}
+    (phi : ContainerMorphism C D) :
+    phi.comp (ContainerMorphism.id D) = phi
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Right unit law:  compMorph phi idMorph = phi
+\end{lstlisting}
+
+
+% --- 7. ContainerMorphism.comp_assoc ----------------------------------
+\subsection{Theorem: \lean{ContainerMorphism.comp\_assoc}}
+
+\begin{thm}[Associativity]
+For every composable triple $\varphi : C \to D$, $\psi : D \to E$,
+$\chi : E \to F$,
+\[
+  (\chi \circ \psi) \circ \varphi \;=\; \chi \circ (\psi \circ \varphi).
+\]
+This holds definitionally (by \lean{rfl}).
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem ContainerMorphism.comp_assoc {C D E F : Container}
+    (phi : ContainerMorphism C D) (psi : ContainerMorphism D E)
+    (chi : ContainerMorphism E F) :
+    (phi.comp psi).comp chi = phi.comp (psi.comp chi)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Associativity:
+-- compMorph (compMorph phi psi) chi = compMorph phi (compMorph psi chi)
+\end{lstlisting}
+
+
+%===================================================================
+\section{The \lean{Category} typeclass and the \lean{Cont} instance}
+%===================================================================
+
+% --- 8. Category typeclass -------------------------------------------
+\subsection{Structure: \lean{Category}}
+
+\begin{defn}[Category typeclass]
+A minimal, Mathlib-free category typeclass on a type $\mathrm{Obj} :
+\mathbf{Type}_u$.  It bundles:
+\begin{itemize}
+  \item a $\mathrm{Hom}$-family $\mathrm{Hom} : \mathrm{Obj} \to \mathrm{Obj}
+        \to \mathbf{Type}_v$,
+  \item identity morphisms $\mathrm{id}_X : \mathrm{Hom}(X, X)$,
+  \item composition $\mathrm{comp} : \mathrm{Hom}(X,Y) \to \mathrm{Hom}(Y,Z)
+        \to \mathrm{Hom}(X,Z)$ (diagrammatic order),
+  \item proofs of left unit, right unit, and associativity.
+\end{itemize}
+This mirrors \lean{CategoryTheory.Category} from Mathlib but is self-contained.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+class Category (Obj : Type u) where
+  Hom : Obj -> Obj -> Type v
+  id  : (X : Obj) -> Hom X X
+  comp : {X Y Z : Obj} -> Hom X Y -> Hom Y Z -> Hom X Z
+  id_comp : forall {X Y : Obj} (f : Hom X Y), comp (id X) f = f
+  comp_id : forall {X Y : Obj} (f : Hom X Y), comp f (id Y) = f
+  assoc : forall {W X Y Z : Obj} (f : Hom W X) (g : Hom X Y) (h : Hom Y Z),
+    comp (comp f g) h = comp f (comp g h)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+class Category hom where
+  identity :: hom a a
+  compose  :: hom a b -> hom b c -> hom a c
+  -- law: compose identity f = f
+  -- law: compose f identity = f
+  -- law: compose (compose f g) h = compose f (compose g h)
+\end{lstlisting}
+
+
+% --- 9. Cont instance -----------------------------------------------
+\subsection{Instance: \lean{Cont}}
+
+\begin{defn}[The category of containers]
+\textbf{Cont} is the category whose objects are containers and whose morphisms
+are container morphisms, with the identity and composition defined above.  All
+three category laws hold definitionally.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+instance Cont : Category Container where
+  Hom    := ContainerMorphism
+  id     := ContainerMorphism.id
+  comp   := ContainerMorphism.comp
+  id_comp := ContainerMorphism.id_comp
+  comp_id := ContainerMorphism.comp_id
+  assoc  := ContainerMorphism.comp_assoc
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Container morphisms form a category.
+-- Objects: containers (s, p).
+-- Morphisms: Morph s p t q with idMorph and compMorph.
+-- All laws hold by computation.
+\end{lstlisting}
+
+
+%===================================================================
+\section{Binary coproducts in \lean{Cont}}
+%===================================================================
+
+The coproduct of $C = (S \triangleleft P)$ and $D = (T \triangleleft Q)$ has shape
+type $S + T$ and position type given case-wise: an $\mathrm{inl}(s)$-shape has
+positions $P(s)$; an $\mathrm{inr}(t)$-shape has positions $Q(t)$.
+
+% --- 10. Container.coprod -------------------------------------------
+\subsection{Definition: \lean{Container.coprod}}
+
+\begin{defn}[Coproduct container]
+The \textbf{coproduct} $C \oplus D$ of containers $C = (S \triangleleft P)$ and
+$D = (T \triangleleft Q)$ is the container
+\[
+  (S + T) \;\triangleleft\; [P, Q],
+\]
+where $[P, Q](\mathrm{inl}(s)) = P(s)$ and $[P, Q](\mathrm{inr}(t)) = Q(t)$.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.coprod (C D : Container) : Container where
+  Shape := C.Shape .+. D.Shape     -- Sum type: C.Shape + D.Shape
+  Pos   := Sum.elim C.Pos D.Pos
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data CoprodShape s t = InlShape s | InrShape t
+
+coprodPos :: (s -> p) -> (t -> q) -> CoprodShape s t -> Either p q
+coprodPos posC _    (InlShape s) = Left  (posC s)
+coprodPos _    posD (InrShape t) = Right (posD t)
+-- or simply: Either s t with positions (p `Either` q) case-wise
+\end{lstlisting}
+
+
+% --- 11. Container.inl ----------------------------------------------
+\subsection{Definition: \lean{Container.inl}}
+
+\begin{defn}[Left injection]
+The \textbf{left injection} $\iota_C : C \to C \oplus D$ has shape map
+$\mathrm{inl} : S \to S + T$ and position map the identity (the positions of an
+$\mathrm{inl}(s)$-shape in $C \oplus D$ are exactly $P(s)$).
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.inl (C D : Container) : ContainerMorphism C (C.coprod D) where
+  onShapes := Sum.inl
+  onPos    := fun _ => id
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+inlMorph :: Morph s p (CoprodShape s t) (Either p q)
+inlMorph = Morph InlShape (\_ -> Left)
+-- onPos sends Left p back to p (identity on Left branch)
+\end{lstlisting}
+
+
+% --- 12. Container.inr ----------------------------------------------
+\subsection{Definition: \lean{Container.inr}}
+
+\begin{defn}[Right injection]
+The \textbf{right injection} $\iota_D : D \to C \oplus D$ has shape map
+$\mathrm{inr} : T \to S + T$ and position map the identity.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.inr (C D : Container) : ContainerMorphism D (C.coprod D) where
+  onShapes := Sum.inr
+  onPos    := fun _ => id
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+inrMorph :: Morph t q (CoprodShape s t) (Either p q)
+inrMorph = Morph InrShape (\_ -> Right)
+\end{lstlisting}
+
+
+% --- 13. ContainerMorphism.desc ------------------------------------
+\subsection{Definition: \lean{ContainerMorphism.desc}}
+
+\begin{defn}[Copairing]
+Given $\varphi : C \to E$ and $\psi : D \to E$, their \textbf{copairing}
+$[\varphi, \psi] : C \oplus D \to E$ has shape map $[u_\varphi, u_\psi]$
+(dispatch on $\mathrm{inl}$/$\mathrm{inr}$) and position map:
+on an $\mathrm{inl}(s)$-shape use $\varphi^\sharp_s$; on an
+$\mathrm{inr}(t)$-shape use $\psi^\sharp_t$.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def ContainerMorphism.desc {C D E : Container}
+    (phi : ContainerMorphism C E) (psi : ContainerMorphism D E) :
+    ContainerMorphism (C.coprod D) E where
+  onShapes := Sum.elim phi.onShapes psi.onShapes
+  onPos := fun s => match s with
+    | Sum.inl s => phi.onPos s
+    | Sum.inr s => psi.onPos s
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+desc :: Morph s p u r -> Morph t q u r
+     -> Morph (CoprodShape s t) (Either p q) u r
+desc (Morph u g) (Morph v h) = Morph
+  (\sh -> case sh of { InlShape s -> u s; InrShape t -> v t })
+  (\sh -> case sh of { InlShape s -> g s; InrShape t -> h t })
+\end{lstlisting}
+
+
+% --- 14. ContainerMorphism.inl_desc ---------------------------------
+\subsection{Theorem: \lean{ContainerMorphism.inl\_desc}}
+
+\begin{thm}[Left computation rule for copairing]
+\[
+  \iota_C \circ [\varphi, \psi] \;=\; \varphi.
+\]
+Holds definitionally (\lean{rfl}).
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem ContainerMorphism.inl_desc {C D E : Container}
+    (phi : ContainerMorphism C E) (psi : ContainerMorphism D E) :
+    (Container.inl C D).comp (phi.desc psi) = phi
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- compMorph inlMorph (desc phi psi) = phi
+\end{lstlisting}
+
+
+% --- 15. ContainerMorphism.inr_desc ---------------------------------
+\subsection{Theorem: \lean{ContainerMorphism.inr\_desc}}
+
+\begin{thm}[Right computation rule for copairing]
+\[
+  \iota_D \circ [\varphi, \psi] \;=\; \psi.
+\]
+Holds definitionally (\lean{rfl}).
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem ContainerMorphism.inr_desc {C D E : Container}
+    (phi : ContainerMorphism C E) (psi : ContainerMorphism D E) :
+    (Container.inr C D).comp (phi.desc psi) = psi
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- compMorph inrMorph (desc phi psi) = psi
+\end{lstlisting}
+
+
+% --- 16. ContainerMorphism.desc_eta ---------------------------------
+\subsection{Theorem: \lean{ContainerMorphism.desc\_eta}}
+
+\begin{thm}[Universal property of coproduct ($\eta$-rule)]
+Every morphism $\chi : C \oplus D \to E$ is the copairing of its composites
+with the injections:
+\[
+  [\chi \circ \iota_C,\; \chi \circ \iota_D] \;=\; \chi.
+\]
+Together with the two computation rules, this is the full universal property:
+$\mathrm{Hom}(C \oplus D, E) \cong \mathrm{Hom}(C, E) \times \mathrm{Hom}(D, E)$
+naturally in $E$.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem ContainerMorphism.desc_eta {C D E : Container}
+    (chi : ContainerMorphism (C.coprod D) E) :
+    ((Container.inl C D).comp chi).desc
+      ((Container.inr C D).comp chi) = chi
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- desc (compMorph inlMorph chi) (compMorph inrMorph chi) = chi
+\end{lstlisting}
+
+
+% --- 17. ContainerMorphism.desc_unique ------------------------------
+\subsection{Theorem: \lean{ContainerMorphism.desc\_unique}}
+
+\begin{thm}[Uniqueness of the copairing mediating morphism]
+For every cocone $(\varphi : C \to E,\; \psi : D \to E)$, there is a
+\emph{unique} morphism $\chi : C \oplus D \to E$ with
+$\chi \circ \iota_C = \varphi$ and $\chi \circ \iota_D = \psi$, namely
+$\chi = [\varphi, \psi]$.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem ContainerMorphism.desc_unique {C D E : Container}
+    (phi : ContainerMorphism C E) (psi : ContainerMorphism D E)
+    (chi : ContainerMorphism (C.coprod D) E)
+    (h1 : (Container.inl C D).comp chi = phi)
+    (h2 : (Container.inr C D).comp chi = psi) :
+    chi = phi.desc psi
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- If compMorph inlMorph chi = phi and compMorph inrMorph chi = psi
+-- then chi = desc phi psi
+\end{lstlisting}
+
+
+%===================================================================
+\section{Binary products in \lean{Cont}}
+%===================================================================
+
+The product of $C = (S \triangleleft P)$ and $D = (T \triangleleft Q)$ has shape
+type $S \times T$ and position type $P(s) + Q(t)$: a \emph{coproduct} of
+position sets (not a product).  This is the categorical product of the
+underlying polynomial functors.
+
+% --- 18. Container.prod ---------------------------------------------
+\subsection{Definition: \lean{Container.prod}}
+
+\begin{defn}[Product container]
+The \textbf{product} $C \times D$ of containers $C = (S \triangleleft P)$ and
+$D = (T \triangleleft Q)$ is the container
+\[
+  (S \times T) \;\triangleleft\; \bigl((s, t) \mapsto P(s) + Q(t)\bigr).
+\]
+Note: the positions are the \emph{sum} (coproduct) $P(s) + Q(t)$, not the
+product $P(s) \times Q(t)$.  This is the standard polynomial product.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.prod (C D : Container) : Container where
+  Shape := C.Shape × D.Shape
+  Pos   := fun st => C.Pos st.1 .+. D.Pos st.2  -- coproduct of position types
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Product container: shapes are pairs, positions are sums.
+prodPos :: (s -> p) -> (t -> q) -> (s, t) -> Either p q
+prodPos posC posD (s, t) = Left (posC s)  -- or Right (posD t)
+-- i.e. Pos (s, t) = Either (Pos_C s) (Pos_D t)
+\end{lstlisting}
+
+\begin{fidelitynote}
+The product of polynomial functors (containers) uses a \emph{coproduct} of
+position types because the polynomial functor associated to $C$ at a set $X$ is
+$\sum_s X^{P(s)}$, and the product of two such functors is
+$\sum_{(s,t)} X^{P(s) + Q(t)}$ (by the exponential law $X^{A+B} \cong X^A
+\times X^B$).  This is distinct from the ``set-level'' product which would use
+$P(s) \times Q(t)$ for positions.
+\end{fidelitynote}
+
+
+% --- 19. Container.fst -----------------------------------------------
+\subsection{Definition: \lean{Container.fst}}
+
+\begin{defn}[First projection]
+The \textbf{first projection} $\pi_1 : C \times D \to C$ has shape map
+$\mathrm{fst} : S \times T \to S$ and position map $\mathrm{inl} : P(s) \to
+P(s) + Q(t)$ (the coproduct injection, going \emph{backwards} in position
+variance).
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.fst (C D : Container) : ContainerMorphism (C.prod D) C where
+  onShapes := Prod.fst
+  onPos    := fun _ => Sum.inl
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+fstMorph :: Morph (s, t) (Either p q) s p
+fstMorph = Morph fst (\_ -> Left)
+-- onPos sends (Left p) back to p; the backward map is Sum.inl
+\end{lstlisting}
+
+
+% --- 20. Container.snd -----------------------------------------------
+\subsection{Definition: \lean{Container.snd}}
+
+\begin{defn}[Second projection]
+The \textbf{second projection} $\pi_2 : C \times D \to D$ has shape map
+$\mathrm{snd} : S \times T \to T$ and position map $\mathrm{inr} : Q(t) \to
+P(s) + Q(t)$.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.snd (C D : Container) : ContainerMorphism (C.prod D) D where
+  onShapes := Prod.snd
+  onPos    := fun _ => Sum.inr
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+sndMorph :: Morph (s, t) (Either p q) t q
+sndMorph = Morph snd (\_ -> Right)
+\end{lstlisting}
+
+
+% --- 21. ContainerMorphism.pair ---------------------------------------
+\subsection{Definition: \lean{ContainerMorphism.pair}}
+
+\begin{defn}[Pairing]
+Given $f : R \to C$ and $g : R \to D$, their \textbf{pairing}
+$\langle f, g \rangle : R \to C \times D$ has
+\begin{align*}
+  \langle f, g \rangle_{\text{shapes}}(r)
+    &\;=\; (f_{\text{shapes}}(r),\; g_{\text{shapes}}(r)), \\
+  \langle f, g \rangle^\sharp_r
+    &\;=\; [f^\sharp_r,\; g^\sharp_r]
+      : P(f(r)) + Q(g(r)) \to R.\mathrm{Pos}(r).
+\end{align*}
+The position map case-splits via $[-, -]$ (eliminator for the sum).
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def ContainerMorphism.pair {R C D : Container}
+    (f : ContainerMorphism R C) (g : ContainerMorphism R D) :
+    ContainerMorphism R (C.prod D) where
+  onShapes := fun r => (f.onShapes r, g.onShapes r)
+  onPos    := fun r => Sum.elim (f.onPos r) (g.onPos r)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+pairMorph :: Morph r rp s p -> Morph r rp t q
+          -> Morph r rp (s, t) (Either p q)
+pairMorph (Morph u g) (Morph v h) = Morph
+  (\r -> (u r, v r))
+  (\r -> either (g r) (h r))
+\end{lstlisting}
+
+
+% --- 22. ContainerMorphism.pair_fst -----------------------------------
+\subsection{Theorem: \lean{ContainerMorphism.pair\_fst}}
+
+\begin{thm}[Left computation rule for pairing]
+\[
+  \langle f, g \rangle \circ \pi_1 \;=\; f.
+\]
+Holds definitionally (\lean{rfl}).
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem ContainerMorphism.pair_fst {R C D : Container}
+    (f : ContainerMorphism R C) (g : ContainerMorphism R D) :
+    (f.pair g).comp (Container.fst C D) = f
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- compMorph (pairMorph f g) fstMorph = f
+\end{lstlisting}
+
+
+% --- 23. ContainerMorphism.pair_snd -----------------------------------
+\subsection{Theorem: \lean{ContainerMorphism.pair\_snd}}
+
+\begin{thm}[Right computation rule for pairing]
+\[
+  \langle f, g \rangle \circ \pi_2 \;=\; g.
+\]
+Holds definitionally (\lean{rfl}).
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem ContainerMorphism.pair_snd {R C D : Container}
+    (f : ContainerMorphism R C) (g : ContainerMorphism R D) :
+    (f.pair g).comp (Container.snd C D) = g
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- compMorph (pairMorph f g) sndMorph = g
+\end{lstlisting}
+
+
+% --- 24. ContainerMorphism.pair_eta -----------------------------------
+\subsection{Theorem: \lean{ContainerMorphism.pair\_eta}}
+
+\begin{thm}[Universal property of product ($\eta$-rule)]
+Every morphism $\chi : R \to C \times D$ is the pairing of its composites
+with the projections:
+\[
+  \langle \chi \circ \pi_1,\; \chi \circ \pi_2 \rangle \;=\; \chi.
+\]
+Together with the two computation rules, this is the full universal property:
+$\mathrm{Hom}(R, C \times D) \cong \mathrm{Hom}(R, C) \times \mathrm{Hom}(R, D)$
+naturally in $R$.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem ContainerMorphism.pair_eta {R C D : Container}
+    (chi : ContainerMorphism R (C.prod D)) :
+    (chi.comp (Container.fst C D)).pair
+      (chi.comp (Container.snd C D)) = chi
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- pairMorph (compMorph chi fstMorph) (compMorph chi sndMorph) = chi
+\end{lstlisting}
+
+
+% --- 25. ContainerMorphism.pair_unique --------------------------------
+\subsection{Theorem: \lean{ContainerMorphism.pair\_unique}}
+
+\begin{thm}[Uniqueness of the pairing mediating morphism]
+For every cone $(f : R \to C,\; g : R \to D)$, there is a \emph{unique}
+morphism $\chi : R \to C \times D$ with $\chi \circ \pi_1 = f$ and
+$\chi \circ \pi_2 = g$, namely $\chi = \langle f, g \rangle$.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem ContainerMorphism.pair_unique {R C D : Container}
+    (f : ContainerMorphism R C) (g : ContainerMorphism R D)
+    (chi : ContainerMorphism R (C.prod D))
+    (h1 : chi.comp (Container.fst C D) = f)
+    (h2 : chi.comp (Container.snd C D) = g) :
+    chi = f.pair g
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- If compMorph chi fstMorph = f and compMorph chi sndMorph = g
+-- then chi = pairMorph f g
+\end{lstlisting}
+
+
+%===================================================================
+\section{Translation conventions}
+%===================================================================
+
+The following conventions supplement those in \texttt{Basic.tex}.
+
+\begin{enumerate}
+\item \textbf{Definitional equality.}  Many laws in this file hold
+  \emph{definitionally} (the proof is \lean{rfl}).  This relies on Lean's
+  $\eta$-rules for functions and structures.  In Haskell, equational laws are
+  asserted as comments; they would be QuickCheck properties in practice.
+
+\item \textbf{HEq and transport.}  The extensionality theorem
+  \lean{ContainerMorphism.ext} uses heterogeneous equality (\lean{HEq}) because
+  the position-map type depends on the shape map.  The pointwise variant
+  \lean{ext'} uses an explicit transport ($\triangleright$).  Neither has a direct
+  Haskell analogue.
+
+\item \textbf{Product positions are sums.}  The product container has positions
+  $P(s) + Q(t)$.  This is structurally dual to the coproduct (where shapes are
+  sums and positions are case-wise), and reflects the polynomial-functor
+  formula $X^{A+B} \cong X^A \times X^B$.
+
+\item \textbf{Variance teaching.}  The injections $\iota_C, \iota_D$ are
+  identity-on-positions; the projections $\pi_1, \pi_2$ carry coproduct
+  injections backward on positions.  This duality captures the whole variance
+  of containers at the level of (co)limits.
+\end{enumerate}
+
+\end{document}

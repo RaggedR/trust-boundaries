@@ -1,0 +1,515 @@
+\documentclass[11pt,a4paper]{article}
+\input{preamble}
+
+\title{Human Verification: \texttt{Containers.Monoidal}\\[4pt]
+  \large The Sequential Operator as a Monoidal Category}
+\author{Machine-generated from \texttt{lean/Monoidal.lean} for review by Neil Ghani}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document presents every definition and theorem \emph{statement} from the
+Lean~4 module \lean{Containers.Monoidal} in three parallel forms: the original
+Lean, a readable Haskell rendering, and precise mathematical English.  Proofs
+are omitted --- they are machine-checked by Lean.  The purpose is to let a
+human verifier confirm that the formalisation captures the intended
+mathematics.
+
+The file proves that $(\mathbf{Cont}, \triangleleft, I)$ is a monoidal
+category, by supplying the bifunctoriality of $\triangleleft$ on morphisms,
+the naturality of the structural isomorphisms, the pentagon, and the triangle.
+All laws hold by \lean{rfl} (definitional equality), since the position fibres
+line up definitionally.  A minimal Mathlib-free \lean{MonoidalCategory}
+typeclass is also defined, and the instance \lean{ContMonoidal} assembles the
+whole.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%===================================================================
+\section{Overview}
+%===================================================================
+
+Building on \texttt{Containers.Sequential}, which defines $\triangleleft$, the
+unit $I$, and the associator/unitors as isomorphisms, this file supplies the
+remaining ingredients to certify $(\mathbf{Cont}, \triangleleft, I)$ as a
+monoidal category.
+
+Key insight: the associator's shape map is \emph{currying} and its position map
+is $\Sigma$-reassociation.  Both pentagon legs reduce to the same flattening of
+a fourfold composite, and every map is the identity on the underlying flat
+tuple.
+
+%===================================================================
+\section{Bifunctoriality of \texorpdfstring{$\triangleleft$}{seq} on morphisms}
+%===================================================================
+
+\subsection{Definition: \lean{Container.seq\textsubscript{2}}}
+
+\begin{defn}[Bifunctorial action of $\triangleleft$]
+Given morphisms $\mu : G \Rightarrow G'$ and $\nu : F \Rightarrow F'$, the
+\textbf{action of $\triangleleft$ on the pair} is the morphism
+$\lean{seq}_2\,\mu\,\nu : G \triangleleft F \Rightarrow G' \triangleleft F'$.
+On shapes, a shape $(t, f)$ of $G \triangleleft F$ --- an outer shape $t$ and
+an inner-shape assignment $f : P_G(t) \to S_F$ --- maps to
+$(\mu(t),\; \nu \circ f \circ \mu^\sharp_t)$, where $\mu^\sharp_t$ is the
+backward position map of $\mu$ at $t$.
+On positions: both backward position maps are applied componentwise.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.seq2 {G G' F F' : Container}
+    (mu : ContainerMorphism G G') (nu : ContainerMorphism F F') :
+    ContainerMorphism (G seq F) (G' seq F') where
+  onShapes := fun tf =>
+    <|mu.onShapes tf.1, fun q' => nu.onShapes (tf.2 (mu.onPos tf.1 q'))|>
+  onPos := fun tf qr =>
+    <|mu.onPos tf.1 qr.1, nu.onPos (tf.2 (mu.onPos tf.1 qr.1)) qr.2|>
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- G seq F has Shape = (t, f) where t :: Shape G, f :: Pos G t -> Shape F
+-- seq2 mu nu : ContainerMorphism (G `seq` F) (G' `seq` F')
+seq2 :: Morph g p g' p' -> Morph f q f' q'
+     -> Morph (g `Seq` f) (p, q) (g' `Seq` f') (p', q')
+seq2 mu nu = Morph
+  { onShapes = \(t, f) -> (onShapes mu t, \q' -> onShapes nu (f (onPos mu t q')))
+  , onPos    = \(t, f) (qr1, qr2) ->
+      (onPos mu t qr1, onPos nu (f (onPos mu t qr1)) qr2) }
+\end{lstlisting}
+
+\begin{fidelitynote}
+The Lean definition uses dependent types: \lean{tf.2} is a function from
+$P_G(\lean{tf.1})$, whose type depends on the shape $\lean{tf.1}$.  The Haskell
+rendering non-dependently pairs the components.
+\end{fidelitynote}
+
+
+\subsection{Definition: \lean{Container.whiskerLeft}}
+
+\begin{defn}[Left whiskering]
+\textbf{Left whiskering} $G \triangleleft \nu : G \triangleleft F \Rightarrow G \triangleleft F'$
+acts by $\nu$ on the inner container, leaving the outer container $G$ fixed:
+\[
+  G \triangleleft \nu \;=\; \lean{seq}_2\,(\mathrm{id}_G)\,\nu.
+\]
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.whiskerLeft (G : Container) {F F' : Container}
+    (nu : ContainerMorphism F F') : ContainerMorphism (G seq F) (G seq F') :=
+  Container.seq2 (ContainerMorphism.id G) nu
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+whiskerLeft :: Proxy g -> Morph f q f' q'
+            -> Morph (g `Seq` f) (p, q) (g `Seq` f') (p, q')
+whiskerLeft _ nu = seq2 idMorph nu
+\end{lstlisting}
+
+
+\subsection{Definition: \lean{Container.whiskerRight}}
+
+\begin{defn}[Right whiskering]
+\textbf{Right whiskering} $\mu \triangleleft F : G \triangleleft F \Rightarrow G' \triangleleft F$
+acts by $\mu$ on the outer container, leaving the inner container $F$ fixed:
+\[
+  \mu \triangleleft F \;=\; \lean{seq}_2\,\mu\,(\mathrm{id}_F).
+\]
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.whiskerRight {G G' : Container} (mu : ContainerMorphism G G')
+    (F : Container) : ContainerMorphism (G seq F) (G' seq F) :=
+  Container.seq2 mu (ContainerMorphism.id F)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+whiskerRight :: Morph g p g' p' -> Proxy f
+             -> Morph (g `Seq` f) (p, q) (g' `Seq` f) (p', q)
+whiskerRight mu _ = seq2 mu idMorph
+\end{lstlisting}
+
+
+%===================================================================
+\section{Bifunctor laws for \texorpdfstring{$\triangleleft$}{seq}}
+%===================================================================
+
+\subsection{Theorem: \lean{Container.seq\textsubscript{2}\_id}}
+
+\begin{thm}[Bifunctoriality: identity]
+$\lean{seq}_2$ preserves identities:
+\[
+  \lean{seq}_2\,(\mathrm{id}_G)\,(\mathrm{id}_F) \;=\; \mathrm{id}_{G \triangleleft F}.
+\]
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.seq2_id (G F : Container) :
+    Container.seq2 (ContainerMorphism.id G) (ContainerMorphism.id F)
+      = ContainerMorphism.id (G seq F) := rfl
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- seq2 idMorph idMorph = idMorph
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{Container.seq\textsubscript{2}\_comp}}
+
+\begin{thm}[Bifunctoriality: interchange]
+$\lean{seq}_2$ preserves composition (interchange / bifunctoriality):
+\[
+  \lean{seq}_2\,(\mu \cdot \mu')\,(\nu \cdot \nu')
+  \;=\;
+  \lean{seq}_2\,\mu\,\nu \;\cdot\; \lean{seq}_2\,\mu'\,\nu'.
+\]
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.seq2_comp {G G' G'' F F' F'' : Container}
+    (mu : ContainerMorphism G G') (mu' : ContainerMorphism G' G'')
+    (nu : ContainerMorphism F F') (nu' : ContainerMorphism F' F'') :
+    Container.seq2 (mu.comp mu') (nu.comp nu')
+      = (Container.seq2 mu nu).comp (Container.seq2 mu' nu') := rfl
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- seq2 (mu `compM` mu') (nu `compM` nu')
+--   = seq2 mu nu `compM` seq2 mu' nu'
+\end{lstlisting}
+
+
+%===================================================================
+\section{Naturality of the structural isomorphisms}
+%===================================================================
+
+\subsection{Theorem: \lean{Container.associator\_naturality}}
+
+\begin{thm}[Naturality of the associator]
+The associator $\alpha$ is natural in all three arguments:
+for all morphisms $f_i : X_i \Rightarrow Y_i$,
+\[
+  (\lean{seq}_2\,(\lean{seq}_2\,f_1\,f_2)\,f_3) \cdot \alpha_{Y_1,Y_2,Y_3}
+  \;=\;
+  \alpha_{X_1,X_2,X_3} \cdot \lean{seq}_2\,f_1\,(\lean{seq}_2\,f_2\,f_3).
+\]
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.associator_naturality {X1 Y1 X2 Y2 X3 Y3 : Container}
+    (f1 : ContainerMorphism X1 Y1) (f2 : ContainerMorphism X2 Y2)
+    (f3 : ContainerMorphism X3 Y3) :
+    (Container.seq2 (Container.seq2 f1 f2) f3).comp
+        (Container.associator Y1 Y2 Y3).hom
+      = (Container.associator X1 X2 X3).hom.comp
+          (Container.seq2 f1 (Container.seq2 f2 f3)) :=
+  rfl
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- (seq2 (seq2 f1 f2) f3) `compM` assocHom y1 y2 y3
+--   = assocHom x1 x2 x3 `compM` seq2 f1 (seq2 f2 f3)
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{Container.leftUnitor\_naturality}}
+
+\begin{thm}[Naturality of the left unitor]
+The left unitor $\lambda$ is natural: for $f : X \Rightarrow Y$,
+\[
+  (I \triangleleft f) \cdot \lambda_Y \;=\; \lambda_X \cdot f.
+\]
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.leftUnitor_naturality {X Y : Container}
+    (f : ContainerMorphism X Y) :
+    (Container.whiskerLeft Container.I f).comp (Container.leftUnitor Y).hom
+      = (Container.leftUnitor X).hom.comp f := rfl
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- whiskerLeft I f `compM` leftUnitorHom y
+--   = leftUnitorHom x `compM` f
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{Container.rightUnitor\_naturality}}
+
+\begin{thm}[Naturality of the right unitor]
+The right unitor $\rho$ is natural: for $f : X \Rightarrow Y$,
+\[
+  (f \triangleleft I) \cdot \rho_Y \;=\; \rho_X \cdot f.
+\]
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.rightUnitor_naturality {X Y : Container}
+    (f : ContainerMorphism X Y) :
+    (Container.whiskerRight f Container.I).comp (Container.rightUnitor Y).hom
+      = (Container.rightUnitor X).hom.comp f := rfl
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- whiskerRight f I `compM` rightUnitorHom y
+--   = rightUnitorHom x `compM` f
+\end{lstlisting}
+
+
+%===================================================================
+\section{Coherence}
+%===================================================================
+
+\subsection{Theorem: \lean{Container.pentagon}}
+
+\begin{thm}[Pentagon identity]
+The two ways of re-associating
+$((C_1 \triangleleft C_2) \triangleleft C_3) \triangleleft C_4$
+to $C_1 \triangleleft (C_2 \triangleleft (C_3 \triangleleft C_4))$ coincide:
+\[
+  (\alpha_{C_1,C_2,C_3} \triangleleft C_4) \cdot
+  \alpha_{C_1, C_2 \triangleleft C_3, C_4} \cdot
+  (C_1 \triangleleft \alpha_{C_2,C_3,C_4})
+  \;=\;
+  \alpha_{C_1 \triangleleft C_2, C_3, C_4} \cdot
+  \alpha_{C_1, C_2, C_3 \triangleleft C_4}.
+\]
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.pentagon (C1 C2 C3 C4 : Container) :
+    ((Container.whiskerRight (Container.associator C1 C2 C3).hom C4).comp
+        (Container.associator C1 (C2 seq C3) C4).hom).comp
+        (Container.whiskerLeft C1 (Container.associator C2 C3 C4).hom)
+      = (Container.associator (C1 seq C2) C3 C4).hom.comp
+        (Container.associator C1 C2 (C3 seq C4)).hom := rfl
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- (whiskerRight assoc123 C4 `compM` assoc1_23_4 `compM`
+--   whiskerLeft C1 assoc234)
+--   = assoc12_3_4 `compM` assoc1_2_34
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{Container.triangle}}
+
+\begin{thm}[Triangle identity]
+The associator through the unit composed with the inner left unitor equals
+the outer right unitor:
+\[
+  \alpha_{C_1, I, C_2} \cdot (C_1 \triangleleft \lambda_{C_2})
+  \;=\;
+  \rho_{C_1} \triangleleft C_2,
+\]
+as morphisms $(C_1 \triangleleft I) \triangleleft C_2 \Rightarrow C_1 \triangleleft C_2$.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.triangle (C1 C2 : Container) :
+    (Container.associator C1 Container.I C2).hom.comp
+        (Container.whiskerLeft C1 (Container.leftUnitor C2).hom)
+      = Container.whiskerRight (Container.rightUnitor C1).hom C2 := rfl
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- assocHom c1 I c2 `compM` whiskerLeft c1 (leftUnitorHom c2)
+--   = whiskerRight (rightUnitorHom c1) c2
+\end{lstlisting}
+
+
+%===================================================================
+\section{The monoidal category typeclass}
+%===================================================================
+
+\subsection{Structure: \lean{CatIso}}
+
+\begin{defn}[Isomorphism in a category]
+A \textbf{categorical isomorphism} between objects $X$ and $Y$ in a category
+$\mathcal{C}$ consists of a forward morphism \lean{hom} and a backward morphism
+\lean{inv} satisfying both round-trip conditions:
+$\lean{hom} \cdot \lean{inv} = \mathrm{id}_X$ and
+$\lean{inv} \cdot \lean{hom} = \mathrm{id}_Y$.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+structure CatIso {Obj : Type u} [Category Obj] (X Y : Obj) where
+  hom : Category.Hom X Y
+  inv : Category.Hom Y X
+  hom_inv_id : Category.comp hom inv = Category.id X
+  inv_hom_id : Category.comp inv hom = Category.id Y
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data CatIso cat x y = CatIso
+  { catHom    :: cat x y
+  , catInv    :: cat y x
+  , homInvId  :: catHom `comp` catInv == idC x  -- propositional
+  , invHomId  :: catInv `comp` catHom == idC y
+  }
+\end{lstlisting}
+
+
+\subsection{Class: \lean{MonoidalCategory}}
+
+\begin{defn}[Monoidal category (Mathlib-free)]
+A \textbf{monoidal category} extends \lean{Category} with:
+\begin{itemize}
+  \item a tensor on objects $\otimes : \mathrm{Obj} \to \mathrm{Obj} \to \mathrm{Obj}$,
+  \item a bifunctorial tensor on morphisms,
+  \item a unit object $\mathbf{1}$,
+  \item associator and unitor isomorphisms,
+  \item naturality of the associator and unitors, and
+  \item the pentagon and triangle coherence laws.
+\end{itemize}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+class MonoidalCategory (Obj : Type u) extends Category.{u, v} Obj where
+  tensorObj    : Obj -> Obj -> Obj
+  tensorHom    : {X1 Y1 X2 Y2 : Obj} ->
+    Hom X1 Y1 -> Hom X2 Y2 -> Hom (tensorObj X1 X2) (tensorObj Y1 Y2)
+  tensorHom_id : forall (X Y : Obj),
+    tensorHom (id X) (id Y) = id (tensorObj X Y)
+  tensorHom_comp : forall {X1 Y1 Z1 X2 Y2 Z2 : Obj}
+    (f1 : Hom X1 Y1) (g1 : Hom Y1 Z1) (f2 : Hom X2 Y2) (g2 : Hom Y2 Z2),
+    tensorHom (comp f1 g1) (comp f2 g2)
+      = comp (tensorHom f1 f2) (tensorHom g1 g2)
+  tensorUnit       : Obj
+  associator       : (X Y Z : Obj) ->
+    CatIso (tensorObj (tensorObj X Y) Z) (tensorObj X (tensorObj Y Z))
+  leftUnitor       : (X : Obj) -> CatIso (tensorObj tensorUnit X) X
+  rightUnitor      : (X : Obj) -> CatIso (tensorObj X tensorUnit) X
+  associator_naturality : forall {X1 Y1 X2 Y2 X3 Y3 : Obj}
+    (f1 : Hom X1 Y1) (f2 : Hom X2 Y2) (f3 : Hom X3 Y3),
+    comp (tensorHom (tensorHom f1 f2) f3) (associator Y1 Y2 Y3).hom
+      = comp (associator X1 X2 X3).hom (tensorHom f1 (tensorHom f2 f3))
+  leftUnitor_naturality : forall {X Y : Obj} (f : Hom X Y),
+    comp (tensorHom (id tensorUnit) f) (leftUnitor Y).hom
+      = comp (leftUnitor X).hom f
+  rightUnitor_naturality : forall {X Y : Obj} (f : Hom X Y),
+    comp (tensorHom f (id tensorUnit)) (rightUnitor Y).hom
+      = comp (rightUnitor X).hom f
+  pentagon : forall (W X Y Z : Obj),
+    comp (comp (tensorHom (associator W X Y).hom (id Z))
+               (associator W (tensorObj X Y) Z).hom)
+         (tensorHom (id W) (associator X Y Z).hom)
+      = comp (associator (tensorObj W X) Y Z).hom
+             (associator W X (tensorObj Y Z)).hom
+  triangle : forall (X Y : Obj),
+    comp (associator X tensorUnit Y).hom
+         (tensorHom (id X) (leftUnitor Y).hom)
+      = tensorHom (rightUnitor X).hom (id Y)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+class Category cat => MonoidalCategory cat where
+  tensorObj  :: obj -> obj -> obj
+  tensorHom  :: cat x1 y1 -> cat x2 y2
+             -> cat (tensorObj x1 x2) (tensorObj y1 y2)
+  tensorUnit :: obj
+  assoc      :: CatIso cat (tensorObj (tensorObj x y) z)
+                            (tensorObj x (tensorObj y z))
+  leftUnit   :: CatIso cat (tensorObj tensorUnit x) x
+  rightUnit  :: CatIso cat (tensorObj x tensorUnit) x
+  -- plus naturality, pentagon, triangle laws as proof obligations
+\end{lstlisting}
+
+
+\subsection{Definition: \lean{ContainerIso.toCatIso}}
+
+\begin{defn}[Reinterpretation of container isomorphisms]
+A \lean{ContainerIso} (from \texttt{Cont.lean}) can be viewed as a \lean{CatIso}
+for the category \lean{Container}: the fields coincide definitionally.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def ContainerIso.toCatIso {C D : Container} (i : ContainerIso C D) :
+    CatIso C D :=
+  <|i.hom, i.inv, i.hom_inv, i.inv_hom|>
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+toCatIso :: ContainerIso c d -> CatIso ContainerMorph c d
+toCatIso i = CatIso (isoHom i) (isoInv i) (homInv i) (invHom i)
+\end{lstlisting}
+
+
+\subsection{Instance: \lean{ContMonoidal}}
+
+\begin{defn}[$({\bf Cont}, \triangleleft, I)$ is monoidal]
+The sequential operator $\triangleleft$ with morphism action $\lean{seq}_2$, unit
+container $I$, and structural isomorphisms from \texttt{Sequential.lean} constitute
+a monoidal category.  Every field --- the two functor laws, three naturality
+squares, pentagon, triangle --- is discharged by \lean{rfl}.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+instance ContMonoidal : MonoidalCategory Container where
+  tensorObj         := Container.seq
+  tensorHom         := Container.seq2
+  tensorHom_id      := Container.seq2_id
+  tensorHom_comp    := fun f1 g1 f2 g2 => Container.seq2_comp f1 g1 f2 g2
+  tensorUnit        := Container.I
+  associator        := fun X Y Z => (Container.associator X Y Z).toCatIso
+  leftUnitor        := fun X => (Container.leftUnitor X).toCatIso
+  rightUnitor       := fun X => (Container.rightUnitor X).toCatIso
+  associator_naturality :=
+    fun f1 f2 f3 => Container.associator_naturality f1 f2 f3
+  leftUnitor_naturality  := fun f => Container.leftUnitor_naturality f
+  rightUnitor_naturality := fun f => Container.rightUnitor_naturality f
+  pentagon          := Container.pentagon
+  triangle          := Container.triangle
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- The sequential operator `seq` (written `triangleleft`) gives Cont
+-- the structure of a monoidal category, with:
+--   tensorObj = seq
+--   tensorHom = seq2
+--   unit      = I
+-- All laws hold definitionally.
+instance MonoidalCategory ContainerMorph where ...
+\end{lstlisting}
+
+\begin{fidelitynote}
+In Lean, only one \lean{MonoidalCategory Container} \emph{instance} can be
+active at a time; this is the canonical one.  The other three monoidal
+structures on \lean{Container} (coproduct $+$, product $\times$, Dirichlet $\otimes$)
+are given as named \lean{def}s in \texttt{FourMonoidal.lean} /
+\texttt{Dirichlet.lean}, to avoid instance clashes.
+\end{fidelitynote}
+
+\end{document}

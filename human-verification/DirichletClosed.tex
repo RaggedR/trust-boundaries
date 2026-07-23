@@ -1,0 +1,573 @@
+\documentclass[11pt,a4paper]{article}
+\input{preamble}
+
+\title{Human Verification: \texttt{Containers.DirichletClosed}\\[4pt]
+  \large $(\mathbf{Cont}, \otimes, y)$ is a Closed Monoidal Category}
+\author{Machine-generated from \texttt{lean/DirichletClosed.lean} for review by Neil Ghani}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document presents every definition and theorem \emph{statement} from the
+Lean~4 module \lean{Containers.DirichletClosed} in three parallel forms: the
+original Lean, a readable Haskell rendering, and precise mathematical English.
+Proofs are omitted --- they are machine-checked by Lean.  The purpose is to let
+a human verifier confirm that the formalisation captures the intended
+mathematics.
+
+The file proves that the Dirichlet tensor $\otimes$ on containers is
+\textbf{closed}: for every container $q$ the functor $- \otimes q$ has a right
+adjoint, the \emph{internal hom} $[q, r]$.  The adjunction is presented as an
+explicit type equivalence $\lean{dirichlet\_closure}$; all round trips hold by
+\lean{rfl}.  Naturality of currying (in both arguments) and the universal
+property in counit form (evaluation and uniqueness) are also proved.  This is
+Niu--Sp\'{e}ak Eq.~(4.79) in the container presentation.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%===================================================================
+\section{Overview}
+%===================================================================
+
+The central objects are:
+\begin{itemize}
+  \item The \textbf{internal hom} $[q, r]$: a container whose shapes are the
+    morphisms $q \Rightarrow r$ in $\mathbf{Cont}$.
+  \item The \textbf{adjunction} $- \otimes q \dashv [q, -]$, given concretely
+    as the currying bijection
+    $(p \otimes q \Rightarrow r) \cong (p \Rightarrow [q, r])$.
+\end{itemize}
+
+The bijection is pure currying: the $q$-component of a backward position map
+is packaged \emph{into the shape} of the internal hom (as its own backward
+position map), and the $p$-component becomes the curried morphism's backward
+position map.  This split is why the positions of $[q, r]$ are
+$\Sigma\,t : S_q,\; r[u(t)]$ and not something else.
+
+Every proof is \lean{rfl}: the operations involved are rearrangements of
+$\Sigma/\times$ telescopes, and Lean 4's definitional $\eta$ for \lean{Prod},
+\lean{Sigma}, and the \lean{ContainerMorphism} structure handles the rest.
+
+%===================================================================
+\section{Auxiliary: type equivalences}
+%===================================================================
+
+\subsection{Structure: \lean{TypeEquiv}}
+
+\begin{defn}[Type equivalence]
+A \textbf{type equivalence} $A \simeq B$ is a pair of maps with both round trips:
+\[
+  f : A \to B, \quad g : B \to A, \quad
+  g \circ f = \mathrm{id}_A, \quad f \circ g = \mathrm{id}_B.
+\]
+This is a Mathlib-free stand-in for \lean{Equiv}.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+structure TypeEquiv (A : Type u) (B : Type v) where
+  toFun    : A -> B
+  invFun   : B -> A
+  left_inv : forall a, invFun (toFun a) = a
+  right_inv: forall b, toFun (invFun b) = b
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data TypeEquiv a b = TypeEquiv
+  { toFun    :: a -> b
+  , invFun   :: b -> a
+  , leftInv  :: forall x. invFun (toFun x) == x   -- propositional
+  , rightInv :: forall y. toFun (invFun y) == y
+  }
+\end{lstlisting}
+
+
+%===================================================================
+\section{The internal hom}
+%===================================================================
+
+\subsection{Definition: \lean{Container.ihom}}
+
+\begin{defn}[Internal hom for $\otimes$]
+For containers $q$ and $r$, the \textbf{internal hom} $[q, r]$ is the container:
+\begin{itemize}
+  \item \emph{Shapes}: $\lean{ContainerMorphism}\,q\,r$ --- the hom-set of
+    $\mathbf{Cont}$.  A shape is a pair $(u, \phi)$ with
+    $u : S_q \to S_r$ and $\phi_t : r[u(t)] \to q[t]$ for each $t : S_q$.
+  \item \emph{Positions} over shape $f = (u, \phi)$:
+    $\Sigma\,t : S_q,\; r[u(t)]$.
+\end{itemize}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.ihom (q r : Container) : Container where
+  Shape := ContainerMorphism q r
+  Pos   := fun f => (t : q.Shape) * r.Pos (f.onShapes t)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Internal hom [q, r]:
+-- Shape  = ContainerMorphism q r
+-- Pos f  = Exists t. r.Pos (onShapes f t)   (dependent pair)
+data IhomPos q r f = IhomPos { iqShape :: Shape q, irPos :: Pos r (onShapes f iqShape) }
+-- (Haskell cannot express the dependent type directly.)
+\end{lstlisting}
+
+\begin{fidelitynote}
+The fact that the \emph{shape} type of $[q, r]$ is literally \lean{ContainerMorphism
+q r} is not a notational convenience --- it is the mathematical content
+(Niu--Sp\'{e}ak Eq.~4.79).  The positions over $f$ are pairs $(t, i)$ where
+$t : S_q$ and $i : r[f(t)]$ is an $r$-position over the image shape.  In
+Haskell, the dependent type $r.\mathrm{Pos}(f.\lean{onShapes}(t))$ cannot be
+expressed directly; the Haskell rendering is therefore approximate.
+\end{fidelitynote}
+
+
+\subsection{Theorem: \lean{Container.ihom\_shape\_eq}}
+
+\begin{thm}[Shape of the internal hom]
+The shape type of $[q, r]$ is definitionally the hom-set:
+\[
+  [q, r].\mathrm{Shape} = \mathrm{ContainerMorphism}\,q\,r.
+\]
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.ihom_shape_eq (q r : Container) :
+    (Container.ihom q r).Shape = ContainerMorphism q r := rfl
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{Container.ihom\_pos\_eq}}
+
+\begin{thm}[Positions of the internal hom]
+The position type of $[q, r]$ over a shape $f : q \Rightarrow r$ is:
+\[
+  [q, r].\mathrm{Pos}\,f = \Sigma\,t : S_q,\; r[f(t)].
+\]
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.ihom_pos_eq (q r : Container)
+    (f : ContainerMorphism q r) :
+    (Container.ihom q r).Pos f
+      = ((t : q.Shape) * r.Pos (f.onShapes t)) := rfl
+\end{lstlisting}
+
+
+%===================================================================
+\section{Currying and uncurrying}
+%===================================================================
+
+\subsection{Definition: \lean{dirCurry}}
+
+\begin{defn}[Currying]
+Given $F : p \otimes q \Rightarrow r$, define
+$\lean{dirCurry}(F) : p \Rightarrow [q, r]$ by:
+\begin{itemize}
+  \item \emph{On shapes}: $s \mapsto \{$shape map: $t \mapsto F(s,t)$;
+    backward position map: $t, i \mapsto (\lean{F.onPos}(s,t,i)).2\}$.
+    (The $q$-component of $F$'s backward position map becomes the shape's own
+    backward position map.)
+  \item \emph{On positions} (backward): $(s, (t, i)) \mapsto
+    (\lean{F.onPos}(s,t,i)).1$.
+    (The $p$-component of $F$'s backward position map.)
+\end{itemize}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def dirCurry {p q r : Container}
+    (F : ContainerMorphism (p |*| q) r) :
+    ContainerMorphism p (Container.ihom q r) where
+  onShapes := fun s =>
+    { onShapes := fun t   => F.onShapes (s, t)
+      onPos    := fun t i => (F.onPos (s, t) i).2 }
+  onPos := fun s x => (F.onPos (s, x.1) x.2).1
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+dirCurry :: ContainerMorphism (p `Dir` q) r
+         -> ContainerMorphism p (Ihom q r)
+dirCurry f = Morph
+  { onShapes = \s -> Morph
+      { onShapes = \t   -> onShapes f (s, t)
+      , onPos    = \t i -> snd (onPos f (s, t) i) }
+  , onPos    = \s (t, i) -> fst (onPos f (s, t) i) }
+\end{lstlisting}
+
+
+\subsection{Definition: \lean{dirUncurry}}
+
+\begin{defn}[Uncurrying]
+Given $G : p \Rightarrow [q, r]$, define
+$\lean{dirUncurry}(G) : p \otimes q \Rightarrow r$ by:
+\begin{itemize}
+  \item \emph{On shapes}: $(s, t) \mapsto (G(s)).(t)$, i.e.\ apply the
+    morphism $G(s) : q \Rightarrow r$ to the shape $t$.
+  \item \emph{On positions} (backward): $(s,t), i \mapsto
+    (G.\lean{onPos}(s, (t, i)),\;(G(s)).\lean{onPos}(t, i))$,
+    producing a pair of a $p$-position and a $q$-position.
+\end{itemize}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def dirUncurry {p q r : Container}
+    (G : ContainerMorphism p (Container.ihom q r)) :
+    ContainerMorphism (p |*| q) r where
+  onShapes := fun st => (G.onShapes st.1).onShapes st.2
+  onPos    := fun st i =>
+    (G.onPos st.1 <|st.2, i|>, (G.onShapes st.1).onPos st.2 i)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+dirUncurry :: ContainerMorphism p (Ihom q r)
+           -> ContainerMorphism (p `Dir` q) r
+dirUncurry g = Morph
+  { onShapes = \(s, t) -> onShapes (onShapes g s) t
+  , onPos    = \(s, t) i ->
+      (onPos g s (t, i), onPos (onShapes g s) t i) }
+\end{lstlisting}
+
+
+%===================================================================
+\section{Round trips and the main theorem}
+%===================================================================
+
+\subsection{Theorem: \lean{dirUncurry\_dirCurry}}
+
+\begin{thm}[Uncurrying undoes currying]
+For all $F : p \otimes q \Rightarrow r$:
+\[
+  \lean{dirUncurry}(\lean{dirCurry}(F)) = F.
+\]
+Holds by \lean{rfl}.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem dirUncurry_dirCurry {p q r : Container}
+    (F : ContainerMorphism (p |*| q) r) :
+    dirUncurry (dirCurry F) = F := rfl
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- dirUncurry (dirCurry f) = f   -- by eta and product eta
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{dirCurry\_dirUncurry}}
+
+\begin{thm}[Currying undoes uncurrying]
+For all $G : p \Rightarrow [q, r]$:
+\[
+  \lean{dirCurry}(\lean{dirUncurry}(G)) = G.
+\]
+Holds by \lean{rfl}.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem dirCurry_dirUncurry {p q r : Container}
+    (G : ContainerMorphism p (Container.ihom q r)) :
+    dirCurry (dirUncurry G) = G := rfl
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- dirCurry (dirUncurry g) = g   -- by eta for ContainerMorphism structure
+\end{lstlisting}
+
+
+\subsection{Definition: \lean{dirichlet\_closure}}
+
+\begin{defn}[The Dirichlet tensor is closed]
+For all containers $p, q, r$, there is a type equivalence:
+\[
+  (p \otimes q \Rightarrow r) \;\simeq\; (p \Rightarrow [q, r]).
+\]
+This is the adjunction $- \otimes q \dashv [q, -]$, or equivalently,
+$(\mathbf{Cont}, \otimes, y)$ is a \textbf{closed monoidal category}.
+
+This is Niu--Sp\'{e}ak, \emph{Polynomial Functors}, Eq.~(4.79), in the
+container presentation.
+
+Declared as a \lean{def} (not a \lean{theorem}) because a type equivalence is
+data (two maps plus two round-trip proofs).
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def dirichlet_closure (p q r : Container) :
+    ContainerMorphism (p |*| q) r <=> ContainerMorphism p (Container.ihom q r) where
+  toFun    := dirCurry
+  invFun   := dirUncurry
+  left_inv := dirUncurry_dirCurry
+  right_inv:= dirCurry_dirUncurry
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+dirichletClosure :: TypeEquiv
+  (ContainerMorphism (p `Dir` q) r)
+  (ContainerMorphism p (Ihom q r))
+dirichletClosure = TypeEquiv
+  { toFun    = dirCurry
+  , invFun   = dirUncurry
+  , leftInv  = dirUncurryCurry
+  , rightInv = dirCurryUncurry }
+\end{lstlisting}
+
+
+%===================================================================
+\section{Naturality}
+%===================================================================
+
+\subsection{Definition: \lean{ihomMap}}
+
+\begin{defn}[Functorial action of the internal hom]
+For $\psi : r \Rightarrow r'$, the action
+$\lean{ihomMap}(\psi) : [q, r] \Rightarrow [q, r']$:
+\begin{itemize}
+  \item On shapes: postcompose, $f \mapsto f \cdot \psi$.
+    (A shape of $[q,r]$ is a morphism $q \Rightarrow r$; postcompose with $\psi$
+    to get a morphism $q \Rightarrow r'$.)
+  \item On positions (backward): given a position $(t, i)$ of $[q, r']$ over
+    $f \cdot \psi$ (where $i : r'[\psi(f(t))]$), push $i$ back through
+    $\psi^\sharp$ to get an $r$-position $\psi^\sharp_{f(t)}(i)$, giving
+    $(t,\, \psi^\sharp_{f(t)}(i))$ of $[q, r]$.
+\end{itemize}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def ihomMap {q r r' : Container} (psi : ContainerMorphism r r') :
+    ContainerMorphism (Container.ihom q r) (Container.ihom q r') where
+  onShapes := fun f => f.comp psi
+  onPos    := fun f x => <|x.1, psi.onPos (f.onShapes x.1) x.2|>
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+ihomMap :: ContainerMorphism r r'
+        -> ContainerMorphism (Ihom q r) (Ihom q r')
+ihomMap psi = Morph
+  { onShapes = \f -> f `compM` psi
+  , onPos    = \f (t, i) -> (t, onPos psi (onShapes f t) i) }
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{ihomMap\_id}}
+
+\begin{thm}[Internal hom preserves identities]
+$\lean{ihomMap}(\mathrm{id}_r) = \mathrm{id}_{[q,r]}$.  Holds by \lean{rfl}.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem ihomMap_id (q r : Container) :
+    ihomMap (q := q) (ContainerMorphism.id r)
+      = ContainerMorphism.id (Container.ihom q r) := rfl
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{ihomMap\_comp}}
+
+\begin{thm}[Internal hom preserves composition]
+$\lean{ihomMap}(\psi \cdot \psi') = \lean{ihomMap}(\psi) \cdot \lean{ihomMap}(\psi')$.
+Holds by \lean{rfl}.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem ihomMap_comp {q r r' r'' : Container}
+    (psi : ContainerMorphism r r') (psi' : ContainerMorphism r' r'') :
+    ihomMap (q := q) (psi.comp psi')
+      = (ihomMap psi).comp (ihomMap psi') := rfl
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{dirCurry\_naturality\_left}}
+
+\begin{thm}[Naturality in $p$ (currying direction)]
+For $h : p' \Rightarrow p$ and $F : p \otimes q \Rightarrow r$:
+\[
+  \lean{dirCurry}((h \otimes \mathrm{id}_q) \cdot F)
+  \;=\;
+  h \cdot \lean{dirCurry}(F).
+\]
+Holds by \lean{rfl}.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem dirCurry_naturality_left {p p' q r : Container}
+    (h : ContainerMorphism p' p)
+    (F : ContainerMorphism (p |*| q) r) :
+    dirCurry ((Container.dir2 h (ContainerMorphism.id q)).comp F)
+      = h.comp (dirCurry F) := rfl
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- naturality_left: dirCurry ((h `tensor` id) `compM` f) = h `compM` dirCurry f
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{dirCurry\_naturality\_right}}
+
+\begin{thm}[Naturality in $r$ (currying direction)]
+For $F : p \otimes q \Rightarrow r$ and $\psi : r \Rightarrow r'$:
+\[
+  \lean{dirCurry}(F \cdot \psi)
+  \;=\;
+  \lean{dirCurry}(F) \cdot [q, \psi].
+\]
+Holds by \lean{rfl}.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem dirCurry_naturality_right {p q r r' : Container}
+    (F : ContainerMorphism (p |*| q) r)
+    (psi : ContainerMorphism r r') :
+    dirCurry (F.comp psi) = (dirCurry F).comp (ihomMap psi) := rfl
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- naturality_right: dirCurry (f `compM` psi) = dirCurry f `compM` ihomMap psi
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{dirUncurry\_naturality\_left}}
+
+\begin{thm}[Naturality in $p$ (uncurrying direction)]
+For $h : p' \Rightarrow p$ and $G : p \Rightarrow [q, r]$:
+\[
+  \lean{dirUncurry}(h \cdot G)
+  \;=\;
+  (h \otimes \mathrm{id}_q) \cdot \lean{dirUncurry}(G).
+\]
+Holds by \lean{rfl}.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem dirUncurry_naturality_left {p p' q r : Container}
+    (h : ContainerMorphism p' p)
+    (G : ContainerMorphism p (Container.ihom q r)) :
+    dirUncurry (h.comp G)
+      = (Container.dir2 h (ContainerMorphism.id q)).comp
+          (dirUncurry G) := rfl
+\end{lstlisting}
+
+
+%===================================================================
+\section{The counit: evaluation}
+%===================================================================
+
+\subsection{Definition: \lean{dirEval}}
+
+\begin{defn}[Evaluation morphism]
+The \textbf{counit} of the adjunction $- \otimes q \dashv [q,-]$ is the
+\textbf{evaluation} morphism
+\[
+  \mathrm{ev} : [q, r] \otimes q \Rightarrow r,
+\]
+obtained by uncurrying the identity on $[q, r]$.  Explicitly:
+\begin{itemize}
+  \item On shapes: $(f, t) \mapsto f(t)$, i.e.\ \emph{apply} the morphism $f$
+    stored in the first component to the shape $t$.
+  \item On positions (backward): $i \mapsto ((t, i),\; f^\sharp_t(i))$,
+    splitting an $r$-position $i$ into a $[q,r]$-position and a $q$-position.
+\end{itemize}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def dirEval (q r : Container) :
+    ContainerMorphism (Container.ihom q r |*| q) r :=
+  dirUncurry (ContainerMorphism.id (Container.ihom q r))
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+dirEval :: ContainerMorphism (Ihom q r `Dir` q) r
+dirEval = dirUncurry idMorph
+-- Concretely:
+--   onShapes (f, t) = onShapes f t
+--   onPos (f, t) i  = ((t, i), onPos f t i)
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{dirEval\_dirCurry}}
+
+\begin{thm}[Universal property: existence]
+For every $F : p \otimes q \Rightarrow r$:
+\[
+  (\lean{dirCurry}(F) \otimes \mathrm{id}_q) \cdot \mathrm{ev} \;=\; F.
+\]
+Holds by \lean{rfl}.  This is the existence half of the universal property of
+the counit.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem dirEval_dirCurry {p q r : Container}
+    (F : ContainerMorphism (p |*| q) r) :
+    (Container.dir2 (dirCurry F) (ContainerMorphism.id q)).comp
+        (dirEval q r) = F := rfl
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- (dirCurry f `tensor` id) `compM` dirEval = f
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{dirCurry\_unique}}
+
+\begin{thm}[Universal property: uniqueness]
+If $G : p \Rightarrow [q, r]$ satisfies
+$(G \otimes \mathrm{id}_q) \cdot \mathrm{ev} = F$,
+then $G = \lean{dirCurry}(F)$.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem dirCurry_unique {p q r : Container}
+    (F : ContainerMorphism (p |*| q) r)
+    (G : ContainerMorphism p (Container.ihom q r))
+    (h : (Container.dir2 G (ContainerMorphism.id q)).comp
+           (dirEval q r) = F) :
+    G = dirCurry F
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- uniqueness: if (g `tensor` id) `compM` ev = f, then g = dirCurry f.
+\end{lstlisting}
+
+\begin{fidelitynote}
+The uniqueness proof is the only non-\lean{rfl} proof in the file: it uses
+\lean{subst} to substitute the hypothesis $h$, reducing to
+$\lean{dirCurry}(\lean{dirUncurry}(G)) = G$, which is exactly
+\lean{dirCurry\_dirUncurry} read backwards.  So the mathematical content is
+still the round-trip, applied once.
+\end{fidelitynote}
+
+\end{document}

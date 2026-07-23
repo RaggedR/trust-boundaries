@@ -1,0 +1,450 @@
+\documentclass[11pt,a4paper]{article}
+\input{preamble}
+
+\title{Human Verification: \texttt{Containers.CoKleisli}\\[4pt]
+  \large CoKleisli Category and Canonical Strength}
+\author{Machine-generated from \texttt{lean/CoKleisli.lean} for review by Neil Ghani}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document presents every definition and theorem \emph{statement} from the
+Lean~4 module \lean{Containers.CoKleisli} in three parallel forms: the original
+Lean, a readable Haskell rendering, and precise mathematical English.  Proofs
+are omitted --- they are machine-checked by Lean.  The purpose is to let a
+human verifier confirm that the formalisation captures the intended mathematics.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%===================================================================
+\section{Overview}
+%===================================================================
+
+This file develops the coKleisli structure and canonical strength for directed
+container comonads, extending \lean{Containers.Directed}.
+
+A \textbf{directed container} $D = (S, P, o, \downarrow, \oplus)$ gives rise to a
+comonad on its extension $\mathbf{Ext}\,D$ (a comonad on $\mathbf{Type}$).  The
+coKleisli category of this comonad has as morphisms $X \to Y$ the functions
+$\mathbf{Ext}\,D\,X \to Y$, composed via the \emph{extension} operation.  This file
+defines \lean{extend}, \lean{cokleisli\_comp}, and the canonical strength
+$\sigma : W(A \times B) \to A \times W(B)$, and proves the categorical laws.
+
+Everything is \textbf{Type}-level, Lean~4 core, no Mathlib.
+
+%===================================================================
+\section{CoKleisli extension}
+%===================================================================
+
+% --- 1. extend ----------------------------------------------------
+\subsection{Definition: \lean{extend}}
+
+\begin{defn}[CoKleisli extension]
+Given $f : \mathbf{Ext}\,D\,X \to Y$, the \textbf{coKleisli extension}
+$\mathtt{extend}\,f : \mathbf{Ext}\,D\,X \to \mathbf{Ext}\,D\,Y$
+applies $f$ at every position via comultiplication:
+\[
+  \mathtt{extend}\,f\,\langle s, v \rangle
+  \;=\;
+  \bigl\langle s,\;
+    \lambda p.\; f\bigl\langle s \mathop{\downarrow} p,\;
+                    \lambda q.\; v(p \oplus q)\bigr\rangle
+  \bigr\rangle.
+\]
+Equivalently, $\mathtt{extend}\,f = \mathbf{Ext}\,f \circ \delta$, where
+$\delta$ is the comonad comultiplication.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def extend {X Y : Type} (f : Ext D.toContainer X -> Y) :
+    Ext D.toContainer X -> Ext D.toContainer Y :=
+  fun p => <|p.1, fun q => f <|D.sub p.1 q, fun r => p.2 (D.shift p.1 q r)|>|>
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- In the coKleisli category of a comonad W, extend lifts
+-- f :: W x -> y  to  extend f :: W x -> W y.
+-- For a directed container this is:
+extend :: DirectedContainer s p -> (Ext s p x -> y) -> Ext s p x -> Ext s p y
+extend d f (Ext s v) = Ext s (\q -> f (Ext (sub d s q) (\r -> v (shift d s q r))))
+\end{lstlisting}
+
+
+% --- 2. extend_eq_map_comult --------------------------------------
+\subsection{Theorem: \lean{extend\_eq\_map\_comult}}
+
+\begin{prop}[Extension as map after comult]
+For any $f : \mathbf{Ext}\,D\,X \to Y$,
+\[
+  \mathtt{extend}\,f \;=\; \mathbf{Ext}\mathord{.}\mathtt{map}\,f \circ \delta,
+\]
+where $\delta = \mathtt{comult}$ is the comonad comultiplication.  This holds
+definitionally (by \lean{rfl}).
+\end{prop}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem extend_eq_map_comult {X Y : Type} (f : Ext D.toContainer X -> Y) :
+    D.extend f = Ext.map f o. D.comult
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- extend f = fmap f . comult
+-- This is the standard relationship between extend and (>>=) in a comonad.
+\end{lstlisting}
+
+
+% --- 3. extend_counit ---------------------------------------------
+\subsection{Theorem: \lean{extend\_counit}}
+
+\begin{thm}[\lean{extend} of the counit is the identity]
+\[
+  \mathtt{extend}\,\varepsilon \;=\; \mathrm{id}.
+\]
+This is the \emph{right unit law} of the coKleisli category.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem extend_counit {X : Type} :
+    D.extend (D.counit (X := X)) = id
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Comonad law (right unit):
+-- extend extract = id
+\end{lstlisting}
+
+
+% --- 4. counit_extend ---------------------------------------------
+\subsection{Theorem: \lean{counit\_extend}}
+
+\begin{thm}[Counit is a left inverse of extension]
+For every $f : \mathbf{Ext}\,D\,X \to Y$,
+\[
+  \varepsilon \circ \mathtt{extend}\,f \;=\; f.
+\]
+This characterises $\mathtt{extend}\,f$ as the unique map $h$ satisfying
+$\varepsilon \circ h = f$ (the universal property of extension).
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem counit_extend {X Y : Type} (f : Ext D.toContainer X -> Y) :
+    D.counit o. D.extend f = f
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Comonad law (left unit):
+-- extract . extend f = f
+\end{lstlisting}
+
+
+% --- 5. extend_extend ---------------------------------------------
+\subsection{Theorem: \lean{extend\_extend}}
+
+\begin{thm}[Extension respects coKleisli composition]
+For $f : \mathbf{Ext}\,D\,X \to Y$ and $g : \mathbf{Ext}\,D\,Y \to Z$,
+\[
+  \mathtt{extend}(g \circ \mathtt{extend}\,f)
+  \;=\;
+  \mathtt{extend}\,g \;\circ\; \mathtt{extend}\,f.
+\]
+This is the \emph{associativity law} of the coKleisli category; it follows
+from coassociativity of the comonad.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem extend_extend {X Y Z : Type}
+    (f : Ext D.toContainer X -> Y)
+    (g : Ext D.toContainer Y -> Z) :
+    D.extend (g o. D.extend f) = D.extend g o. D.extend f
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Comonad law (associativity / fusion):
+-- extend (g . extend f) = extend g . extend f
+\end{lstlisting}
+
+
+%===================================================================
+\section{CoKleisli composition}
+%===================================================================
+
+% --- 6. cokleisli_comp --------------------------------------------
+\subsection{Definition: \lean{cokleisli\_comp}}
+
+\begin{defn}[CoKleisli composition]
+Given coKleisli morphisms $f : \mathbf{Ext}\,D\,X \to Y$ and
+$g : \mathbf{Ext}\,D\,Y \to Z$, their \textbf{coKleisli composite} is
+\[
+  g \mathbin{.*} f \;:=\; g \circ \mathtt{extend}\,f
+  \;:\; \mathbf{Ext}\,D\,X \to Z.
+\]
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def cokleisli_comp {X Y Z : Type}
+    (f : Ext D.toContainer X -> Y)
+    (g : Ext D.toContainer Y -> Z) :
+    Ext D.toContainer X -> Z :=
+  g o. D.extend f
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- CoKleisli composition  (=>>) in Control.Comonad:
+-- (=>>) :: (w a -> b) -> (w b -> c) -> w a -> c
+cokleisliComp :: (Ext s p x -> y) -> (Ext s p y -> z) -> Ext s p x -> z
+cokleisliComp f g = g . extend f
+\end{lstlisting}
+
+
+% --- 7. cokleisli_comp_counit -------------------------------------
+\subsection{Theorem: \lean{cokleisli\_comp\_counit}}
+
+\begin{thm}[Right unit of CoKleisli composition]
+For every $f : \mathbf{Ext}\,D\,X \to Y$,
+\[
+  f \mathbin{.*} \varepsilon \;=\; f.
+\]
+The counit $\varepsilon$ is a right identity for coKleisli composition.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem cokleisli_comp_counit {X Y : Type}
+    (f : Ext D.toContainer X -> Y) :
+    D.cokleisli_comp (D.counit) f = f
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Right unit:  f =>> extract = f
+\end{lstlisting}
+
+
+% --- 8. cokleisli_counit_comp -------------------------------------
+\subsection{Theorem: \lean{cokleisli\_counit\_comp}}
+
+\begin{thm}[Left unit of CoKleisli composition]
+For every $f : \mathbf{Ext}\,D\,X \to Y$,
+\[
+  \varepsilon \mathbin{.*} f \;=\; f.
+\]
+The counit $\varepsilon$ is a left identity for coKleisli composition.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem cokleisli_counit_comp {X Y : Type}
+    (f : Ext D.toContainer X -> Y) :
+    D.cokleisli_comp f D.counit = f
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Left unit:  extract =>> f = f
+\end{lstlisting}
+
+
+% --- 9. cokleisli_assoc -------------------------------------------
+\subsection{Theorem: \lean{cokleisli\_assoc}}
+
+\begin{thm}[Associativity of CoKleisli composition]
+For $f : \mathbf{Ext}\,D\,X \to Y$, $g : \mathbf{Ext}\,D\,Y \to Z$,
+$h : \mathbf{Ext}\,D\,Z \to W$,
+\[
+  (h \mathbin{.*} g) \mathbin{.*} f \;=\; h \mathbin{.*} (g \mathbin{.*} f).
+\]
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem cokleisli_assoc {X Y Z W : Type}
+    (f : Ext D.toContainer X -> Y)
+    (g : Ext D.toContainer Y -> Z)
+    (h : Ext D.toContainer Z -> W) :
+    D.cokleisli_comp (D.cokleisli_comp f g) h
+      = D.cokleisli_comp f (D.cokleisli_comp g h)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Associativity:  (f =>> g) =>> h = f =>> (g =>> h)
+\end{lstlisting}
+
+
+%===================================================================
+\section{Canonical strength}
+%===================================================================
+
+% --- 10. strength -------------------------------------------------
+\subsection{Definition: \lean{strength}}
+
+\begin{defn}[Canonical strength]
+The \textbf{canonical strength} of the directed container comonad is a natural
+transformation
+\[
+  \sigma_{A,B} : \mathbf{Ext}\,D\,(A \times B) \;\longrightarrow\;
+                 A \times \mathbf{Ext}\,D\,B,
+\]
+defined by
+\[
+  \sigma_{A,B}\langle s, v \rangle
+  \;=\;
+  \bigl(\pi_1(v(o(s))),\;
+        \langle s, \pi_2 \circ v \rangle\bigr).
+\]
+The first component extracts the $A$-value at the root; the second keeps the
+shape and strips each labelled pair to its $B$-component.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def strength (A B : Type) :
+    Ext D.toContainer (A × B) -> A × Ext D.toContainer B :=
+  fun p => <|(p.2 (D.root p.1)).1, <|p.1, fun q => (p.2 q).2|>|>
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Canonical comonad strength:  sigma :: w (a, b) -> (a, w b)
+-- For a directed container:
+strength :: DirectedContainer s p -> Ext s p (a, b) -> (a, Ext s p b)
+strength d (Ext s v) = (fst (v (root d s)), Ext s (snd . v))
+\end{lstlisting}
+
+\begin{fidelitynote}
+Every comonad on a cartesian category is canonically strong.  Here the
+$A$-component is extracted at the \emph{root} position $o(s)$, which is
+well-typed because the counit extracts at the root.  The Lean source has a
+minor syntactic issue in line~166 (a missing opening angle bracket); the
+intent is clear from context and from the surrounding docstring.
+\end{fidelitynote}
+
+
+% --- 11. strength_natural_left ------------------------------------
+\subsection{Theorem: \lean{strength\_natural\_left}}
+
+\begin{thm}[Strength naturality in $A$]
+For every $f : A \to A'$,
+\[
+  (f \times \mathrm{id}) \circ \sigma_{A,B}
+  \;=\;
+  \sigma_{A',B} \circ \mathbf{Ext}\,D\,(f \times \mathrm{id}).
+\]
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem strength_natural_left {A A' B : Type} (f : A -> A') :
+    (fun p : A × Ext D.toContainer B => (f p.1, p.2)) o. D.strength A B
+      = D.strength A' B o. Ext.map (fun ab : A × B => (f ab.1, ab.2))
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Left naturality:
+-- first f . strength = strength . fmap (first f)
+-- where first f (a, b) = (f a, b)
+\end{lstlisting}
+
+
+% --- 12. strength_natural_right -----------------------------------
+\subsection{Theorem: \lean{strength\_natural\_right}}
+
+\begin{thm}[Strength naturality in $B$]
+For every $g : B \to B'$,
+\[
+  (\mathrm{id} \times \mathbf{Ext}\,D\,g) \circ \sigma_{A,B}
+  \;=\;
+  \sigma_{A,B'} \circ \mathbf{Ext}\,D\,(\mathrm{id} \times g).
+\]
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem strength_natural_right {A B B' : Type} (g : B -> B') :
+    (fun p : A × Ext D.toContainer B => (p.1, Ext.map g p.2)) o. D.strength A B
+      = D.strength A B' o. Ext.map (fun ab : A × B => (ab.1, g ab.2))
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Right naturality:
+-- second (fmap g) . strength = strength . fmap (second g)
+-- where second g (a, b) = (a, g b)
+\end{lstlisting}
+
+
+% --- 13. strength_counit ------------------------------------------
+\subsection{Theorem: \lean{strength\_counit}}
+
+\begin{thm}[Strength--counit coherence]
+\[
+  (\mathrm{id}_A \times \varepsilon_B) \circ \sigma_{A,B}
+  \;=\;
+  \varepsilon_{A \times B}.
+\]
+Extracting from the $B$-component of the strength gives the same result as
+extracting directly from the $A \times B$-tree.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem strength_counit {A B : Type} :
+    (fun p : A × Ext D.toContainer B => (p.1, D.counit p.2)) o. D.strength A B
+      = D.counit (X := A × B)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Strength-counit coherence:
+-- second extract . strength = extract
+-- i.e.  (id *** extract) . sigma = extract
+\end{lstlisting}
+
+
+%===================================================================
+\section{Translation conventions}
+%===================================================================
+
+The following conventions apply throughout this document.
+
+\begin{enumerate}
+\item \textbf{Directed container notation.}  A directed container
+  $D = (S, P, o, \downarrow, \oplus)$ has shapes $S$, positions $P$,
+  root $o : S \to P$, sub-shape $(\downarrow) : S \to P(s) \to S$, and
+  shift $(\oplus) : (s : S) \to P(s) \to P(s \downarrow p) \to P(s)$.
+  The laws D1--D5 from \lean{Containers.Directed} are used implicitly in the
+  proofs.
+
+\item \textbf{CoKleisli = Kleisli of the opposite monad.}  The coKleisli
+  category of a comonad $W$ has objects the types and morphisms $X \to Y$ the
+  functions $W(X) \to Y$; identity is $\varepsilon$ and composition is
+  $\mathtt{cokleisli\_comp}$.
+
+\item \textbf{Haskell comonad vocabulary.}  Haskell's \hask{Control.Comonad}
+  uses \hask{extract} for $\varepsilon$ and \hask{extend} for the coKleisli
+  lift; the operator \hask{=>>} is coKleisli composition in the left-to-right
+  order.
+
+\item \textbf{Proof bodies omitted.}  Only definitions and theorem
+  \emph{statements} are translated.  Lean checks the proofs; the human
+  verifier checks that the \emph{statements} match the intended mathematics.
+\end{enumerate}
+
+\end{document}

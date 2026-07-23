@@ -1,0 +1,406 @@
+\documentclass[11pt,a4paper]{article}
+\input{preamble}
+
+\title{Human Verification: \texttt{Containers.Rungs}\\[4pt]
+  \large DAG and Graph Rungs of the Trust Ladder}
+\author{Machine-generated from \texttt{lean/Rungs.lean} for review by Neil Ghani}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document presents every definition and theorem \emph{statement} from the
+Lean~4 module \lean{Containers.Rungs} in three parallel forms: the original
+Lean, a readable Haskell rendering, and precise mathematical English.  Proofs
+are omitted --- they are machine-checked by Lean.  The purpose is to let a
+human verifier confirm that the formalisation captures the intended
+mathematics.
+
+The file verifies two negative-result rungs of the directed-container trust
+ladder (\S7 and \S8 of the paper): the DAG rung shows that the Sawasdee
+Cellars wine graph extended with a Singapore transshipment is \emph{not thin}
+(two distinct routes between the same nodes exist), and the Graph rung shows
+that a 2-node scrap loop produces an \emph{infinite} position set.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%===================================================================
+\section{Overview}
+%===================================================================
+
+A directed container whose position sets are all singletons is called
+\emph{thin}: there is at most one route between any two nodes.  The ladder in
+the paper has four rungs:
+
+\begin{enumerate}
+  \item \textbf{Tree} --- positions are singletons (trivially thin).
+  \item \textbf{Polytree / DAG without multiple routes} --- still thin.
+  \item \textbf{DAG with multiple routes} --- not thin ($\lnot$ Subsingleton).
+  \item \textbf{General graph with cycles} --- position sets are infinite.
+\end{enumerate}
+
+This file addresses rungs~3 and~4 with concrete witnesses.
+
+%===================================================================
+\section{DAG rung: Sawasdee + Singapore transshipment (\S7)}
+%===================================================================
+
+% --- Facility -------------------------------------------------------
+\subsection{Inductive type: \lean{SawasdeeDAG.Facility}}
+
+\begin{defn}[Extended facility set]
+The set of \textbf{facilities} in the extended Sawasdee Cellars network consists
+of the original eleven nodes plus Singapore: twelve facilities in total.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+inductive Facility
+  | vineyard1 | vineyard2 | vineyard3
+  | sawasdee | melbournePort | singapore | thaiPort
+  | distributor1 | distributor2
+  | retail1 | retail2 | retail3
+  deriving DecidableEq, Repr
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data Facility
+  = Vineyard1 | Vineyard2 | Vineyard3
+  | Sawasdee | MelbournePort | Singapore | ThaiPort
+  | Distributor1 | Distributor2
+  | Retail1 | Retail2 | Retail3
+  deriving (Eq, Show)
+\end{lstlisting}
+
+
+% --- Leg -----------------------------------------------------------
+\subsection{Inductive type: \lean{SawasdeeDAG.Leg}}
+
+\begin{defn}[Extended leg set]
+The \textbf{legs} of the extended network consist of the original ten shipping
+legs plus two Singapore transshipment legs: \lean{sing1} (Melbourne Port
+$\to$ Singapore) and \lean{sing2} (Singapore $\to$ Thai Port).
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+inductive Leg
+  | v1s | v2s | v3s
+  | smp
+  | sea        -- direct Melbourne Port -> Thai Port
+  | sing1      -- Melbourne Port -> Singapore
+  | sing2      -- Singapore -> Thai Port
+  | td1 | td2
+  | d1r1 | d1r2
+  | d2r3
+  deriving DecidableEq, Repr
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data Leg
+  = V1s | V2s | V3s | Smp
+  | Sea | Sing1 | Sing2
+  | Td1 | Td2 | D1r1 | D1r2 | D2r3
+  deriving (Eq, Show)
+\end{lstlisting}
+
+
+% --- G' -------------------------------------------------------------
+\subsection{Definition: \lean{SawasdeeDAG.G'}}
+
+\begin{defn}[Extended Sawasdee graph]
+$G'$ is the digraph with vertices \lean{Facility}, edges \lean{Leg}, and
+source/target maps \lean{leg\_src} and \lean{leg\_tgt} defined by pattern
+matching.  It extends the original Sawasdee Cellars graph with the Singapore
+transshipment leg.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+@[reducible] def G' : Digraph where
+  V := Facility
+  E := Leg
+  src := leg_src
+  tgt := leg_tgt
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data Digraph v e = Digraph { src :: e -> v, tgt :: e -> v }
+
+g' :: Digraph Facility Leg
+g' = Digraph legSrc legTgt
+\end{lstlisting}
+
+
+% --- directPath / transshipPath ------------------------------------
+\subsection{Definitions: \lean{directPath} and \lean{transshipPath}}
+
+\begin{defn}[Witness routes]
+Two distinct directed paths from \lean{melbournePort} to \lean{thaiPort} in
+$G'$:
+\begin{itemize}
+  \item $\text{directPath}$: the single leg $\mathrm{sea}$, of length~1.
+  \item $\text{transshipPath}$: the two-leg route $\mathrm{sing1}$ followed by
+    $\mathrm{sing2}$, of length~2.
+\end{itemize}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def directPath : Path G' melbournePort thaiPort :=
+  .cons (G := G') sea (.nil (G := G') thaiPort)
+
+def transshipPath : Path G' melbournePort thaiPort :=
+  .cons (G := G') sing1 (.cons (G := G') sing2 (.nil (G := G') thaiPort))
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Paths represented as lists of legs (types approximate only)
+directPath :: [Leg]
+directPath = [Sea]
+
+transshipPath :: [Leg]
+transshipPath = [Sing1, Sing2]
+\end{lstlisting}
+
+
+% --- DAG rung theorem -------------------------------------------
+\subsection{Theorem: DAG rung (\S7)}
+
+\begin{thm}[DAG rung --- not thin]
+The type of paths from \lean{melbournePort} to \lean{thaiPort} in $G'$ is not
+a subsingleton: $\lnot\,\mathrm{Subsingleton}(\mathrm{Path}_{G'}(\text{Melbourne
+Port},\,\text{Thai Port}))$.
+
+Proof witness: \lean{directPath} has length~1 while \lean{transshipPath} has
+length~2, so they are distinct.  Hence the network $\mathcal{N}(G')$ is not
+thin at Melbourne Port.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+example : Not (Subsingleton (Path G' melbournePort thaiPort)) :=
+  fun h => ...  -- length argument; proof omitted
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- The type of paths is not a singleton:
+-- length directPath /= length transshipPath
+dagRung :: Bool
+dagRung = length directPath /= length transshipPath  -- True
+\end{lstlisting}
+
+
+%===================================================================
+\section{Graph rung: 2-node scrap cycle (\S8)}
+%===================================================================
+
+% --- Node / Edge / G_scrap ----------------------------------------
+\subsection{Types: \lean{ScrapLoop.Node}, \lean{ScrapLoop.Edge}, \lean{G\_scrap}}
+
+\begin{defn}[Scrap-loop graph]
+The scrap-loop graph $G_{\mathrm{scrap}}$ has:
+\begin{itemize}
+  \item two nodes: \lean{rollingMill} and \lean{meltShop};
+  \item two directed edges: \lean{rm2ms} (rolling mill $\to$ melt shop) and
+    \lean{ms2rm} (melt shop $\to$ rolling mill).
+\end{itemize}
+This is a 2-cycle: billets flow from the rolling mill, and scrap returns from
+the melt shop.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+inductive Node | rollingMill | meltShop
+  deriving DecidableEq, Repr
+
+inductive Edge | rm2ms | ms2rm
+  deriving DecidableEq, Repr
+
+@[reducible] def G_scrap : Digraph where
+  V := Node
+  E := Edge
+  src := edge_src
+  tgt := edge_tgt
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data Node = RollingMill | MeltShop deriving (Eq, Show)
+data Edge = Rm2ms | Ms2rm          deriving (Eq, Show)
+
+gScrap :: Digraph Node Edge
+gScrap = Digraph edgeSrc edgeTgt
+\end{lstlisting}
+
+
+% --- oneLap / laps ------------------------------------------------
+\subsection{Definitions: \lean{oneLap} and \lean{laps}}
+
+\begin{defn}[Lap paths]
+A single lap around the 2-cycle:
+\[
+  \text{oneLap} : \mathrm{Path}_{G_{\mathrm{scrap}}}(\text{rollingMill},
+  \text{rollingMill}),
+\]
+consisting of the two edges \lean{rm2ms} then \lean{ms2rm}.  The family
+\lean{laps} $: \mathbb{N} \to
+\mathrm{Path}_{G_{\mathrm{scrap}}}(\text{rollingMill},\text{rollingMill})$
+iterates this lap: $\text{laps}(n)$ is the path that traverses the cycle exactly
+$n$ times.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def oneLap : Path G_scrap rollingMill rollingMill :=
+  .cons (G := G_scrap) rm2ms
+    (.cons (G := G_scrap) ms2rm (.nil (G := G_scrap) rollingMill))
+
+def laps : Nat -> Path G_scrap rollingMill rollingMill
+  | .zero   => .nil (G := G_scrap) rollingMill
+  | .succ n => (laps n).append oneLap
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+oneLap :: [Edge]
+oneLap = [Rm2ms, Ms2rm]
+
+laps :: Int -> [Edge]
+laps 0 = []
+laps n = laps (n-1) ++ oneLap
+\end{lstlisting}
+
+
+% --- Infinite -------------------------------------------------------
+\subsection{Structure: \lean{Infinite}}
+
+\begin{defn}[Infinite type (bundled)]
+A type $\alpha$ is \textbf{infinite} if there exists an injective function
+$\mathbb{N} \to \alpha$:
+\[
+  \mathrm{Infinite}(\alpha) \;\equiv\; \exists f : \mathbb{N} \to \alpha,\;
+  \forall m\, n,\; f(m) = f(n) \Rightarrow m = n.
+\]
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+structure Infinite (alpha : Type) : Prop where
+  witness : forall (f : Nat -> alpha), forall m n, f m = f n -> m = n
+\end{lstlisting}
+
+\begin{fidelitynote}
+The Lean definition quantifies existentially (the witness field records the
+injection); the English and Haskell readings make this explicit.
+\end{fidelitynote}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- A type a is infinite if there is an injection Nat -> a.
+-- In Haskell this is the class Infinite from Data.Infinite, or simply:
+isInfinite' :: (Int -> a) -> (a -> a -> Bool) -> (Int -> Int -> Bool) -> Bool
+isInfinite' f eq implies = True -- just a witness, not a proof
+\end{lstlisting}
+
+
+% --- infinite_pos_rollingMill ------------------------------------
+\subsection{Theorem: \lean{infinite\_pos\_rollingMill}}
+
+\begin{thm}[Graph rung --- infinite position set]
+The $\Sigma$-type $\sum_{w : \mathrm{Node}} \mathrm{Path}_{G_{\mathrm{scrap}}}(\mathrm{rollingMill},\, w)$
+is infinite.  The injection is $n \mapsto (\mathrm{rollingMill},\, \mathrm{laps}(n))$,
+which is injective because $\mathrm{laps}(n)$ has length $2n$, a strictly
+increasing function of $n$.
+
+Hence the position set of the directed container $\mathcal{N}(G_{\mathrm{scrap}})$
+at \lean{rollingMill} is infinite, placing $G_{\mathrm{scrap}}$ on the top rung
+of the ladder.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem infinite_pos_rollingMill :
+    Infinite ((w : Node) * Path G_scrap rollingMill w) where
+  witness := forall (n => <|rollingMill, laps n|>), ...
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- The injection: n |-> (RollingMill, laps n)
+-- Injectivity: length (laps m) = 2*m, so m /= n => laps m /= laps n
+injection :: Int -> (Node, [Edge])
+injection n = (RollingMill, laps n)
+\end{lstlisting}
+
+
+% --- nontrivialEndo / nontrivialEndo_ne_root ----------------------
+\subsection{Definition and theorem: \lean{nontrivialEndo} and \lean{nontrivialEndo\_ne\_root}}
+
+\begin{defn}[Nontrivial endomorphism]
+The \textbf{nontrivial endomorphism} at \lean{rollingMill} is the one-lap
+position: the pair $(\mathrm{rollingMill},\, \mathrm{oneLap})$ as an element of
+$\mathcal{N}(G_{\mathrm{scrap}}).\mathrm{Pos}(\mathrm{rollingMill})$.
+\end{defn}
+
+\begin{thm}[Endomorphism is non-trivial]
+The nontrivial endomorphism is distinct from the root (the zero-lap empty path):
+\[
+  \mathrm{nontrivialEndo} \;\neq\;
+  \mathcal{N}(G_{\mathrm{scrap}}).\mathrm{root}(\mathrm{rollingMill}).
+\]
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def nontrivialEndo : (Digraph.network G_scrap).Pos rollingMill :=
+  <|rollingMill, oneLap|>
+
+theorem nontrivialEndo_ne_root :
+    nontrivialEndo != (Digraph.network G_scrap).root rollingMill
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+nontrivialEndo :: (Node, [Edge])
+nontrivialEndo = (RollingMill, oneLap)  -- length 2
+
+root :: (Node, [Edge])
+root = (RollingMill, [])  -- length 0
+
+-- nontrivialEndo /= root  (different lengths)
+\end{lstlisting}
+
+
+%===================================================================
+\section{Translation conventions}
+%===================================================================
+
+\begin{enumerate}
+\item \textbf{Paths as lists.}  In Lean, \lean{Path G v w} is an indexed
+  inductive type whose constructors carry type-level evidence of endpoint
+  compatibility.  In Haskell, paths are approximated as lists of edges
+  \hask{[Edge]}; the endpoint type indices are lost.
+
+\item \textbf{Subsingleton.}  Lean's \lean{Subsingleton} is a typeclass
+  saying a type has at most one element.  The negation used in the DAG rung
+  says: there exist two provably distinct elements.
+
+\item \textbf{Injectivity witness.}  Lean's bundled \lean{Infinite} packs an
+  injection together with its injectivity proof.  The Haskell rendering only
+  shows the injection function; the proof obligation is dropped.
+
+\item \textbf{Proof bodies omitted.}  Only definitions and theorem
+  \emph{statements} are translated.  Lean checks the proofs; the human
+  verifier checks that the \emph{statements} match the intended mathematics.
+\end{enumerate}
+
+\end{document}

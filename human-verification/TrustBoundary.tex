@@ -1,0 +1,672 @@
+\documentclass[11pt,a4paper]{article}
+\input{preamble}
+
+\title{Human Verification: \texttt{TrustBoundary}\\[4pt]
+  \large Trust-Labelled Trees, the Boundary Rule, and Duplicate-Stability}
+\author{Machine-generated from \texttt{lean/TrustBoundary.lean} for review by Neil Ghani}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document presents every definition and theorem \emph{statement} from the
+Lean~4 module \lean{TrustBoundary} in three parallel forms: the original
+Lean, a readable Haskell rendering, and precise mathematical English.  Proofs
+are omitted --- they are machine-checked by Lean.
+
+The module links proof registries (finitely-branching rose trees with trust
+labels) to the trust-system theory of \lean{Trust.lean}.  The main structural
+result is \emph{duplicate-stability}: if the global boundary rule holds for
+a tree $t$, it also holds for every subtree $t.\mathrm{sub}(p)$.  The
+deployed trust chain (\lean{TrustLevel}, 7 levels) and the loop experiment's
+chain (\lean{LoopTrustLevel}, 6 levels) are also instantiated here.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%===================================================================
+\section{Overview}
+%===================================================================
+
+Deployed proof registries are finitely-branching rose trees (\lean{LTree})
+whose nodes carry a trust label.  The boundary rule
+(\lean{registry\_validate.py}) is node-local: a node may claim
+\lean{proved} or above only if every non-dead child claims \lean{proved} or
+above.  Equivalently, the rule is a \emph{coKleisli predicate}: apply the
+local check at every node produced by the comonad operation \lean{duplicate}
+(= \lean{sub}).
+
+The module proves:
+\begin{enumerate}
+  \item \textbf{Duplicate-stability} (\lean{ok\_sub}): the global boundary
+    rule propagates to every subtree.
+  \item \textbf{The deployed chain} (\lean{TrustLevel}): a \lean{Chain}
+    instance for the seven-level registry chain, so the certificate lemma
+    and lax transport from \lean{Trust.lean} apply to real registry labels.
+  \item \textbf{The loop experiment's chain} (\lean{LoopTrustLevel}): a
+    six-level variant for the Warnaar positivity loop.
+\end{enumerate}
+
+%===================================================================
+\section{Trust labels and labelled trees}
+%===================================================================
+
+\subsection{Structure: \lean{TrustLabel}}
+
+\begin{defn}[Trust label]
+A \textbf{trust label} is a pair: a trust level $\ell \in T$ (a level in
+the chain $T$) and a boolean \lean{dead} flag.  Dead-end nodes are
+\emph{exempt} from the boundary rule; \lean{dead = true} means the approach
+was abandoned.  An order relation cannot express an exemption, which is why
+\lean{dead} is a separate flag rather than a chain element.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+structure TrustLabel (T : Type) where
+  trust : T
+  dead  : Bool
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data TrustLabel t = TrustLabel
+  { trust :: t
+  , dead  :: Bool
+  }
+\end{lstlisting}
+
+
+\subsection{Inductive type: \lean{LTree}}
+
+\begin{defn}[Labelled rose tree]
+A \textbf{trust-labelled finitely-branching rose tree} has a
+\lean{TrustLabel T} at every node and an explicit arity $n : \mathbb{N}$
+with children indexed by $\mathrm{Fin}(n)$.  This is the shape of a deployed
+registry (\texttt{proofs/registry/*.json}).
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+inductive LTree (T : Type) where
+  | node : TrustLabel T -> (n : Nat) -> (Fin n -> LTree T) -> LTree T
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data LTree t = Node (TrustLabel t) [LTree t]
+-- (Using a list of children rather than a Fin-indexed function)
+\end{lstlisting}
+
+\begin{fidelitynote}
+In Lean the arity $n$ is an explicit \lean{Nat} and children are indexed by
+\lean{Fin n}, giving a \emph{dependent} function type.  In Haskell we use a
+list, losing the arity-indexed dependency.
+\end{fidelitynote}
+
+
+\subsection{Definition: \lean{LTree.lab}}
+
+\begin{defn}[Root label]
+$\mathrm{lab}(t)$ extracts the trust label at the root of $t$.  Under the
+comonad, $\mathrm{lab}(t.\mathrm{sub}(p))$ reads the label at position~$p$.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def LTree.lab : LTree T -> TrustLabel T
+  | .node l _ _ => l
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+lab :: LTree t -> TrustLabel t
+lab (Node l _) = l
+\end{lstlisting}
+
+%===================================================================
+\section{Positions, sub-trees, and paths}
+%===================================================================
+
+\subsection{Inductive type: \lean{LTree.LPos}}
+
+\begin{defn}[Position / path]
+A \textbf{position} in $t : \lean{LTree}\,T$ is a path from the root to a
+node.  It is either \lean{here} (the root) or a child index $i$ followed by
+a position in the $i$-th child.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+inductive LPos : LTree T -> Type where
+  | here  : LPos t
+  | child : (i : Fin n) -> LPos (children i)
+              -> LPos (.node l n children)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data LPos t
+  = Here
+  | Child Int (LPos t)   -- approximate: index is Int, not Fin n
+\end{lstlisting}
+
+
+\subsection{Definition: \lean{LTree.sub}}
+
+\begin{defn}[Sub-tree]
+$t.\mathrm{sub}(p)$ is the sub-tree rooted at position $p$.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def sub : (t : LTree T) -> LPos t -> LTree T
+  | t, .here => t
+  | .node _ _ children, .child i p => (children i).sub p
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+sub :: LTree t -> LPos (LTree t) -> LTree t
+sub t Here           = t
+sub (Node _ cs) (Child i p) = sub (cs !! i) p
+\end{lstlisting}
+
+
+\subsection{Definition: \lean{LTree.shift}}
+
+\begin{defn}[Path concatenation]
+$t.\mathrm{shift}(p, q)$ concatenates path $p$ with path $q$ (where $q$ is
+a position in $t.\mathrm{sub}(p)$), giving a position in $t$.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def shift : (t : LTree T) -> (p : LPos t)
+              -> LPos (t.sub p) -> LPos t
+  | _, .here, q => q
+  | .node _ _ children, .child i p, q =>
+      .child i ((children i).shift p q)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+shift :: LTree t -> LPos (LTree t) -> LPos (LTree t) -> LPos (LTree t)
+shift _ Here q = q
+shift (Node _ cs) (Child i p) q = Child i (shift (cs !! i) p q)
+\end{lstlisting}
+
+%===================================================================
+\section{Directed-container axioms for \lean{LTree}}
+%===================================================================
+
+\subsection{Definitions: \lean{shift\_root}, \lean{sub\_shift}, \lean{shift\_assoc}}
+
+The following three lemmas confirm that \lean{LTree} with \lean{sub} and
+\lean{shift} satisfies the directed-container axioms D3, D4, D5.
+
+\begin{thm}[D3: shift to root]
+For every tree $t$ and position $p$,
+\[
+  t.\mathrm{shift}(p, \mathrm{here}) = p.
+\]
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def shift_root : (t : LTree T) -> (p : LPos t) ->
+    t.shift p .here = p
+\end{lstlisting}
+
+\begin{thm}[D4: sub-trees nest along shift]
+For every $t$, $p : \mathrm{LPos}(t)$, $q : \mathrm{LPos}(t.\mathrm{sub}(p))$,
+\[
+  t.\mathrm{sub}(t.\mathrm{shift}(p, q)) = (t.\mathrm{sub}(p)).\mathrm{sub}(q).
+\]
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def sub_shift : (t : LTree T) -> (p : LPos t)
+    -> (q : LPos (t.sub p)) ->
+    t.sub (t.shift p q) = (t.sub p).sub q
+\end{lstlisting}
+
+\begin{thm}[D5: shift is associative]
+For $t$, $p$, $q$, $r$ at compatible types (with transport along D4),
+\[
+  t.\mathrm{shift}(t.\mathrm{shift}(p, q),\, r) =
+  t.\mathrm{shift}(p,\, (t.\mathrm{sub}(p)).\mathrm{shift}(q, r)).
+\]
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def shift_assoc : (t : LTree T) -> (p : LPos t)
+    -> (q : LPos (t.sub p))
+    -> (r : LPos ((t.sub p).sub q)) ->
+    t.shift (t.shift p q) ((t.sub_shift p q).symm => r) =
+      t.shift p ((t.sub p).shift q r)
+\end{lstlisting}
+
+\begin{fidelitynote}
+The \lean{=>} in D5 is Lean transport notation: $(t.\mathrm{sub\_shift}\,p\,q)^{-1}
+\blacktriangleright r$ re-types $r : \mathrm{LPos}((t.\mathrm{sub}(p)).\mathrm{sub}(q))$
+as $r : \mathrm{LPos}(t.\mathrm{sub}(t.\mathrm{shift}(p,q)))$ via the equality from D4.
+In Haskell this coercion is invisible (all trees have the same type), but
+in Lean's dependent type theory the transport is an explicit proof term.
+The listings use \texttt{=>} as an ASCII approximation of the transport operator.
+\end{fidelitynote}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- shift_root:  shift t p Here = p
+-- sub_shift:   sub t (shift t p q) = sub (sub t p) q
+-- shift_assoc: shift t (shift t p q) r = shift t p (shift (sub t p) q r)
+-- All hold by structural induction on p.
+\end{lstlisting}
+
+%===================================================================
+\section{The trust registry as a directed container}
+%===================================================================
+
+\subsection{Definition: \lean{trustRegistry}}
+
+\begin{defn}[Trust registry directed container]
+The trust-labelled rose trees form a directed container with
+\begin{align*}
+  \mathrm{Shape} &= \lean{LTree}\,T, \\
+  \mathrm{Pos}   &= \lean{LTree.LPos}, \\
+  \mathrm{root}  &= \lambda t.\,\lean{here}, \\
+  \mathrm{sub}   &= \lean{LTree.sub}, \\
+  \mathrm{shift} &= \lean{LTree.shift}.
+\end{align*}
+Axioms D1--D5 are provided by \lean{rfl}, \lean{sub\_shift}, \lean{shift\_root},
+and \lean{shift\_assoc} respectively (D1 and D2 hold definitionally).
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def trustRegistry (T : Type) : DirectedContainer where
+  Shape := LTree T
+  Pos   := LTree.LPos
+  root  := fun _ => .here
+  sub   := LTree.sub
+  shift := LTree.shift
+  d1    := fun _ => rfl
+  d4    := LTree.sub_shift
+  d2    := fun _ _ => rfl
+  d3    := LTree.shift_root
+  d5    := LTree.shift_assoc
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- trustRegistry :: DirectedContainer (LTree T) (LPos (LTree T))
+-- root t = Here
+-- sub  = LTree.sub
+-- shift = LTree.shift
+-- D1--D5 hold by structural induction.
+\end{lstlisting}
+
+%===================================================================
+\section{The boundary rule}
+%===================================================================
+
+\subsection{Definition: \lean{LTree.localOk}}
+
+\begin{defn}[Node-local boundary rule]
+At threshold $\theta : T$, a tree $t = \lean{node}\,l\,n\,\mathrm{children}$
+satisfies the \textbf{local boundary rule} if: whenever $\theta \le l.\mathrm{trust}$
+(this node claims above threshold), every non-dead child $i$ satisfies
+$\theta \le \mathrm{children}(i).\mathrm{lab}.\mathrm{trust}$.
+
+Formally:
+\[
+  \mathrm{localOk}(\theta, t) \;\iff\;
+  \theta \le t.\mathrm{lab}.\mathrm{trust} \;\Rightarrow\;
+  \forall\, i : \mathrm{Fin}(n),\;
+  \mathrm{children}(i).\mathrm{lab}.\mathrm{dead} = \mathrm{true}
+  \;\vee\; \theta \le \mathrm{children}(i).\mathrm{lab}.\mathrm{trust}.
+\]
+This is precisely what \texttt{registry\_validate.py} checks at each node.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def localOk (theta : T) : LTree T -> Prop
+  | .node l n children =>
+      theta <= l.trust -> forall i : Fin n,
+        (children i).lab.dead = true \/ theta <= (children i).lab.trust
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+localOk :: (Ord t) => t -> LTree t -> Bool
+localOk theta (Node l children)
+  | trust l >= theta = all (\c -> dead (lab c) || trust (lab c) >= theta) children
+  | otherwise        = True
+\end{lstlisting}
+
+
+\subsection{Definition: \lean{LTree.Ok}}
+
+\begin{defn}[Global boundary rule]
+The \textbf{global boundary rule} holds for $t$ at threshold $\theta$ if the
+local check holds at every position (i.e., at every sub-tree produced by
+\lean{duplicate}):
+\[
+  \mathrm{Ok}(\theta, t) \;\iff\;
+  \forall\, p : \mathrm{LPos}(t),\;
+  \mathrm{localOk}(\theta,\, t.\mathrm{sub}(p)).
+\]
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Ok (theta : T) (t : LTree T) : Prop :=
+  forall p : LPos t, (t.sub p).localOk theta
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+ok :: (Ord t) => t -> LTree t -> Bool
+ok theta t = all (\p -> localOk theta (sub t p)) (allPositions t)
+  where allPositions = ...  -- enumerate all positions recursively
+\end{lstlisting}
+
+%===================================================================
+\section{Duplicate-stability}
+%===================================================================
+
+\subsection{Theorem: \lean{LTree.ok\_sub}}
+
+\begin{thm}[Duplicate-stability of the trust boundary]
+If the global boundary rule holds for $t$ at threshold $\theta$, then it
+also holds for every subtree:
+\[
+  \mathrm{Ok}(\theta, t) \;\Rightarrow\;
+  \forall\, p : \mathrm{LPos}(t),\;
+  \mathrm{Ok}(\theta,\, t.\mathrm{sub}(p)).
+\]
+The proof is a one-line transport along D4: a position $q$ in
+$t.\mathrm{sub}(p)$ corresponds to the position $t.\mathrm{shift}(p, q)$ in
+$t$; D4 identifies the subtrees; so the check at $(t, t.\mathrm{shift}(p,
+q))$ \emph{is} the check at $(t.\mathrm{sub}(p), q)$.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem ok_sub (theta : T) (t : LTree T) (h : Ok theta t)
+    (p : LPos t) : Ok theta (t.sub p) :=
+  fun q => t.sub_shift p q => h (t.shift p q)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- ok_sub: ok theta t -> ok theta (sub t p)
+--
+-- For any position q in (sub t p):
+--   localOk theta (sub (sub t p) q)
+--   = localOk theta (sub t (shift t p q))    -- by D4
+--   = h (shift t p q)                        -- from Ok theta t
+\end{lstlisting}
+
+\begin{fidelitynote}
+In Lean, the transport $\lean{t.sub\_shift\,p\,q} \blacktriangleright
+\lean{h\,(t.shift\,p\,q)}$ coerces the hypothesis along the D4 equality.
+In Haskell (or informal mathematics) this coercion is invisible because the
+identity of the tree doesn't depend on its type index.
+\end{fidelitynote}
+
+
+\subsection{Theorem: \lean{LTree.ok\_iff\_all\_sub}}
+
+\begin{thm}[Ok iff all sub-trees are Ok]
+\[
+  \mathrm{Ok}(\theta, t) \;\iff\;
+  \forall\, p : \mathrm{LPos}(t),\;
+  \mathrm{Ok}(\theta,\, t.\mathrm{sub}(p)).
+\]
+The forward direction is \lean{ok\_sub}; the backward direction reads the
+root component (\lean{here}).
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem ok_iff_all_sub (theta : T) (t : LTree T) :
+    Ok theta t <-> forall p : LPos t, Ok theta (t.sub p)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- ok theta t <=> all (\p -> ok theta (sub t p)) (allPositions t)
+-- Forward: ok_sub; Backward: apply at Here (sub t Here = t).
+\end{lstlisting}
+
+%===================================================================
+\section{The deployed trust chain}
+%===================================================================
+
+\subsection{Inductive type: \lean{Trust.TrustLevel}}
+
+\begin{defn}[Deployed trust chain]
+The seven-level chain used in production registries (schema v3/v4):
+\[
+  \mathtt{unchecked} < \mathtt{speculative} < \mathtt{computed} <
+  \mathtt{proved} < \mathtt{peerReviewed} < \mathtt{published} <
+  \mathtt{leanVerified}.
+\]
+\lean{unchecked} is $\bot$, modelling both \texttt{in-progress} and
+\texttt{unclassified} (the validator's CAP\_RANK $-1$).  \texttt{dead-end}
+is the \lean{dead} flag, not a chain element.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+inductive TrustLevel where
+  | unchecked
+  | speculative
+  | computed
+  | proved
+  | peerReviewed
+  | published
+  | leanVerified
+deriving DecidableEq
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data TrustLevel
+  = Unchecked | Speculative | Computed | Proved
+  | PeerReviewed | Published | LeanVerified
+  deriving (Eq, Ord, Show)
+\end{lstlisting}
+
+
+\subsection{Definition: \lean{TrustLevel.rank} and \lean{instance : Chain TrustLevel}}
+
+\begin{defn}[Numeric rank and chain instance]
+The rank assigns $\mathtt{unchecked} \mapsto 0,\ldots,\mathtt{leanVerified}
+\mapsto 6$; the order $a \le b$ is $\mathrm{rank}(a) \le \mathrm{rank}(b)$.
+The \lean{Chain TrustLevel} instance makes the certificate lemma, attainment,
+and lax transport from \lean{Trust.lean} available for real registry labels.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def TrustLevel.rank : TrustLevel -> Nat
+  | .unchecked    => 0 | .speculative => 1
+  | .computed     => 2 | .proved      => 3
+  | .peerReviewed => 4 | .published   => 5
+  | .leanVerified => 6
+
+instance : Chain TrustLevel where
+  le a b := a.rank <= b.rank
+  bot := .unchecked
+  -- le_refl, le_trans, le_antisymm, le_total, bot_le, dec all proved
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Derived Ord matches the rank ordering.
+-- bot = Unchecked.
+\end{lstlisting}
+
+
+\subsection{Abbreviation: \lean{Trust.RegistryOk} and theorem \lean{registryOk\_sub}}
+
+\begin{defn}[Deployed boundary rule]
+The \textbf{registry boundary rule} at the deployed threshold \lean{proved}:
+\[
+  \mathrm{RegistryOk}(t) \;\iff\; \mathrm{Ok}(\mathtt{proved},\, t).
+\]
+\end{defn}
+
+\begin{thm}[Deployed duplicate-stability]
+If $\mathrm{RegistryOk}(t)$ and $p : \mathrm{LPos}(t)$, then
+$\mathrm{RegistryOk}(t.\mathrm{sub}(p))$.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+abbrev RegistryOk (t : LTree TrustLevel) : Prop :=
+  t.Ok TrustLevel.proved
+
+theorem registryOk_sub (t : LTree TrustLevel) (h : RegistryOk t)
+    (p : LTree.LPos t) : RegistryOk (t.sub p) :=
+  LTree.ok_sub TrustLevel.proved t h p
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+registryOk :: LTree TrustLevel -> Bool
+registryOk t = ok Proved t
+
+-- registryOk_sub: registryOk t => registryOk (sub t p)
+\end{lstlisting}
+
+%===================================================================
+\section{The loop experiment's trust chain}
+%===================================================================
+
+\subsection{Inductive type: \lean{LoopTrust.LoopTrustLevel}}
+
+\begin{defn}[Loop trust chain]
+The six-level chain for the Warnaar positivity loop experiment:
+\[
+  \mathtt{unchecked} < \mathtt{speculative} < \mathtt{computed} <
+  \mathtt{proved} < \mathtt{verified} < \mathtt{leanVerified}.
+\]
+Differs from \lean{TrustLevel} in that \lean{verified} replaces
+\lean{peerReviewed} and \lean{published}: a \lean{verified} node means an
+independent verifier (or Robin) hostile-reviewed the proof.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+inductive LoopTrustLevel where
+  | unchecked | speculative | computed
+  | proved    | verified    | leanVerified
+deriving DecidableEq
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data LoopTrustLevel
+  = LUnchecked | LSpeculative | LComputed
+  | LProved    | LVerified    | LLeanVerified
+  deriving (Eq, Ord, Show)
+\end{lstlisting}
+
+
+\subsection{Definition: \lean{LoopTrustLevel.rank} and \lean{instance : Chain LoopTrustLevel}}
+
+\begin{defn}[Numeric rank and chain instance for loop trust]
+Rank runs from 0 (\lean{unchecked}) to 5 (\lean{leanVerified}).  The
+\lean{Chain LoopTrustLevel} instance brings the full trust-system theory to
+bear on loop registries.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def LoopTrustLevel.rank : LoopTrustLevel -> Nat
+  | .unchecked    => 0 | .speculative  => 1
+  | .computed     => 2 | .proved       => 3
+  | .verified     => 4 | .leanVerified => 5
+
+instance : Chain LoopTrustLevel where
+  le a b := a.rank <= b.rank
+  bot := .unchecked
+  -- le_refl, le_trans, le_antisymm, le_total, bot_le, dec all proved
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Derived Ord matches rank ordering; bot = LUnchecked.
+\end{lstlisting}
+
+
+\subsection{Abbreviation: \lean{LoopRegistryOk} and theorem \lean{loopRegistryOk\_sub}}
+
+\begin{defn}[Loop boundary rule]
+\[
+  \mathrm{LoopRegistryOk}(t) \;\iff\; \mathrm{Ok}(\mathtt{proved},\, t)
+\]
+for $t : \lean{LTree}\,\lean{LoopTrustLevel}$.
+\end{defn}
+
+\begin{thm}[Loop duplicate-stability]
+$\mathrm{LoopRegistryOk}(t)$ implies $\mathrm{LoopRegistryOk}(t.\mathrm{sub}(p))$
+for every $p$.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+abbrev LoopRegistryOk (t : Containers.LTree LoopTrustLevel) : Prop :=
+  t.Ok LoopTrustLevel.proved
+
+theorem loopRegistryOk_sub (t : Containers.LTree LoopTrustLevel)
+    (h : LoopRegistryOk t) (p : Containers.LTree.LPos t) :
+    LoopRegistryOk (t.sub p) :=
+  Containers.LTree.ok_sub LoopTrustLevel.proved t h p
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+loopRegistryOk :: LTree LoopTrustLevel -> Bool
+loopRegistryOk t = ok LProved t
+
+-- loopRegistryOk_sub: loopRegistryOk t => loopRegistryOk (sub t p)
+\end{lstlisting}
+
+%===================================================================
+\section{Translation conventions}
+%===================================================================
+
+\begin{enumerate}
+\item \textbf{Dependent type families.}  Positions \lean{LPos t} depend on
+  the tree $t$ in Lean; in Haskell all trees have the same position type,
+  losing this dependency.
+
+\item \textbf{Transport.}  D5 (\lean{shift\_assoc}) uses transport along the
+  D4 equality.  The listings approximate \lean{|>} (the Lean transport operator) by \texttt{=>} (meaning
+  ``cast via this proof''); no Haskell counterpart exists.
+
+\item \textbf{Duplicate-stability via D4.}  The one-line proof of
+  \lean{ok\_sub} is $q \mapsto \lean{sub\_shift\,p\,q} \blacktriangleright
+  \lean{h\,(shift\,p\,q)}$: a D4 transport applied to the hypothesis.
+  In Haskell, D4 holds computationally and no coercion is needed.
+
+\item \textbf{Proof bodies omitted.}  Lean checks all proofs.
+
+\item \textbf{Namespace structure.}  \lean{TrustLabel}, \lean{LTree},
+  \lean{trustRegistry} are in \lean{Containers}; \lean{TrustLevel} and
+  \lean{RegistryOk} are in \lean{Containers.Trust};
+  \lean{LoopTrustLevel} and \lean{LoopRegistryOk} are in
+  \lean{Containers.LoopTrust}.
+\end{enumerate}
+
+\end{document}

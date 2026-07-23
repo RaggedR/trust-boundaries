@@ -1,0 +1,381 @@
+\documentclass[11pt,a4paper]{article}
+\input{preamble}
+
+\title{Human Verification: \texttt{Containers.Comonoid}\\[4pt]
+  \large Directed Containers as Comonoids in $(\mathbf{Cont}, \triangleleft, I)$}
+\author{Machine-generated from \texttt{lean/Comonoid.lean} for review by Neil Ghani}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document presents every definition and theorem \emph{statement} from the
+Lean~4 module \lean{Containers.Comonoid} in three parallel forms: the original
+Lean, a readable Haskell rendering, and precise mathematical English.  Proofs
+are omitted --- they are machine-checked by Lean.  The purpose is to let a
+human verifier confirm that the formalisation captures the intended mathematics.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%===================================================================
+\section{Overview}
+%===================================================================
+
+The category $\mathbf{Cont}$ of containers carries a monoidal structure
+$(\triangleleft, I)$, where the \emph{sequential composition} $C \triangleleft D$
+is the container whose extension is $\mathbf{Ext}\,C \circ \mathbf{Ext}\,D$.  A
+\textbf{comonoid} in $(\mathbf{Cont}, \triangleleft, I)$ is a container $C$
+equipped with:
+\begin{itemize}
+  \item a \emph{counit morphism} $\varepsilon : C \to I$, and
+  \item a \emph{comultiplication morphism} $\delta : C \to C \triangleleft C$,
+\end{itemize}
+satisfying the two counit laws and coassociativity, all stated as equalities of
+container morphisms --- \emph{without ever passing to $[\mathbf{Set},\mathbf{Set}]$}.
+
+The main theorem is that every directed container is canonically a
+$\triangleleft$-comonoid, via \lean{DirectedContainer.toComonoid}.  The comonoid
+laws correspond exactly to the directed-container axioms D1--D5:
+
+\begin{center}
+\begin{tabular}{lll}
+  \textbf{Law} & \textbf{Comonoid} & \textbf{DC axioms} \\
+  Left counit  & $\delta ; (\varepsilon \triangleleft C) = \lambda^{-1}$ &
+    D1 (shapes) + D2 (positions) \\
+  Right counit & $\delta ; (C \triangleleft \varepsilon) = \rho^{-1}$ &
+    D3 \\
+  Coassociativity & $\delta ; (\delta \triangleleft C) ; \alpha = \delta ; (C \triangleleft \delta)$ &
+    D4 (shapes) + D5 (positions)
+\end{tabular}
+\end{center}
+
+Everything is \textbf{Type}-level, Lean~4 core, no Mathlib.
+
+%===================================================================
+\section{Auxiliary lemmas}
+%===================================================================
+
+% --- 1. ContainerMorphism.ext_eq ----------------------------------
+\subsection{Lemma: \lean{ContainerMorphism.ext\_eq}}
+
+\begin{prop}[Pointwise extensionality for morphisms]
+Two container morphisms $(f, f_P), (g, g_P) : C \to D$ are equal whenever:
+\begin{itemize}
+  \item their shape maps agree pointwise: $\forall s,\; f(s) = g(s)$, and
+  \item their position maps agree after transporting along that pointwise
+    equality: $\forall s, p,\; f_P(s, p) = g_P(s, (h_s)_* p)$,
+    where $h_s : f(s) = g(s)$.
+\end{itemize}
+This is stated with a \emph{pointwise} shape equality deliberately, so that
+the transport $h_s$ appears literally in the position obligation and can be
+rewritten by \lean{Container.seq\_pos\_transport}.
+\end{prop}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem ContainerMorphism.ext_eq {C D : Container} {f g : C.Shape -> D.Shape}
+    {fp : (s : C.Shape) -> D.Pos (f s) -> C.Pos s}
+    {gp : (s : C.Shape) -> D.Pos (g s) -> C.Pos s}
+    (hs : forall s, f s = g s) (hp : forall s p, fp s p = gp s (hs s cast p)) :
+    (<|f, fp|> : ContainerMorphism C D) = <|g, gp|>
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Morphism extensionality: two morphisms with the same shape map (pointwise)
+-- and compatible position maps are equal.  In Haskell this is just function
+-- extensionality applied to both components.
+\end{lstlisting}
+
+
+% --- 2. Container.cast_symm_cast ----------------------------------
+\subsection{Lemma: \lean{Container.cast\_symm\_cast}}
+
+\begin{prop}[Round-trip transport cancellation]
+For any type family $P : \alpha \to \mathbf{Type}$, equality $h : a = b$,
+and element $x : P(a)$,
+\[
+  h^{-1}_*\bigl(h_* x\bigr) \;=\; x.
+\]
+Transporting along $h$ and back is the identity.
+\end{prop}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.cast_symm_cast {alpha : Type} {P : alpha -> Type}
+    {a b : alpha} (h : a = b) (x : P a) :
+    (h.symm cast (h cast x : P b) : P a) = x
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- The round-trip  coerce . coerce = id  holds by parametricity / type safety.
+-- In Lean this requires an explicit proof because transport is not definitionally
+-- involutive.
+\end{lstlisting}
+
+
+% --- 3. Container.seq_pos_transport --------------------------------
+\subsection{Lemma: \lean{Container.seq\_pos\_transport}}
+
+\begin{prop}[Transport on positions of sequential composition]
+Let $C, E$ be containers, $t : E.\mathrm{Shape}$, and
+$f, g : E.\mathrm{Pos}(t) \to C.\mathrm{Shape}$ inner-shape assignments with
+$h : \forall u,\; f(u) = g(u)$.  Then transporting a position
+$\langle u, q \rangle : (E \triangleleft C).\mathrm{Pos}\langle t, f \rangle$
+along the induced equality acts componentwise:
+\[
+  (h_*)_*\langle u, q \rangle
+  \;=\;
+  \langle u,\; (h_u)_* q \rangle
+  \;\in\;
+  (E \triangleleft C).\mathrm{Pos}\langle t, g \rangle.
+\]
+That is, the outer position $u$ is unchanged, and only the inner position $q$
+is transported along $h(u) : f(u) = g(u)$.
+\end{prop}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.seq_pos_transport {C E : Container} {t : E.Shape}
+    {f g : E.Pos t -> C.Shape} (h : forall u, f u = g u)
+    (u : E.Pos t) (q : C.Pos (f u)) :
+    (congrArg (Sigma.mk (beta := fun k => E.Pos k -> C.Shape) t) (funext h) cast
+        (<|u, q|> : (E seq C).Pos <|t, f|>) : (E seq C).Pos <|t, g|>)
+      = (<|u, (h u cast q : C.Pos (g u))|> : (E seq C).Pos <|t, g|>)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- The position type of (E seq C) over shape (t, f) is  (u : E.Pos t, C.Pos (f u)).
+-- Transporting along a pointwise equality h : forall u. f u = g u
+-- leaves u unchanged and coerces the inner position via h u.
+-- No Haskell encoding is natural; this is purely a transport-bookkeeping lemma.
+\end{lstlisting}
+
+\begin{fidelitynote}
+This lemma and \lean{ContainerMorphism.ext\_eq} are the two main tools for
+managing dependent transports in this file.  They have no non-trivial Haskell
+analogues, since Haskell lacks dependent types.  Their role is to isolate and
+discharge all ``bureaucratic'' casts so that the mathematical content of the
+comonoid laws is visible in the main proof of \lean{toComonoid}.
+\end{fidelitynote}
+
+
+%===================================================================
+\section{Comonoid structure}
+%===================================================================
+
+% --- 4. Container.Comonoid ----------------------------------------
+\subsection{Structure: \lean{Container.Comonoid}}
+
+\begin{defn}[Comonoid in $(\mathbf{Cont}, \triangleleft, I)$]
+A \textbf{comonoid} on a container $C$ consists of:
+\begin{itemize}
+  \item a counit morphism $\varepsilon : C \to I$,
+  \item a comultiplication morphism $\delta : C \to C \triangleleft C$,
+\end{itemize}
+satisfying:
+\begin{itemize}
+  \item \textbf{Left counit:}
+    $\delta \mathbin{;} (\varepsilon \triangleleft \mathrm{id}_C)
+    = \lambda^{-1}_C$,
+  \item \textbf{Right counit:}
+    $\delta \mathbin{;} (\mathrm{id}_C \triangleleft \varepsilon)
+    = \rho^{-1}_C$,
+  \item \textbf{Coassociativity:}
+    $\bigl(\delta \mathbin{;} (\delta \triangleleft \mathrm{id}_C)\bigr)
+      \mathbin{;} \alpha_{C,C,C}
+    = \delta \mathbin{;} (\mathrm{id}_C \triangleleft \delta)$.
+\end{itemize}
+Here $\lambda, \rho, \alpha$ are the left unitor, right unitor, and associator
+of the monoidal category $(\mathbf{Cont}, \triangleleft, I)$, and $;$ is morphism
+composition in $\mathbf{Cont}$.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+structure Container.Comonoid (C : Container) where
+  counit : ContainerMorphism C Container.I
+  comult : ContainerMorphism C (C seq C)
+  left_counit :
+    comult.comp (Container.seq2 counit (ContainerMorphism.id C))
+      = (Container.leftUnitor C).inv
+  right_counit :
+    comult.comp (Container.seq2 (ContainerMorphism.id C) counit)
+      = (Container.rightUnitor C).inv
+  coassoc :
+    (comult.comp (Container.seq2 comult (ContainerMorphism.id C))).comp
+        (Container.associator C C C).hom
+      = comult.comp (Container.seq2 (ContainerMorphism.id C) comult)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- A comonoid in (Cont, seq, I):
+-- class Comonoid c where
+--   counit :: c -> I          -- shape: always (); pos: root
+--   comult :: c -> c seq c     -- shape: (s, sub s); pos: shift s p q
+-- Laws (stated as equations between natural transformations):
+--   left_counit  : comult ; (counit seq id) = leftUnitor_inv
+--   right_counit : comult ; (id seq counit) = rightUnitor_inv
+--   coassoc      : (comult ; (comult seq id)) ; assoc = comult ; (id seq comult)
+\end{lstlisting}
+
+\begin{fidelitynote}
+The laws are stated \emph{internally} in $\mathbf{Cont}$ --- as equalities of
+container morphisms, not as equalities of natural transformations.  This is the
+key distinction from the comonad statement in \lean{Containers.Directed}: there
+the laws mention $\mathbf{Ext}$, here they do not.  Unfolding the definitions
+shows the two formulations are equivalent, and the proof of \lean{toComonoid}
+makes this explicit.
+\end{fidelitynote}
+
+
+%===================================================================
+\section{The directed container is a comonoid}
+%===================================================================
+
+% --- 5. coCounit --------------------------------------------------
+\subsection{Definition: \lean{DirectedContainer.coCounit}}
+
+\begin{defn}[Counit morphism]
+The \textbf{counit container morphism} $\varepsilon : C \to I$ of a directed
+container $D$ sends every shape to $()$ and pulls back positions to the root:
+\[
+  \varepsilon.\mathrm{onShapes}(s) \;=\; (), \qquad
+  \varepsilon.\mathrm{onPos}(s, \_) \;=\; o(s).
+\]
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def coCounit (D : DirectedContainer) : ContainerMorphism D.toContainer Container.I where
+  onShapes := fun _ => ()
+  onPos := fun s _ => D.root s
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+coCounit :: DirectedContainer s p -> Morph s p () ()
+coCounit d = Morph { onShapes = \_ -> (), onPos = \s _ -> root d s }
+\end{lstlisting}
+
+
+% --- 6. coComult --------------------------------------------------
+\subsection{Definition: \lean{DirectedContainer.coComult}}
+
+\begin{defn}[Comultiplication morphism]
+The \textbf{comultiplication container morphism} $\delta : C \to C \triangleleft C$
+of a directed container $D$ is:
+\[
+  \delta.\mathrm{onShapes}(s) \;=\; \langle s, s \mathop{\downarrow} - \rangle, \qquad
+  \delta.\mathrm{onPos}(s, \langle p, q \rangle) \;=\; p \oplus q.
+\]
+The shape map sends $s$ to the pair $(s, s \downarrow -)$; the position map
+combines a pair $\langle p, q \rangle$ of positions via shift.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def coComult (D : DirectedContainer) :
+    ContainerMorphism D.toContainer (D.toContainer seq D.toContainer) where
+  onShapes := fun s => <|s, D.sub s|>
+  onPos := fun s pq => D.shift s pq.1 pq.2
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+coComult :: DirectedContainer s p -> Morph s p (s, s -> p, p -> s) (p, p) p
+-- Shape map:  s |-> (s, sub d s)
+-- Pos map:    (s, (p, q)) |-> shift d s p q
+\end{lstlisting}
+
+
+% --- 7. toComonoid ------------------------------------------------
+\subsection{Theorem: \lean{DirectedContainer.toComonoid}}
+
+\begin{thm}[Every directed container is a $\triangleleft$-comonoid]
+Let $D$ be a directed container.  Then the pair
+$(\mathtt{coCounit}(D), \mathtt{coComult}(D))$ makes $D.\mathrm{toContainer}$
+into a comonoid in $(\mathbf{Cont}, \triangleleft, I)$.  Specifically:
+\begin{itemize}
+  \item \textbf{Left counit}: follows from D1 (shapes) and D2 (positions), using
+    \lean{Container.seq\_pos\_transport} to handle the dependent cast.
+  \item \textbf{Right counit}: follows immediately from D3.
+  \item \textbf{Coassociativity}: follows from D4 (shapes) and D5 (positions),
+    using two applications of \lean{Container.seq\_pos\_transport} together with
+    \lean{Container.cast\_symm\_cast} to cancel the D4 round-trip.
+\end{itemize}
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def toComonoid (D : DirectedContainer) : Container.Comonoid D.toContainer where
+  counit := D.coCounit
+  comult := D.coComult
+  left_counit := ...   -- proof omitted
+  right_counit := ...  -- proof omitted
+  coassoc      := ...  -- proof omitted
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Every directed container (s, p, root, sub, shift) satisfying D1--D5
+-- gives a comonoid in (Cont, seq, I):
+--   counit = Morph (\_ -> ()) (\s _ -> root s)
+--   comult = Morph (\s -> (s, sub s)) (\s (p,q) -> shift s p q)
+-- and the comonoid laws follow from D1--D5.
+\end{lstlisting}
+
+\begin{fidelitynote}
+The Lean definition is a \lean{def}, not a \lean{theorem}, because it constructs
+a term of type \lean{Container.Comonoid D.toContainer}.  The proof fields
+(\lean{left\_counit}, \lean{right\_counit}, \lean{coassoc}) are filled by tactic
+blocks; these are omitted here.
+
+The correspondence between comonoid laws and DC axioms is exact:
+\[
+\text{right counit} \leftrightarrow \text{D3}, \quad
+\text{left counit} \leftrightarrow \text{D1}+\text{D2}, \quad
+\text{coassociativity} \leftrightarrow \text{D4}+\text{D5}.
+\]
+The dependent casts arising from D1 and D4 (which are only propositional shape
+equalities) are managed by the two auxiliary lemmas proved in
+Section~\ref{sec:aux} above.
+\end{fidelitynote}
+
+
+%===================================================================
+\section{Translation conventions}
+%===================================================================
+
+\begin{enumerate}
+\item \textbf{Sequential composition $\triangleleft$.}  The operator
+  \texttt{<|} (written \texttt{seq} in listings) in Lean is the sequential composition of containers.  Its
+  extension satisfies
+  $\mathbf{Ext}(C \triangleleft D) \cong \mathbf{Ext}\,C \circ \mathbf{Ext}\,D$.
+  In Haskell it would be a type-level composition of functors.
+
+\item \textbf{Unit container $I$.}  The unit $I$ has a single shape $()$
+  and no positions.  Its extension is the identity functor.
+
+\item \textbf{Monoidal structure.}  The left unitor $\lambda$, right unitor
+  $\rho$, and associator $\alpha$ are container isomorphisms (pairs of inverse
+  container morphisms) proved in \lean{Containers.Monoidal}.
+
+\item \textbf{Laws stated internally.}  The comonoid laws are equations
+  between \emph{container morphisms}, not between natural transformations.
+  This is significant: the theorem ``directed containers are exactly comonoids
+  in $(\mathbf{Cont}, \triangleleft, I)$'' holds at the internal level,
+  sidestepping the functor category $[\mathbf{Set}, \mathbf{Set}]$ entirely.
+
+\item \textbf{Proof bodies omitted.}  Only definitions and theorem
+  \emph{statements} are translated.  Lean checks the proofs; the human
+  verifier checks that the \emph{statements} match the intended mathematics.
+\end{enumerate}
+
+\end{document}

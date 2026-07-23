@@ -1,0 +1,363 @@
+\documentclass[11pt,a4paper]{article}
+\input{preamble}
+
+\title{Human Verification: \texttt{Containers.ProofSearchN}\\[4pt]
+  \large N-ary Proof Search Trees as a Directed Container}
+\author{Machine-generated from \texttt{lean/ProofSearchN.lean} for review by Neil Ghani}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document presents every definition and theorem \emph{statement} from the
+Lean~4 module \lean{Containers.ProofSearchN} in three parallel forms: the
+original Lean, a readable Haskell rendering, and precise mathematical English.
+Proofs are omitted --- they are machine-checked by Lean.  The purpose is to
+let a human verifier confirm that the formalisation captures the intended
+mathematics.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%===================================================================
+\section{Overview}
+%===================================================================
+
+This file generalises \lean{Containers.ProofSearch} from \emph{binary} trees
+to \textbf{finitely-branching rose trees} (arbitrary arity at each node).  The
+directed-container structure is identical in spirit: shapes are rose trees,
+positions are paths from root to a node, and the comonad operations come from
+path concatenation.
+
+\paragraph{Encoding choice.}
+Each node carries a branching factor $n : \mathbb{N}$ and a function assigning
+a child tree to each index $i : \mathrm{Fin}(n)$.  The \lean{Fin\,n} encoding
+avoids nested-inductive complications (which \lean{List} would introduce) and
+lets structural recursion work directly on \lean{RTree} and \lean{RPos} without
+well-founded recursion or fuel arguments.
+
+A \textbf{leaf} (dead end or success) is \lean{node\,0\,f} where
+$f : \mathrm{Fin}(0) \to \mathrm{RTree}$ is vacuously defined.  The only
+position in a leaf is \lean{here}.
+
+\paragraph{Relationship to \lean{STree}.}
+\lean{STree} embeds into \lean{RTree}: a leaf maps to \lean{node\,0\,!} and
+\lean{node\,$\ell$\,$r$} maps to \lean{node\,2\,![$\ell'$, $r'$]}.  This is
+not a strict sub-case since \lean{STree} forces exactly 0 or 2 children.
+
+%===================================================================
+\section{Shapes: finitely-branching rose trees}
+%===================================================================
+
+% --- 1. RTree -----------------------------------------------------
+\subsection{Inductive type: \lean{RTree}}
+
+\begin{defn}[Rose tree]
+A \textbf{finitely-branching rose tree} is a node with a branching factor
+$n : \mathbb{N}$ and a family of $n$ child trees:
+\[
+  \mathrm{RTree} \;::=\; \lean{node}(n : \mathbb{N},\; \mathrm{Fin}(n) \to \mathrm{RTree}).
+\]
+A leaf (dead end) is $\lean{node}(0, f)$ where $f$ is vacuous.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+inductive RTree where
+  | node : (n : Nat) -> (Fin n -> RTree) -> RTree
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data RTree = Node Int [RTree]   -- n children stored as a list
+  deriving (Show, Eq)
+
+-- A leaf is Node 0 [].
+-- In Lean, children are indexed by Fin n (a bounded integer type).
+-- Haskell approximates this with a plain list.
+\end{lstlisting}
+
+\begin{fidelitynote}
+In Lean, the children are given by a function $\mathrm{Fin}(n) \to \mathrm{RTree}$
+where $n$ is stored in the tree.  This allows structural recursion on
+\lean{RTree} and \lean{RPos} directly.  In Haskell, a list of children is
+the natural representation but cannot enforce the branching-factor invariant
+at the type level.
+\end{fidelitynote}
+
+
+%===================================================================
+\section{Positions: paths in a rose tree}
+%===================================================================
+
+% --- 2. RPos ------------------------------------------------------
+\subsection{Inductive type: \lean{RPos}}
+
+\begin{defn}[Position in a rose tree]
+A \textbf{position} in an \lean{RTree} is a path from the root to a node:
+\begin{itemize}
+  \item \lean{here}: the root (valid for any tree);
+  \item \lean{child}$(i, p)$: descend into child $i$ (where $i : \mathrm{Fin}(n)$)
+        and continue along path $p$ in that child.
+\end{itemize}
+For a leaf (\lean{node\,0\,f}), there are no valid $i : \mathrm{Fin}(0)$,
+so the only position is \lean{here}.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+inductive RPos : RTree -> Type where
+  | here  : RPos t
+  | child : (i : Fin n) -> RPos (children i) -> RPos (.node n children)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data RPos t where
+  Here  :: RPos t
+  Child :: Int -> RPos child -> RPos (Node n children)
+-- Approximation (GADTs omitted for readability):
+data RPos = Here | GoChild Int RPos
+\end{lstlisting}
+
+\begin{fidelitynote}
+In Lean, \lean{RPos} is indexed by the tree.  The \lean{child} constructor
+is only well-typed when the tree is a \lean{node\,n\,children}, and $i$
+must be a valid index in \lean{Fin\,n}.  Haskell's approximation loses
+both the tree-index and the bound on $i$.
+\end{fidelitynote}
+
+
+%===================================================================
+\section{The directed-container operations}
+%===================================================================
+
+% --- 3. RTree.sub -------------------------------------------------
+\subsection{Definition: \lean{RTree.sub}}
+
+\begin{defn}[Sub-tree at a position]
+The sub-tree at position $p$ in tree $t$:
+\begin{align*}
+  t \downarrow \lean{here} &= t, \\
+  (\lean{node}\,n\,\mathrm{children}) \downarrow \lean{child}(i, p)
+    &= \mathrm{children}(i) \downarrow p.
+\end{align*}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def RTree.sub : (t : RTree) -> RPos t -> RTree
+  | t, .here => t
+  | .node _ children, .child i p => (children i).sub p
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+sub :: RTree -> RPos -> RTree
+sub t             Here         = t
+sub (Node _ cs)  (GoChild i p) = sub (cs !! i) p
+sub (Node 0 _)   (GoChild _ _) = error "leaf has no children"
+\end{lstlisting}
+
+
+% --- 4. RTree.shift -----------------------------------------------
+\subsection{Definition: \lean{RTree.shift}}
+
+\begin{defn}[Shift (path concatenation)]
+The shift $p \oplus q$ embeds position $q$ in the sub-tree at $p$ back
+into the whole tree:
+\begin{align*}
+  t.\lean{shift}(\lean{here}, q) &= q, \\
+  (\lean{node}\,n\,\mathrm{children}).\lean{shift}(\lean{child}(i, p), q)
+    &= \lean{child}(i,\; \mathrm{children}(i).\lean{shift}(p, q)).
+\end{align*}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def RTree.shift : (t : RTree) -> (p : RPos t) -> RPos (t.sub p) -> RPos t
+  | _, .here, q => q
+  | .node _ children, .child i p, q => .child i ((children i).shift p q)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+shift :: RTree -> RPos -> RPos -> RPos
+shift _            Here          q = q
+shift (Node _ cs) (GoChild i p) q = GoChild i (shift (cs !! i) p q)
+\end{lstlisting}
+
+
+%===================================================================
+\section{Directed-container laws}
+%===================================================================
+
+% --- 5. RTree.shift_root (D3) ------------------------------------
+\subsection{Theorem: \lean{RTree.shift\_root} (D3)}
+
+\begin{thm}[D3: right identity]
+Shifting by the root of the sub-tree recovers the original position:
+\[
+  t.\lean{shift}(p, \lean{here}) \;=\; p
+  \quad\text{for all } p : \mathrm{RPos}(t).
+\]
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def RTree.shift_root : (t : RTree) -> (p : RPos t) ->
+    t.shift p .here = p
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- D3: prop_shift_root t p = shift t p Here == p
+\end{lstlisting}
+
+
+% --- 6. RTree.sub_shift (D4) -------------------------------------
+\subsection{Theorem: \lean{RTree.sub\_shift} (D4)}
+
+\begin{thm}[D4: sub-trees nest along the shift]
+\[
+  t \downarrow (p \oplus q) \;=\; (t \downarrow p) \downarrow q
+  \quad\text{for all } p : \mathrm{RPos}(t),\; q : \mathrm{RPos}(t \downarrow p).
+\]
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def RTree.sub_shift : (t : RTree) -> (p : RPos t) -> (q : RPos (t.sub p)) ->
+    t.sub (t.shift p q) = (t.sub p).sub q
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- D4: prop_sub_shift t p q = sub t (shift t p q) == sub (sub t p) q
+\end{lstlisting}
+
+
+% --- 7. RTree.shift_assoc (D5) -----------------------------------
+\subsection{Theorem: \lean{RTree.shift\_assoc} (D5)}
+
+\begin{thm}[D5: shift is associative]
+Path concatenation is associative (with transport along D4):
+\[
+  t.\lean{shift}(p \oplus q,\; D4^{-1} \triangleright r)
+  \;=\;
+  t.\lean{shift}(p,\; (t \downarrow p).\lean{shift}(q, r))
+\]
+for all $p : \mathrm{RPos}(t)$, $q : \mathrm{RPos}(t \downarrow p)$,
+$r : \mathrm{RPos}((t \downarrow p) \downarrow q)$.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def RTree.shift_assoc : (t : RTree) -> (p : RPos t) -> (q : RPos (t.sub p)) ->
+    (r : RPos ((t.sub p).sub q)) ->
+    t.shift (t.shift p q) ((t.sub_shift p q).symm [> r) =
+      t.shift p ((t.sub p).shift q r)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- D5 (transport suppressed):
+-- prop_shift_assoc t p q r =
+--   shift t (shift t p q) r == shift t p (shift (sub t p) q r)
+\end{lstlisting}
+
+\begin{fidelitynote}
+As in \lean{ProofSearch}, the Lean statement requires $r$ to be transported
+along $\mathrm{sub\_shift}$ (D4) before the left-hand shift can consume it.
+In the rose-tree case, the \lean{child} constructor recurses into the
+appropriate child and the recursion is structurally simpler than for
+\lean{STree} (one constructor instead of \lean{left}/\lean{right}).
+\end{fidelitynote}
+
+
+%===================================================================
+\section{The directed container}
+%===================================================================
+
+% --- 8. proofSearchN ----------------------------------------------
+\subsection{Definition: \lean{proofSearchN}}
+
+\begin{defn}[The \lean{proofSearchN} directed container]
+Define the directed container of $N$-ary proof-search trees as:
+\[
+  \mathrm{proofSearchN} \;=\; (\mathrm{RTree},\; \mathrm{RPos},\;
+  \lean{here},\; \lean{RTree.sub},\; \lean{RTree.shift})
+\]
+with:
+\begin{itemize}
+  \item D1: $t \downarrow \lean{here} = t$ (by $\mathrm{rfl}$);
+  \item D2: $t.\lean{shift}(\lean{here}, q) = q$ (by $\mathrm{rfl}$);
+  \item D3: $\lean{RTree.shift\_root}$;
+  \item D4: $\lean{RTree.sub\_shift}$;
+  \item D5: $\lean{RTree.shift\_assoc}$.
+\end{itemize}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def proofSearchN : DirectedContainer where
+  Shape := RTree
+  Pos := RPos
+  root := fun _ => .here
+  sub := RTree.sub
+  shift := RTree.shift
+  d1 := fun _ => rfl
+  d4 := RTree.sub_shift
+  d2 := fun _ _ => rfl
+  d3 := RTree.shift_root
+  d5 := RTree.shift_assoc
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+proofSearchN :: DirectedContainer RTree RPos
+proofSearchN = DirectedContainer
+  { shape = RTree
+  , pos   = RPos
+  , root  = const Here
+  , sub   = sub
+  , shift = shift
+  -- D1: sub t Here = t              (by definition)
+  -- D2: shift t Here q = q          (by definition)
+  -- D3: shift t p Here = p          (RTree.shift_root)
+  -- D4: sub t (shift t p q) = sub (sub t p) q   (RTree.sub_shift)
+  -- D5: shift t (shift t p q) r = shift t p (shift (sub t p) q r)
+  }
+\end{lstlisting}
+
+
+%===================================================================
+\section{Translation conventions}
+%===================================================================
+
+\begin{enumerate}
+\item \textbf{Fin-indexed children.}  Lean uses $\mathrm{Fin}(n) \to \mathrm{RTree}$
+  for children, enabling structural recursion without well-founded recursion
+  or \lean{List}.  Haskell uses a plain list; the branching-factor bound is
+  not enforced.
+
+\item \textbf{Structural recursion.}  Both \lean{RTree.sub} and \lean{RTree.shift}
+  recurse on paths by structural induction, with \lean{here} as the base case
+  and \lean{child i p} as the recursive case.  This is simpler than the
+  binary case (one recursive constructor vs.\ two).
+
+\item \textbf{Relationship to binary trees.}  \lean{proofSearch} is a
+  special case of \lean{proofSearchN} with branching factors restricted to
+  $\{0, 2\}$.  The Lean formalisation keeps them separate to avoid the
+  round-trip gap that would arise from an embedding.
+
+\item \textbf{D1 and D2 definitional.}  As in the binary case, the first
+  case (\lean{here}) in each recursive definition is definitionally equal to
+  the expected value, so D1 and D2 are proved by $\mathrm{rfl}$.
+
+\item \textbf{Proof bodies omitted.}  Only statements are translated.
+\end{enumerate}
+
+\end{document}

@@ -1,0 +1,98 @@
+% preamble.tex — shared setup for human-verification documents
+% Compile each document with:  tectonic <File>.tex
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath,amsthm}
+\usepackage{mathtools}
+\usepackage[dvipsnames]{xcolor}
+\usepackage{listings}
+\usepackage{hyperref}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{parskip}
+
+% ── Colours ──────────────────────────────────────────────────────────
+\definecolor{leanBg}{HTML}{F7F7F0}
+\definecolor{haskellBg}{HTML}{F0F4F7}
+\definecolor{keyword}{HTML}{7B3294}
+\definecolor{comment}{HTML}{5A8C32}
+\definecolor{noteFg}{HTML}{B35900}
+
+% ── Lean 4 listings language ─────────────────────────────────────────
+% NOTE: Lean listing blocks use ASCII approximations of unicode symbols
+% (e.g. -> for arrow, o. for compose).  The literate key substitutes
+% these with proper math-mode renderings in the PDF.
+\lstdefinelanguage{Lean4}{
+  morekeywords={def,theorem,structure,where,namespace,end,import,fun,
+                let,have,show,by,exact,intro,cases,rfl,subst,obtain,
+                funext,simp,rw,apply,variable,Type,Prop,instance,
+                section,open,class,extends,deriving,sorry,noncomputable},
+  sensitive=true,
+  morecomment=[l]{--},
+  morecomment=[n]{/-}{-/},
+  morestring=[b]",
+}
+
+% ── Lean listing style ───────────────────────────────────────────────
+\lstdefinestyle{lean}{
+  language=Lean4,
+  backgroundcolor=\color{leanBg},
+  basicstyle=\small\ttfamily,
+  keywordstyle=\color{keyword}\bfseries,
+  commentstyle=\color{comment}\itshape,
+  breaklines=true,
+  frame=single,
+  framerule=0.4pt,
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+  aboveskip=6pt,
+  belowskip=4pt,
+  literate=
+    {->}{{$\to$}}2
+    {=>}{{$\Rightarrow$}}2
+    {<|}{{$\langle$}}1
+    {|>}{{$\rangle$}}1
+    {==>}{{$\Longrightarrow$}}3
+    { o. }{{$\;\circ\;$}}3
+    {forall}{{$\forall$}}1
+    {:=}{{$\,:=\,$}}2
+    {!=}{{$\neq$}}2
+    {<=}{{$\leq$}}2
+    {>=}{{$\geq$}}2,
+}
+
+% ── Haskell listing style ───────────────────────────────────────────
+\lstdefinestyle{haskell}{
+  language=Haskell,
+  backgroundcolor=\color{haskellBg},
+  basicstyle=\small\ttfamily,
+  keywordstyle=\color{keyword}\bfseries,
+  commentstyle=\color{comment}\itshape,
+  breaklines=true,
+  frame=single,
+  framerule=0.4pt,
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+  aboveskip=6pt,
+  belowskip=4pt,
+  literate=
+    {->}{{$\to$}}2
+    {=>}{{$\Rightarrow$}}2,
+}
+
+% ── Theorem environments ────────────────────────────────────────────
+\theoremstyle{definition}
+\newtheorem{defn}{Definition}[section]
+\newtheorem{thm}[defn]{Theorem}
+\newtheorem{prop}[defn]{Proposition}
+
+\theoremstyle{remark}
+\newtheorem*{fidelitynote}{Fidelity note}
+
+% ── Convenience macros ───────────────────────────────────────────────
+\newcommand{\lean}[1]{\texttt{#1}}      % inline Lean identifier
+\newcommand{\hask}[1]{\texttt{#1}}      % inline Haskell identifier
+\newcommand{\Ext}{\mathrm{Ext}}
+\newcommand{\Pos}{\mathrm{Pos}}
+\newcommand{\Shape}{\mathrm{Shape}}

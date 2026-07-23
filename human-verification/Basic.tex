@@ -1,0 +1,528 @@
+\documentclass[11pt,a4paper]{article}
+\input{preamble}
+
+\title{Human Verification: \texttt{Containers.Basic}\\[4pt]
+  \large Containers, Extensions, and Morphisms}
+\author{Machine-generated from \texttt{lean/Basic.lean} for review by Neil Ghani}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document presents every definition and theorem \emph{statement} from the
+Lean~4 module \lean{Containers.Basic} in three parallel forms: the original
+Lean, a readable Haskell rendering, and precise mathematical English.  Proofs
+are omitted --- they are machine-checked by Lean.  The purpose is to let a
+human verifier confirm that the formalisation captures the intended
+mathematics.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%===================================================================
+\section{Overview}
+%===================================================================
+
+This file develops the basic theory of \emph{containers} (Abbott, Altenkirch,
+Ghani) using only Lean~4 core --- no Mathlib dependency.
+
+A container is a type of \emph{shapes} together with, for each shape, a type
+of \emph{positions}.  Its \emph{extension} is the polynomial (dependent-pair)
+functor it induces on $\mathbf{Type}$.  Container morphisms induce natural
+transformations between extensions, and --- this is the representation theorem
+--- every natural transformation arises this way, uniquely.
+
+Everything is $\mathbf{Type}$-level (a single universe) to keep the
+development self-contained.
+
+%===================================================================
+\section{Container and its extension}
+%===================================================================
+
+% --- 1. Container -------------------------------------------------
+\subsection{Structure: \lean{Container}}
+
+\begin{defn}[Container]
+A \textbf{container} $C = (S, P)$ consists of a type $S$ of \emph{shapes}
+and, for each shape $s : S$, a type $P(s)$ of \emph{positions}.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+structure Container where
+  Shape : Type
+  Pos : Shape -> Type
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- In Lean, Pos is a dependent type family  Pos : Shape -> Type.
+-- In Haskell we approximate this by fixing both type parameters.
+-- A "container" is then the *pair* of types (s, p), where s is the
+-- type of shapes and p is the type of positions.
+\end{lstlisting}
+
+\begin{fidelitynote}
+In the Lean formalisation, the position type $P(s)$ varies with the shape $s$;
+this is a genuine dependent type.  In our Haskell rendering, positions are a
+single type parameter \hask{p}, which is the standard approximation for
+non-dependently-typed languages.  All subsequent definitions inherit this
+simplification.
+\end{fidelitynote}
+
+
+% --- 2. Ext -------------------------------------------------------
+\subsection{Definition: \lean{Ext}}
+
+\begin{defn}[Extension]
+The \textbf{extension} of a container $C = (S, P)$ at a type $X$ is the
+dependent sum
+\[
+  \Ext\,C\,X \;=\; \Sigma_{s : S}\,(P(s) \to X).
+\]
+An element is a shape $s$ together with a labelling of its positions by
+elements of $X$.  This is the polynomial functor associated to~$C$.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Ext (C : Container) (X : Type) : Type :=
+  (s : C.Shape) * (C.Pos s -> X)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data Ext s p x = Ext s (p -> x)
+\end{lstlisting}
+
+
+% --- 3. Ext.map ---------------------------------------------------
+\subsection{Definition: \lean{Ext.map}}
+
+\begin{defn}[Functorial action]
+Given $f : X \to Y$, the \textbf{map} $\Ext\,C\,f : \Ext\,C\,X \to
+\Ext\,C\,Y$ relabels positions by post-composing the labelling function
+with~$f$:
+\[
+  \Ext\,C\,f\;\langle s, v \rangle \;=\; \langle s,\; f \circ v \rangle.
+\]
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Ext.map {C : Container} {X Y : Type} (f : X -> Y) :
+    Ext C X -> Ext C Y :=
+  fun p => <|p.1, fun i => f (p.2 i)|>
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+instance Functor (Ext s p) where
+  fmap f (Ext s v) = Ext s (f . v)
+\end{lstlisting}
+
+
+% --- 4. Ext.map_id ------------------------------------------------
+\subsection{Theorem: \lean{Ext.map\_id}}
+
+\begin{thm}[Identity law]
+For every container $C$ and type $X$,
+\[
+  \Ext\,C\,\mathrm{id}_X \;=\; \mathrm{id}_{\Ext\,C\,X}.
+\]
+That is, the functorial action of $\Ext\,C$ preserves the identity function.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Ext.map_id {C : Container} {X : Type} :
+    Ext.map (C := C) (id : X -> X) = id
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Functor law (identity):
+-- fmap id = id
+--
+-- For all (Ext s v):  fmap id (Ext s v) = Ext s (id . v) = Ext s v
+\end{lstlisting}
+
+
+% --- 5. Ext.map_comp ----------------------------------------------
+\subsection{Theorem: \lean{Ext.map\_comp}}
+
+\begin{thm}[Composition law]
+For every container $C$ and functions $f : X \to Y$, $g : Y \to Z$,
+\[
+  \Ext\,C\,(g \circ f) \;=\; \Ext\,C\,g \;\circ\; \Ext\,C\,f.
+\]
+That is, the functorial action of $\Ext\,C$ preserves composition.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Ext.map_comp {C : Container} {X Y Z : Type}
+    (f : X -> Y) (g : Y -> Z) :
+    Ext.map (C := C) (g o. f) = Ext.map g o. Ext.map f
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Functor law (composition):
+-- fmap (g . f) = fmap g . fmap f
+--
+-- For all (Ext s v):
+--   fmap (g . f) (Ext s v) = Ext s (g . f . v)
+--                           = fmap g (Ext s (f . v))
+--                           = (fmap g . fmap f) (Ext s v)
+\end{lstlisting}
+
+
+%===================================================================
+\section{Container morphisms}
+%===================================================================
+
+% --- 6. ContainerMorphism -----------------------------------------
+\subsection{Structure: \lean{ContainerMorphism}}
+
+\begin{defn}[Container morphism]
+A \textbf{morphism of containers} $\varphi : C \Rightarrow D$ between
+$C = (S_C, P_C)$ and $D = (S_D, P_D)$ consists of:
+\begin{itemize}
+  \item a map on shapes $u : S_C \to S_D$, and
+  \item a \emph{contravariant} map on positions: for each $s : S_C$,
+        a function $g_s : P_D(u(s)) \to P_C(s)$.
+\end{itemize}
+The position map goes ``backwards'': it pulls $D$-positions over the image
+shape back to $C$-positions.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+structure ContainerMorphism (C D : Container) where
+  onShapes : C.Shape -> D.Shape
+  onPos : (s : C.Shape) -> D.Pos (onShapes s) -> C.Pos s
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data Morph s p t q = Morph
+  { onShapes :: s -> t
+  , onPos    :: s -> q -> p
+  }
+\end{lstlisting}
+
+\begin{fidelitynote}
+In Lean, \lean{onPos} has a dependent type: given $s : S_C$, it maps positions
+of the \emph{image} shape $u(s)$ back to positions of~$s$.  In Haskell, the
+type \hask{s -> q -> p} does not capture this dependency; it simply maps an
+\hask{s} and a \hask{q} to a \hask{p}.  The intent is the same, but the
+type-level guarantee that \hask{q} refers to positions of the image of
+\hask{s} is lost.
+\end{fidelitynote}
+
+
+% --- 7. ContainerMorphism.toNat -----------------------------------
+\subsection{Definition: \lean{ContainerMorphism.toNat}}
+
+\begin{defn}[Induced natural transformation]
+A container morphism $\varphi = (u, g)$ induces, at every type $X$, a map
+\[
+  \varphi^*_X : \Ext\,C\,X \;\to\; \Ext\,D\,X, \qquad
+  \varphi^*_X\langle s, v \rangle \;=\; \langle u(s),\; v \circ g_s \rangle.
+\]
+The family $(\varphi^*_X)_X$ is a natural transformation
+$\Ext\,C \Longrightarrow \Ext\,D$.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def ContainerMorphism.toNat {C D : Container}
+    (phi : ContainerMorphism C D)
+    (X : Type) : Ext C X -> Ext D X :=
+  fun p => <|phi.onShapes p.1, fun i => p.2 (phi.onPos p.1 i)|>
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+toNat :: Morph s p t q -> Ext s p x -> Ext t q x
+toNat (Morph u g) (Ext s v) = Ext (u s) (v . g s)
+\end{lstlisting}
+
+
+% --- 8. toNat_natural ---------------------------------------------
+\subsection{Theorem: \lean{ContainerMorphism.toNat\_natural}}
+
+\begin{thm}[Naturality]
+For every container morphism $\varphi : C \Rightarrow D$ and every function
+$f : X \to Y$, the following square commutes:
+\[
+  \Ext\,D\,f \;\circ\; \varphi^*_X
+  \;=\;
+  \varphi^*_Y \;\circ\; \Ext\,C\,f.
+\]
+Equivalently, the family $(\varphi^*_X)_X$ is a natural transformation.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem ContainerMorphism.toNat_natural {C D : Container}
+    (phi : ContainerMorphism C D) {X Y : Type} (f : X -> Y) :
+    Ext.map f o. phi.toNat X = phi.toNat Y o. Ext.map f
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Naturality:
+-- fmap f . toNat phi = toNat phi . fmap f
+--
+-- For all (Ext s v):
+--   (fmap f . toNat (Morph u g)) (Ext s v)
+--     = fmap f (Ext (u s) (v . g s))
+--     = Ext (u s) (f . v . g s)
+--     = toNat (Morph u g) (Ext s (f . v))
+--     = (toNat (Morph u g) . fmap f) (Ext s v)
+\end{lstlisting}
+
+
+%===================================================================
+\section{The representation theorem}
+%===================================================================
+
+Container morphisms $C \Rightarrow D$ are in bijection with natural
+transformations $\Ext\,C \Longrightarrow \Ext\,D$.  The key idea: a natural
+transformation is determined by where it sends the \emph{generic element}
+$\langle s, \mathrm{id} \rangle \in \Ext\,C\,(P_C(s))$.  Evaluating at
+$X := P_C(s)$ recovers the shape map; naturality (a Yoneda-style argument)
+recovers the position map.
+
+% --- 9. ExtNatTrans -----------------------------------------------
+\subsection{Structure: \lean{ExtNatTrans}}
+
+\begin{defn}[Natural transformation between extensions]
+A \textbf{natural transformation} $\eta : \Ext\,C \Longrightarrow \Ext\,D$
+is a family of maps $\eta_X : \Ext\,C\,X \to \Ext\,D\,X$, indexed by
+types~$X$, satisfying the naturality condition: for every $f : X \to Y$,
+\[
+  \Ext\,D\,f \;\circ\; \eta_X
+  \;=\;
+  \eta_Y \;\circ\; \Ext\,C\,f.
+\]
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+structure ExtNatTrans (C D : Container) where
+  component : (X : Type) -> Ext C X -> Ext D X
+  natural : forall {X Y : Type} (f : X -> Y),
+    Ext.map f o. component X = component Y o. Ext.map f
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- A natural transformation between container extensions.
+-- In Haskell, the naturality condition is a free theorem
+-- (parametricity), so we only need the polymorphic function.
+type ExtNatTrans s p t q = forall x. Ext s p x -> Ext t q x
+\end{lstlisting}
+
+\begin{fidelitynote}
+In Haskell, a polymorphic function
+\hask{forall x. Ext s p x -> Ext t q x}
+is automatically natural by parametricity (the ``free theorem'').  In Lean,
+naturality must be stated and proved explicitly, since Lean's type theory
+does not give you parametricity for free.  The Lean structure bundles the
+proof; the Haskell type relies on it implicitly.
+\end{fidelitynote}
+
+
+% --- 10. toExtNatTrans --------------------------------------------
+\subsection{Definition: \lean{ContainerMorphism.toExtNatTrans}}
+
+\begin{defn}[Forward direction]
+Every container morphism $\varphi : C \Rightarrow D$ gives rise to a natural
+transformation $\varphi^* : \Ext\,C \Longrightarrow \Ext\,D$, by bundling
+\lean{toNat} with its naturality proof.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def ContainerMorphism.toExtNatTrans {C D : Container}
+    (phi : ContainerMorphism C D) : ExtNatTrans C D where
+  component := phi.toNat
+  natural := fun f => phi.toNat_natural f
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+toExtNatTrans :: Morph s p t q -> (forall x. Ext s p x -> Ext t q x)
+toExtNatTrans = toNat
+-- Naturality is automatic by parametricity.
+\end{lstlisting}
+
+
+% --- 11. toMorphism -----------------------------------------------
+\subsection{Definition: \lean{ExtNatTrans.toMorphism}}
+
+\begin{defn}[Backward direction]
+Given a natural transformation $\eta : \Ext\,C \Longrightarrow \Ext\,D$,
+recover a container morphism by probing $\eta$ at the \emph{generic element}
+$\langle s, \mathrm{id} \rangle \in \Ext\,C\,(P_C(s))$:
+\begin{align*}
+  u(s)  &\;=\; \pi_1\bigl(\eta_{P_C(s)}\langle s, \mathrm{id} \rangle\bigr), \\
+  g_s   &\;=\; \pi_2\bigl(\eta_{P_C(s)}\langle s, \mathrm{id} \rangle\bigr).
+\end{align*}
+The shape map is the first component of the result; the position map is the
+second.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def ExtNatTrans.toMorphism {C D : Container}
+    (eta : ExtNatTrans C D) : ContainerMorphism C D where
+  onShapes := fun s => (eta.component (C.Pos s) <|s, id|>).1
+  onPos := fun s => (eta.component (C.Pos s) <|s, id|>).2
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+toMorphism :: (forall x. Ext s p x -> Ext t q x) -> Morph s p t q
+toMorphism eta = Morph u g
+  where
+    -- Probe at the generic element (s, id) :: Ext s p p
+    -- This only type-checks when s is a concrete shape value,
+    -- so in practice we'd need to supply a witness.
+    Ext t' g' = eta (Ext s id)   -- for each shape s
+    u s = t'
+    g s = g'
+\end{lstlisting}
+
+\begin{fidelitynote}
+The Lean version probes $\eta$ at $X = P_C(s)$ --- a type that \emph{depends
+on} the shape $s$.  In Haskell, the rank-2 type
+\hask{forall x. Ext s p x -> Ext t q x} can be instantiated at $x = p$
+(the position type), and the ``generic element'' is \hask{Ext s id}.  The
+dependent aspect --- that we choose a \emph{different} $X$ for each $s$ ---
+is not expressible in Haskell's type system, but the Yoneda-style argument
+carries through operationally.
+\end{fidelitynote}
+
+
+% --- 12--13. Round-trip theorems ----------------------------------
+\subsection{Theorem: \lean{toExtNatTrans\_toMorphism} (morphism round-trip)}
+
+\begin{thm}[Morphism round-trip]
+Starting from a container morphism $\varphi$, building the natural
+transformation $\varphi^*$, and reading a morphism back, returns the
+original:
+\[
+  \mathrm{toMorphism}(\mathrm{toExtNatTrans}(\varphi)) \;=\; \varphi.
+\]
+This direction is purely computational (no appeal to naturality needed).
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem ContainerMorphism.toExtNatTrans_toMorphism
+    {C D : Container}
+    (phi : ContainerMorphism C D) :
+    phi.toExtNatTrans.toMorphism = phi
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Round-trip (morphism direction):
+-- toMorphism (toExtNatTrans phi) = phi
+--
+-- Proof sketch:
+--   toExtNatTrans (Morph u g) = \(Ext s v) -> Ext (u s) (v . g s)
+--   Probing at (Ext s id) gives Ext (u s) (id . g s) = Ext (u s) (g s)
+--   So toMorphism recovers (Morph u g).
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{toMorphism\_toExtNatTrans}
+  (natural transformation round-trip)}
+
+\begin{thm}[Natural transformation round-trip --- the representation theorem]
+Starting from a natural transformation $\eta$, extracting a morphism, and
+building a natural transformation back, returns the original:
+\[
+  \mathrm{toExtNatTrans}(\mathrm{toMorphism}(\eta)).\mathrm{component}
+  \;=\; \eta.\mathrm{component}.
+\]
+This is the substantive direction.  It requires the naturality law: for
+$p = \langle s, g \rangle : \Ext\,C\,X$, we apply naturality of $\eta$ at~$g$
+to the generic element $\langle s, \mathrm{id} \rangle$ and use
+$\Ext\,C\,g\,\langle s, \mathrm{id} \rangle = \langle s, g \rangle$
+to recover $\eta_X\langle s, g \rangle$ from
+$\Ext\,D\,g\,(\eta_{P_C(s)}\langle s, \mathrm{id} \rangle)$.
+
+Together with the morphism round-trip, this establishes a bijection:
+\[
+  \mathrm{ContainerMorphism}(C, D)
+  \;\cong\;
+  \mathrm{NatTrans}(\Ext\,C, \Ext\,D).
+\]
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem ExtNatTrans.toMorphism_toExtNatTrans
+    {C D : Container}
+    (eta : ExtNatTrans C D) :
+    eta.toMorphism.toExtNatTrans.component = eta.component
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Round-trip (natural transformation direction):
+-- toExtNatTrans (toMorphism eta) = eta
+--
+-- This is the representation theorem.  In Haskell, it follows from
+-- parametricity: a polymorphic function  forall x. F x -> G x  is
+-- uniquely determined by its action on the "identity" labelling.
+-- In Lean, where parametricity is not built in, this requires an
+-- explicit naturality argument (a Yoneda-style calculation).
+\end{lstlisting}
+
+
+%===================================================================
+\section{Translation conventions}
+%===================================================================
+
+The following conventions apply throughout this document series.
+
+\begin{enumerate}
+\item \textbf{Dependent position families.}  In Lean, a container has
+  $\Pos : \Shape \to \mathbf{Type}$ --- positions depend on the shape.
+  In Haskell, we approximate this with a single type parameter \hask{p}.
+  This is the standard simplification; all theorem statements remain
+  meaningful, but type-level guarantees about which positions belong to which
+  shapes are lost.
+
+\item \textbf{Transport / coercion.}  Several Lean definitions and theorems
+  involve \emph{transport} ($\blacktriangleright$ in Lean) along equality
+  proofs between shapes.  These have no Haskell counterpart and are flagged
+  individually in fidelity notes.  They will appear prominently in the
+  directed-container file (\texttt{Directed.lean}), where laws D2 and D5
+  transport positions along shape equalities D1 and D4.
+
+\item \textbf{Theorems as properties.}  Lean theorems become either
+  Haskell property functions (executable QuickCheck-style propositions) or
+  equational laws stated in comments when the statement quantifies over types
+  in a way that Haskell cannot express.
+
+\item \textbf{Naturality for free.}  In Haskell, polymorphic functions are
+  natural by parametricity.  In Lean, naturality is an explicit proof
+  obligation.  When a Lean structure bundles a naturality proof, the Haskell
+  rendering simply gives the polymorphic type.
+
+\item \textbf{Proof bodies omitted.}  Only definitions and theorem
+  \emph{statements} are translated.  Lean checks the proofs; the human
+  verifier checks that the \emph{statements} match the intended mathematics.
+\end{enumerate}
+
+\end{document}

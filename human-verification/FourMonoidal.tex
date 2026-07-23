@@ -1,0 +1,918 @@
+\documentclass[11pt,a4paper]{article}
+\input{preamble}
+
+% Double-bracket notation for the extension functor
+\usepackage{stmaryrd}
+
+\title{Human Verification: \texttt{Containers.FourMonoidal}\\[4pt]
+  \large The Four Monoidal Structures on $\mathbf{Cont}$}
+\author{Machine-generated from \texttt{lean/FourMonoidal.lean} for review by Neil Ghani}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document presents every definition and theorem \emph{statement} from the
+Lean~4 module \lean{Containers.FourMonoidal} in three parallel forms: the original
+Lean, a readable Haskell rendering, and precise mathematical English.  Proofs
+are omitted --- they are machine-checked by Lean.  The purpose is to let a
+human verifier confirm that the formalisation captures the intended
+mathematics.
+
+The file completes the account of all four monoidal structures on $\mathbf{Cont}$:
+the coproduct $(+, 0)$, the categorical product $(\times, 1)$, the Dirichlet
+tensor $(\otimes, y)$ (in \texttt{Dirichlet.lean}), and the sequential operator
+$(\triangleleft, I)$ (in \texttt{Monoidal.lean}).  It also proves that the
+extension functor $\llbracket{-}\rrbracket$ is \emph{strong} monoidal for $+$
+and $\times$, and provides the comparison isomorphisms.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%===================================================================
+\section{Overview}
+%===================================================================
+
+The four monoidal structures on $\mathbf{Cont}$ are summarised by the table:
+
+\begin{center}
+\begin{tabular}{llll}
+\hline
+Structure & Shapes of $C \otimes D$ & Positions of $C \otimes D$ & Unit \\
+\hline
+coproduct $+$ & $S \sqcup T$ & $[P, Q]$ (by injection) & $0 = \emptyset \triangleleft \cdots$ \\
+product $\times$ & $S \times T$ & $P\,s \sqcup Q\,t$ & $1 = \mathbf{1} \triangleleft \emptyset$ \\
+Dirichlet $\otimes$ & $S \times T$ & $P\,s \times Q\,t$ & $y = \mathbf{1} \triangleleft \mathbf{1}$ \\
+sequential $\triangleleft$ & $\Sigma\,s, P\,s \to T$ & $\Sigma\,p, Q(f(p))$ & $I = y$ \\
+\hline
+\end{tabular}
+\end{center}
+
+\medskip
+\noindent
+\textbf{Key observation.} The product $\times$ and Dirichlet $\otimes$ have the
+same shapes $S \times T$ but differ only in their positions (sum vs.\ product).
+Yet the \emph{extensions} invert the reading:
+$\llbracket C \times D \rrbracket X \cong \llbracket C \rrbracket X \times \llbracket D \rrbracket X$
+(pointwise product), while
+$\llbracket C \otimes D \rrbracket X$ is \emph{not} any pointwise combination
+of $\llbracket C \rrbracket X$ and $\llbracket D \rrbracket X$.
+This is the exponential law: $y^{A+B} \cong y^A \times y^B$, but $y^{A \times B}$
+admits no such splitting.
+
+Only $\lean{ContMonoidal}$ (sequential $\triangleleft$) is the canonical
+\lean{MonoidalCategory Container} \emph{instance}; the other three are named
+\lean{def}s to avoid instance clashes.
+
+%===================================================================
+\section{Unit containers}
+%===================================================================
+
+\subsection{Definition: \lean{Container.zero}}
+
+\begin{defn}[The empty container $0$]
+The \textbf{empty container} $0 = \emptyset \triangleleft (\mathrm{elim})$ has
+no shapes and (vacuously) no positions.  It is the unit for the coproduct $+$
+and the initial object of $\mathbf{Cont}$.
+Its extension $\llbracket 0 \rrbracket X$ is the empty type for every $X$.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.zero : Container where
+  Shape := Empty
+  Pos   := fun e => e.elim
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+zeroContainer :: Container Void p
+zeroContainer = Container { shape = absurd, pos = absurd }
+-- Extension: Ext ZeroContainer x  is  uninhabited.
+\end{lstlisting}
+
+
+\subsection{Definition: \lean{Container.one}}
+
+\begin{defn}[The one-shape container $1$]
+The \textbf{one-shape, no-position container} $1 = \mathbf{1} \triangleleft \emptyset$
+is the polynomial $y^0$.  It is the unit for the categorical product $\times$
+and the terminal object of $\mathbf{Cont}$.
+Its extension $\llbracket 1 \rrbracket X$ is a singleton type for every $X$.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.one : Container where
+  Shape := Unit
+  Pos   := fun _ => Empty
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+oneContainer :: Container () Void
+oneContainer = Container { shape = const (), pos = const absurd }
+-- Extension: Ext OneContainer x  =~=  Unit.
+\end{lstlisting}
+
+
+%===================================================================
+\section{The coproduct \texorpdfstring{$(+, 0)$}{(+,0)}}
+%===================================================================
+
+\subsection{Definition: \lean{Container.coprod\textsubscript{2}}}
+
+\begin{defn}[Bifunctorial action of $+$]
+The morphism action $\lean{coprod}_2\,\mu\,\nu : C + D \Rightarrow C' + D'$
+is derived from the coproduct's universal property: apply $\mu$ to $C$-shapes
+and $\nu$ to $D$-shapes via the injections, then co-pair.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.coprod2 {C C' D D' : Container}
+    (mu : ContainerMorphism C C') (nu : ContainerMorphism D D') :
+    ContainerMorphism (C.coprod D) (C'.coprod D') :=
+  (mu.comp (Container.inl C' D')).desc (nu.comp (Container.inr C' D'))
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+coprod2 :: Morph c p c' p' -> Morph d q d' q'
+        -> Morph (c `Coprod` d) (Either p q) (c' `Coprod` d') (Either p' q')
+coprod2 mu nu = desc (mu `compM` inlMorph) (nu `compM` inrMorph)
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{Container.coprod\textsubscript{2}\_id}}
+
+\begin{thm}[Coproduct bifunctoriality: identity]
+$\lean{coprod}_2\,(\mathrm{id}_C)\,(\mathrm{id}_D) = \mathrm{id}_{C+D}$.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.coprod2_id (C D : Container) :
+    Container.coprod2 (ContainerMorphism.id C) (ContainerMorphism.id D)
+      = ContainerMorphism.id (C.coprod D)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- coprod2 idMorph idMorph = idMorph
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{Container.coprod\textsubscript{2}\_comp}}
+
+\begin{thm}[Coproduct bifunctoriality: interchange]
+$\lean{coprod}_2\,(\mu \cdot \mu')\,(\nu \cdot \nu')
+= \lean{coprod}_2\,\mu\,\nu \;\cdot\; \lean{coprod}_2\,\mu'\,\nu'$.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.coprod2_comp {C C' C'' D D' D'' : Container}
+    (mu : ContainerMorphism C C') (mu' : ContainerMorphism C' C'')
+    (nu : ContainerMorphism D D') (nu' : ContainerMorphism D' D'') :
+    Container.coprod2 (mu.comp mu') (nu.comp nu')
+      = (Container.coprod2 mu nu).comp (Container.coprod2 mu' nu')
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- coprod2 (mu `compM` mu') (nu `compM` nu')
+--   = coprod2 mu nu `compM` coprod2 mu' nu'
+\end{lstlisting}
+
+
+\subsection{Definition: \lean{Container.coprodAssociator}}
+
+\begin{defn}[Coproduct associator]
+The isomorphism $(C + D) + E \cong C + (D + E)$:
+\begin{itemize}
+  \item \emph{Shapes}: $\mathrm{Sum}$-reassociation
+    $(\mathrm{inl}\,(\mathrm{inl}\,a) \mapsto \mathrm{inl}\,a$, etc.).
+  \item \emph{Positions}: identity in every branch.
+\end{itemize}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.coprodAssociator (C D E : Container) :
+    ContainerIso ((C.coprod D).coprod E) (C.coprod (D.coprod E)) where
+  hom :=
+    { onShapes := fun x => match x with
+        | Sum.inl (Sum.inl a) => Sum.inl a
+        | Sum.inl (Sum.inr b) => Sum.inr (Sum.inl b)
+        | Sum.inr c           => Sum.inr (Sum.inr c)
+      onPos := fun x => match x with
+        | Sum.inl (Sum.inl _) => id
+        | Sum.inl (Sum.inr _) => id
+        | Sum.inr _           => id }
+  inv :=
+    { onShapes := fun x => match x with
+        | Sum.inl a           => Sum.inl (Sum.inl a)
+        | Sum.inr (Sum.inl b) => Sum.inl (Sum.inr b)
+        | Sum.inr (Sum.inr c) => Sum.inr c
+      onPos := fun x => match x with
+        | Sum.inl _           => id
+        | Sum.inr (Sum.inl _) => id
+        | Sum.inr (Sum.inr _) => id }
+  hom_inv := ...   -- proof omitted
+  inv_hom := ...
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+coprodAssociator :: ContainerIso
+  (Coprod (Coprod c d) e) (Coprod c (Coprod d e))
+coprodAssociator = ...
+-- Shapes: standard Either reassociation; positions: id everywhere.
+\end{lstlisting}
+
+
+\subsection{Definition: \lean{Container.coprodLeftUnitor}}
+
+\begin{defn}[Coproduct left unitor]
+The isomorphism $0 + C \cong C$: nothing in the left summand.
+\begin{itemize}
+  \item Forward: $\mathrm{inl}\,e \mapsto e.\mathrm{elim}$ (impossible case);
+    $\mathrm{inr}\,s \mapsto s$.
+  \item Backward: $s \mapsto \mathrm{inr}\,s$.
+\end{itemize}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.coprodLeftUnitor (C : Container) :
+    ContainerIso (Container.zero.coprod C) C where
+  hom :=
+    { onShapes := fun x => match x with | Sum.inl e => e.elim | Sum.inr s => s
+      onPos    := fun x => match x with | Sum.inl e => e.elim | Sum.inr _ => id }
+  inv :=
+    { onShapes := Sum.inr
+      onPos    := fun _ => id }
+  hom_inv := ...;  inv_hom := ...
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+coprodLeftUnitor :: ContainerIso (Coprod Zero c) c
+-- fwd: Left (absurd) or Right s -> s
+-- bwd: s -> Right s
+\end{lstlisting}
+
+
+\subsection{Definition: \lean{Container.coprodRightUnitor}}
+
+\begin{defn}[Coproduct right unitor]
+The isomorphism $C + 0 \cong C$: nothing in the right summand.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.coprodRightUnitor (C : Container) :
+    ContainerIso (C.coprod Container.zero) C where
+  hom :=
+    { onShapes := fun x => match x with | Sum.inl s => s | Sum.inr e => e.elim
+      onPos    := fun x => match x with | Sum.inl _ => id | Sum.inr e => e.elim }
+  inv := { onShapes := Sum.inl; onPos := fun _ => id }
+  hom_inv := ...;  inv_hom := ...
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+coprodRightUnitor :: ContainerIso (Coprod c Zero) c
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{Container.coprodAssociator\_naturality}}
+
+\begin{thm}[Naturality of coproduct associator]
+\[
+  (\lean{coprod}_2\,(\lean{coprod}_2\,f_1\,f_2)\,f_3) \cdot \alpha^+_{Y_1,Y_2,Y_3}
+  \;=\;
+  \alpha^+_{X_1,X_2,X_3} \cdot \lean{coprod}_2\,f_1\,(\lean{coprod}_2\,f_2\,f_3).
+\]
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.coprodAssociator_naturality
+    {X1 Y1 X2 Y2 X3 Y3 : Container}
+    (f1 : ContainerMorphism X1 Y1) (f2 : ContainerMorphism X2 Y2)
+    (f3 : ContainerMorphism X3 Y3) :
+    (Container.coprod2 (Container.coprod2 f1 f2) f3).comp
+        (Container.coprodAssociator Y1 Y2 Y3).hom
+      = (Container.coprodAssociator X1 X2 X3).hom.comp
+          (Container.coprod2 f1 (Container.coprod2 f2 f3))
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- coprodAssociator_naturality: naturality square for coprodAssociator
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{Container.coprodLeftUnitor\_naturality}}
+
+\begin{thm}[Naturality of coproduct left unitor]
+\[
+  (\lean{coprod}_2\,(\mathrm{id}_0)\,f) \cdot \lambda^+_Y
+  \;=\;
+  \lambda^+_X \cdot f.
+\]
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.coprodLeftUnitor_naturality {X Y : Container}
+    (f : ContainerMorphism X Y) :
+    (Container.coprod2 (ContainerMorphism.id Container.zero) f).comp
+        (Container.coprodLeftUnitor Y).hom
+      = (Container.coprodLeftUnitor X).hom.comp f
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{Container.coprodRightUnitor\_naturality}}
+
+\begin{thm}[Naturality of coproduct right unitor]
+\[
+  (\lean{coprod}_2\,f\,(\mathrm{id}_0)) \cdot \rho^+_Y
+  \;=\;
+  \rho^+_X \cdot f.
+\]
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.coprodRightUnitor_naturality {X Y : Container}
+    (f : ContainerMorphism X Y) :
+    (Container.coprod2 f (ContainerMorphism.id Container.zero)).comp
+        (Container.coprodRightUnitor Y).hom
+      = (Container.coprodRightUnitor X).hom.comp f
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{Container.coprodPentagon}}
+
+\begin{thm}[Pentagon for $+$]
+The two re-association paths of
+$((C_1 + C_2) + C_3) + C_4 \to C_1 + (C_2 + (C_3 + C_4))$ agree.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.coprodPentagon (C1 C2 C3 C4 : Container) :
+    ((Container.coprod2 (Container.coprodAssociator C1 C2 C3).hom
+          (ContainerMorphism.id C4)).comp
+        (Container.coprodAssociator C1 (C2.coprod C3) C4).hom).comp
+        (Container.coprod2 (ContainerMorphism.id C1)
+          (Container.coprodAssociator C2 C3 C4).hom)
+      = (Container.coprodAssociator (C1.coprod C2) C3 C4).hom.comp
+          (Container.coprodAssociator C1 C2 (C3.coprod C4)).hom
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{Container.coprodTriangle}}
+
+\begin{thm}[Triangle for $+$]
+\[
+  \alpha^+_{C_1,0,C_2} \cdot (\mathrm{id}_{C_1} + \lambda^+_{C_2})
+  \;=\;
+  \rho^+_{C_1} + \mathrm{id}_{C_2}.
+\]
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.coprodTriangle (C1 C2 : Container) :
+    (Container.coprodAssociator C1 Container.zero C2).hom.comp
+        (Container.coprod2 (ContainerMorphism.id C1)
+          (Container.coprodLeftUnitor C2).hom)
+      = Container.coprod2 (Container.coprodRightUnitor C1).hom
+          (ContainerMorphism.id C2)
+\end{lstlisting}
+
+
+\subsection{Definition: \lean{contCoprodMonoidal}}
+
+\begin{defn}[$(\mathbf{Cont}, +, 0)$ is a monoidal category]
+A named \lean{def} (not an \lean{instance}): the coproduct $+$ with morphism
+action $\lean{coprod}_2$, unit $0$, and the structural isomorphisms above satisfy
+all monoidal-category axioms.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+@[reducible] def contCoprodMonoidal : MonoidalCategory Container where
+  tensorObj         := Container.coprod
+  tensorHom         := Container.coprod2
+  tensorHom_id      := Container.coprod2_id
+  tensorHom_comp    := fun f1 g1 f2 g2 => Container.coprod2_comp f1 g1 f2 g2
+  tensorUnit        := Container.zero
+  associator        := fun X Y Z => (Container.coprodAssociator X Y Z).toCatIso
+  leftUnitor        := fun X => (Container.coprodLeftUnitor X).toCatIso
+  rightUnitor       := fun X => (Container.coprodRightUnitor X).toCatIso
+  associator_naturality  :=
+    fun f1 f2 f3 => Container.coprodAssociator_naturality f1 f2 f3
+  leftUnitor_naturality  := fun f => Container.coprodLeftUnitor_naturality f
+  rightUnitor_naturality := fun f => Container.coprodRightUnitor_naturality f
+  pentagon          := Container.coprodPentagon
+  triangle          := Container.coprodTriangle
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+contCoprodMonoidal :: MonoidalCategoryDef ContainerMorph
+contCoprodMonoidal = MonoidalCategoryDef
+  { tensor = coprod2, unit = zeroContainer, ... }
+\end{lstlisting}
+
+
+%===================================================================
+\section{The categorical product \texorpdfstring{$(\times, 1)$}{(times, 1)}}
+%===================================================================
+
+\subsection{Definition: \lean{Container.prod\textsubscript{2}}}
+
+\begin{defn}[Bifunctorial action of $\times$]
+The morphism action $\lean{prod}_2\,\mu\,\nu : C \times D \Rightarrow C' \times D'$
+is derived from the product's universal property: pair the compositions
+$\pi_1 \cdot \mu$ and $\pi_2 \cdot \nu$.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.prod2 {C C' D D' : Container}
+    (mu : ContainerMorphism C C') (nu : ContainerMorphism D D') :
+    ContainerMorphism (C.prod D) (C'.prod D') :=
+  ((Container.fst C D).comp mu).pair ((Container.snd C D).comp nu)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+prod2 :: Morph c p c' p' -> Morph d q d' q'
+      -> Morph (c `Prod` d) (Either p q) (c' `Prod` d') (Either p' q')
+prod2 mu nu = pairMorph (fstMorph `compM` mu) (sndMorph `compM` nu)
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{Container.prod\textsubscript{2}\_id}}
+
+\begin{thm}[Product bifunctoriality: identity]
+$\lean{prod}_2\,(\mathrm{id}_C)\,(\mathrm{id}_D) = \mathrm{id}_{C \times D}$.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.prod2_id (C D : Container) :
+    Container.prod2 (ContainerMorphism.id C) (ContainerMorphism.id D)
+      = ContainerMorphism.id (C.prod D)
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{Container.prod\textsubscript{2}\_comp}}
+
+\begin{thm}[Product bifunctoriality: interchange]
+$\lean{prod}_2\,(\mu \cdot \mu')\,(\nu \cdot \nu')
+= \lean{prod}_2\,\mu\,\nu \;\cdot\; \lean{prod}_2\,\mu'\,\nu'$.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.prod2_comp {C C' C'' D D' D'' : Container}
+    (mu : ContainerMorphism C C') (mu' : ContainerMorphism C' C'')
+    (nu : ContainerMorphism D D') (nu' : ContainerMorphism D' D'') :
+    Container.prod2 (mu.comp mu') (nu.comp nu')
+      = (Container.prod2 mu nu).comp (Container.prod2 mu' nu')
+\end{lstlisting}
+
+
+\subsection{Definition: \lean{Container.prodAssociator}}
+
+\begin{defn}[Product associator]
+The isomorphism $(C \times D) \times E \cong C \times (D \times E)$:
+\begin{itemize}
+  \item \emph{Shapes}: $\mathrm{Prod}$-reassociation
+    $((s,t),u) \mapsto (s,(t,u))$.
+  \item \emph{Positions}: $\mathrm{Sum}$-reassociation \emph{backwards}
+    (since position maps are contravariant); the backward direction reassociates
+    $P\,s \sqcup (Q\,t \sqcup R\,u)$ to $(P\,s \sqcup Q\,t) \sqcup R\,u$.
+\end{itemize}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.prodAssociator (C D E : Container) :
+    ContainerIso ((C.prod D).prod E) (C.prod (D.prod E)) where
+  hom :=
+    { onShapes := fun x => (x.1.1, (x.1.2, x.2))
+      onPos    := fun _ p =>
+        Sum.elim (fun a => Sum.inl (Sum.inl a))
+          (Sum.elim (fun b => Sum.inl (Sum.inr b))
+                    (fun c => Sum.inr c)) p }
+  inv :=
+    { onShapes := fun x => ((x.1, x.2.1), x.2.2)
+      onPos    := fun _ p =>
+        Sum.elim (Sum.elim (fun a => Sum.inl a)
+                           (fun b => Sum.inr (Sum.inl b)))
+                 (fun c => Sum.inr (Sum.inr c)) p }
+  hom_inv := ...;  inv_hom := ...
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Shapes: reassociate tuples.
+-- Positions: reassociate Either (backwards, since contravariant).
+prodAssociator :: ContainerIso (Prod (Prod c d) e) (Prod c (Prod d e))
+\end{lstlisting}
+
+\begin{fidelitynote}
+The positions of $C \times D$ are $P\,s \sqcup Q\,t$.  The associator's position
+map goes \emph{backward}: given a position of $C \times (D \times E)$, it
+produces a position of $(C \times D) \times E$.  The backward position map of
+the forward direction is a \emph{rightward} $\mathrm{Sum}$-reassociation
+(injecting left-nested sums into right-nested ones), which is what the code
+shows.
+\end{fidelitynote}
+
+
+\subsection{Definition: \lean{Container.prodLeftUnitor}}
+
+\begin{defn}[Product left unitor]
+The isomorphism $1 \times C \cong C$.  Since $1$ has shape $\mathbf{1}$ and no
+positions, the position type of $1 \times C$ at shape $(\ast, s)$ is
+$\emptyset \sqcup P\,s \cong P\,s$.
+\begin{itemize}
+  \item Forward on shapes: $(\ast, s) \mapsto s$.
+  \item Forward on positions: inject right, $p \mapsto \mathrm{inr}\,p$.
+\end{itemize}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.prodLeftUnitor (C : Container) :
+    ContainerIso (Container.one.prod C) C where
+  hom :=
+    { onShapes := fun x => x.2
+      onPos    := fun _ p => Sum.inr p }
+  inv :=
+    { onShapes := fun s => ((), s)
+      onPos    := fun _ p => Sum.elim (fun e => e.elim) id p }
+  hom_inv := ...;  inv_hom := ...
+\end{lstlisting}
+
+
+\subsection{Definition: \lean{Container.prodRightUnitor}}
+
+\begin{defn}[Product right unitor]
+The isomorphism $C \times 1 \cong C$:
+\begin{itemize}
+  \item Forward on shapes: $(s, \ast) \mapsto s$.
+  \item Forward on positions: inject left, $p \mapsto \mathrm{inl}\,p$.
+\end{itemize}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.prodRightUnitor (C : Container) :
+    ContainerIso (C.prod Container.one) C where
+  hom :=
+    { onShapes := fun x => x.1
+      onPos    := fun _ p => Sum.inl p }
+  inv :=
+    { onShapes := fun s => (s, ())
+      onPos    := fun _ p => Sum.elim id (fun e => e.elim) p }
+  hom_inv := ...;  inv_hom := ...
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{Container.prodAssociator\_naturality}}
+
+\begin{thm}[Naturality of product associator]
+\[
+  (\lean{prod}_2\,(\lean{prod}_2\,f_1\,f_2)\,f_3) \cdot \alpha^\times_{Y_1,Y_2,Y_3}
+  \;=\;
+  \alpha^\times_{X_1,X_2,X_3} \cdot \lean{prod}_2\,f_1\,(\lean{prod}_2\,f_2\,f_3).
+\]
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.prodAssociator_naturality
+    {X1 Y1 X2 Y2 X3 Y3 : Container}
+    (f1 : ContainerMorphism X1 Y1) (f2 : ContainerMorphism X2 Y2)
+    (f3 : ContainerMorphism X3 Y3) :
+    (Container.prod2 (Container.prod2 f1 f2) f3).comp
+        (Container.prodAssociator Y1 Y2 Y3).hom
+      = (Container.prodAssociator X1 X2 X3).hom.comp
+          (Container.prod2 f1 (Container.prod2 f2 f3))
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{Container.prodLeftUnitor\_naturality}}
+
+\begin{thm}[Naturality of product left unitor]
+$(\lean{prod}_2\,(\mathrm{id}_1)\,f) \cdot \lambda^\times_Y = \lambda^\times_X \cdot f$.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.prodLeftUnitor_naturality {X Y : Container}
+    (f : ContainerMorphism X Y) :
+    (Container.prod2 (ContainerMorphism.id Container.one) f).comp
+        (Container.prodLeftUnitor Y).hom
+      = (Container.prodLeftUnitor X).hom.comp f := rfl
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{Container.prodRightUnitor\_naturality}}
+
+\begin{thm}[Naturality of product right unitor]
+$(\lean{prod}_2\,f\,(\mathrm{id}_1)) \cdot \rho^\times_Y = \rho^\times_X \cdot f$.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.prodRightUnitor_naturality {X Y : Container}
+    (f : ContainerMorphism X Y) :
+    (Container.prod2 f (ContainerMorphism.id Container.one)).comp
+        (Container.prodRightUnitor Y).hom
+      = (Container.prodRightUnitor X).hom.comp f := rfl
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{Container.prodPentagon}}
+
+\begin{thm}[Pentagon for $\times$]
+The two re-association paths of
+$((C_1 \times C_2) \times C_3) \times C_4 \to C_1 \times (C_2 \times (C_3 \times C_4))$
+agree.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.prodPentagon (C1 C2 C3 C4 : Container) :
+    ((Container.prod2 (Container.prodAssociator C1 C2 C3).hom
+          (ContainerMorphism.id C4)).comp
+        (Container.prodAssociator C1 (C2.prod C3) C4).hom).comp
+        (Container.prod2 (ContainerMorphism.id C1)
+          (Container.prodAssociator C2 C3 C4).hom)
+      = (Container.prodAssociator (C1.prod C2) C3 C4).hom.comp
+          (Container.prodAssociator C1 C2 (C3.prod C4)).hom
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{Container.prodTriangle}}
+
+\begin{thm}[Triangle for $\times$]
+$\alpha^\times_{C_1,1,C_2} \cdot (\mathrm{id}_{C_1} \times \lambda^\times_{C_2})
+= \rho^\times_{C_1} \times \mathrm{id}_{C_2}$.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.prodTriangle (C1 C2 : Container) :
+    (Container.prodAssociator C1 Container.one C2).hom.comp
+        (Container.prod2 (ContainerMorphism.id C1)
+          (Container.prodLeftUnitor C2).hom)
+      = Container.prod2 (Container.prodRightUnitor C1).hom
+          (ContainerMorphism.id C2)
+\end{lstlisting}
+
+
+\subsection{Definition: \lean{contProdMonoidal}}
+
+\begin{defn}[$(\mathbf{Cont}, \times, 1)$ is a monoidal category]
+A named \lean{def}: the categorical product $\times$ with morphism action
+$\lean{prod}_2$, unit $1$, and the structural isomorphisms satisfy all
+monoidal-category axioms.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+@[reducible] def contProdMonoidal : MonoidalCategory Container where
+  tensorObj         := Container.prod
+  tensorHom         := Container.prod2
+  tensorHom_id      := Container.prod2_id
+  tensorHom_comp    := fun f1 g1 f2 g2 => Container.prod2_comp f1 g1 f2 g2
+  tensorUnit        := Container.one
+  associator        := fun X Y Z => (Container.prodAssociator X Y Z).toCatIso
+  leftUnitor        := fun X => (Container.prodLeftUnitor X).toCatIso
+  rightUnitor       := fun X => (Container.prodRightUnitor X).toCatIso
+  associator_naturality  :=
+    fun f1 f2 f3 => Container.prodAssociator_naturality f1 f2 f3
+  leftUnitor_naturality  := fun f => Container.prodLeftUnitor_naturality f
+  rightUnitor_naturality := fun f => Container.prodRightUnitor_naturality f
+  pentagon          := Container.prodPentagon
+  triangle          := Container.prodTriangle
+\end{lstlisting}
+
+
+%===================================================================
+\section{The extension functor as a strong monoidal functor}
+%===================================================================
+
+\subsection{Definitions and theorems: coproduct comparison}
+
+\begin{defn}[Coproduct comparison isomorphism]
+The maps
+\[
+  \lean{coprodExt} : \llbracket C + D \rrbracket X \xrightarrow{\sim}
+    \llbracket C \rrbracket X \sqcup \llbracket D \rrbracket X,
+\]
+\[
+  \lean{coprodExtInv} : \llbracket C \rrbracket X \sqcup \llbracket D \rrbracket X
+    \xrightarrow{\sim} \llbracket C + D \rrbracket X.
+\]
+A $(C+D)$-structure is a $C$-structure or a $D$-structure, according to the
+injection its shape came from.  Both round trips hold.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.coprodExt {C D : Container} {X : Type} :
+    Ext (C.coprod D) X -> Ext C X |+| Ext D X :=
+  fun p => match p with
+    | <|Sum.inl s, f|> => Sum.inl <|s, f|>
+    | <|Sum.inr t, f|> => Sum.inr <|t, f|>
+
+def Container.coprodExtInv {C D : Container} {X : Type} :
+    Ext C X |+| Ext D X -> Ext (C.coprod D) X :=
+  fun p => match p with
+    | Sum.inl q => <|Sum.inl q.1, q.2|>
+    | Sum.inr q => <|Sum.inr q.1, q.2|>
+
+theorem Container.coprodExtInv_coprodExt {C D : Container} {X : Type}
+    (p : Ext (C.coprod D) X) :
+    Container.coprodExtInv (Container.coprodExt p) = p
+
+theorem Container.coprodExt_coprodExtInv {C D : Container} {X : Type}
+    (p : Ext C X |+| Ext D X) :
+    Container.coprodExt (Container.coprodExtInv p) = p
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+coprodExt :: Ext (Coprod c d) x -> Either (Ext c x) (Ext d x)
+coprodExt (Ext (Left s)  f) = Left  (Ext s f)
+coprodExt (Ext (Right t) f) = Right (Ext t f)
+
+coprodExtInv :: Either (Ext c x) (Ext d x) -> Ext (Coprod c d) x
+coprodExtInv (Left  (Ext s f)) = Ext (Left  s) f
+coprodExtInv (Right (Ext t f)) = Ext (Right t) f
+\end{lstlisting}
+
+
+\subsection{Definition/Theorem: \lean{Container.zeroExt}}
+
+\begin{defn}[Unit comparison for $0$]
+The map $\llbracket 0 \rrbracket X \to \emptyset$: there is no shape, so there is
+no structure.  The round trip is trivial (\lean{Empty.elim}).
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.zeroExt {X : Type} : Ext Container.zero X -> Empty :=
+  fun p => p.1.elim
+
+theorem Container.zeroExt_iso {X : Type} (p : Ext Container.zero X) :
+    (Container.zeroExt p).elim = p := p.1.elim
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+zeroExt :: Ext ZeroContainer x -> Void
+zeroExt (Ext s _) = absurd s
+\end{lstlisting}
+
+
+\subsection{Definitions and theorems: product comparison}
+
+\begin{defn}[Product comparison isomorphism]
+The maps
+\[
+  \lean{prodExt} : \llbracket C \times D \rrbracket X \xrightarrow{\sim}
+    \llbracket C \rrbracket X \times \llbracket D \rrbracket X,
+\]
+\[
+  \lean{prodExtInv} : \llbracket C \rrbracket X \times \llbracket D \rrbracket X
+    \xrightarrow{\sim} \llbracket C \times D \rrbracket X.
+\]
+Since positions of $C \times D$ are $P\,s \sqcup Q\,t$, a labelling
+$P\,s \sqcup Q\,t \to X$ is a pair of labellings $(P\,s \to X, Q\,t \to X)$
+by the exponential law $y^{A+B} \cong y^A \times y^B$.  This is why the
+product container has the \emph{pointwise product} of extensions.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.prodExt {C D : Container} {X : Type} :
+    Ext (C.prod D) X -> Ext C X * Ext D X :=
+  fun p => (<|p.1.1, fun i => p.2 (Sum.inl i)|>,
+            <|p.1.2, fun j => p.2 (Sum.inr j)|>)
+
+def Container.prodExtInv {C D : Container} {X : Type} :
+    Ext C X * Ext D X -> Ext (C.prod D) X :=
+  fun p => <|(p.1.1, p.2.1), Sum.elim p.1.2 p.2.2|>
+
+theorem Container.prodExtInv_prodExt {C D : Container} {X : Type}
+    (p : Ext (C.prod D) X) :
+    Container.prodExtInv (Container.prodExt p) = p
+
+theorem Container.prodExt_prodExtInv {C D : Container} {X : Type}
+    (p : Ext C X * Ext D X) :
+    Container.prodExt (Container.prodExtInv p) = p
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+prodExt :: Ext (Prod c d) x -> (Ext c x, Ext d x)
+prodExt (Ext (s, t) f) =
+  (Ext s (\i -> f (Left i)), Ext t (\j -> f (Right j)))
+
+prodExtInv :: (Ext c x, Ext d x) -> Ext (Prod c d) x
+prodExtInv (Ext s f, Ext t g) = Ext (s, t) (either f g)
+\end{lstlisting}
+
+
+\subsection{Definitions and theorems: unit comparison for $1$}
+
+\begin{defn}[Unit comparison for $1$]
+The isomorphism $\llbracket 1 \rrbracket X \cong \mathbf{1}$:
+one shape, no positions, so exactly one structure.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.oneExt {X : Type} : Ext Container.one X -> Unit :=
+  fun _ => ()
+
+def Container.oneExtInv {X : Type} : Unit -> Ext Container.one X :=
+  fun _ => <|(), fun e => e.elim|>
+
+theorem Container.oneExtInv_oneExt {X : Type}
+    (p : Ext Container.one X) :
+    Container.oneExtInv (Container.oneExt p) = p
+
+theorem Container.oneExt_oneExtInv {X : Type} (u : Unit) :
+    Container.oneExt (Container.oneExtInv (X := X) u) = u := rfl
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+oneExt    :: Ext OneContainer x -> ()
+oneExt _  = ()
+
+oneExtInv :: () -> Ext OneContainer x
+oneExtInv () = Ext () absurd
+\end{lstlisting}
+
+
+\subsection{Definitions: shared unit comparison \texorpdfstring{$\llbracket y \rrbracket X \cong X$}{[y] X = X}}
+
+\begin{defn}[Unit comparison for $y = I$]
+The isomorphism $\llbracket y \rrbracket X \cong X$: read the label at the unique
+position.  This is the unit comparison for both $\otimes$ and $\triangleleft$,
+since $y = I$.
+\[
+  \lean{yExt}(s, v) = v(\ast), \qquad
+  \lean{yExtInv}(x) = (\ast,\; \_\mapsto x).
+\]
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.yExt {X : Type} : Ext Container.y X -> X :=
+  fun p => p.2 ()
+
+def Container.yExtInv {X : Type} : X -> Ext Container.y X :=
+  fun x => <|(), fun _ => x|>
+
+theorem Container.yExtInv_yExt {X : Type}
+    (p : Ext Container.y X) :
+    Container.yExtInv (Container.yExt p) = p := rfl
+
+theorem Container.yExt_yExtInv {X : Type} (x : X) :
+    Container.yExt (Container.yExtInv x) = x := rfl
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+yExt :: Ext YContainer x -> x
+yExt (Ext () v) = v ()
+
+yExtInv :: x -> Ext YContainer x
+yExtInv x = Ext () (const x)
+\end{lstlisting}
+
+\begin{fidelitynote}
+Both round trips hold by \lean{rfl}: definitional $\eta$ for \lean{Unit} and the
+\lean{Sigma} / \lean{Ext} type.
+\end{fidelitynote}
+
+\end{document}

@@ -1,0 +1,808 @@
+\documentclass[11pt,a4paper]{article}
+\input{preamble}
+
+\title{Human Verification: \texttt{Containers.ComonadConverse}\\[4pt]
+  \large From Container Comonads Back to Directed Containers (M2b)}
+\author{Machine-generated from \texttt{lean/ComonadConverse.lean} for review by Neil Ghani}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document presents every definition and theorem \emph{statement} from the
+Lean~4 module \lean{Containers.ComonadConverse} in three parallel forms: the
+original Lean, a readable Haskell rendering, and precise mathematical English.
+Proofs are omitted --- they are machine-checked by Lean.  The purpose is to let
+a human verifier confirm that the formalisation captures the intended
+mathematics.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%===================================================================
+\section{Overview}
+%===================================================================
+
+This file proves the \textbf{converse} of the Ahman--Chapman--Uustalu
+equivalence (\emph{When is a container a comonad?}, LMCS 10(3):2014).  The
+forward direction (in \lean{Containers.Directed}) shows that a directed
+container induces a comonad on its extension.  Here we run the construction
+backwards: from a comonad structure on $\mathbf{Ext}\,C$ we \textbf{recover} a
+directed container and prove that the recovered structure satisfies D1--D5.
+
+\medskip
+\noindent\textbf{Strategy.}  By the representation theorem
+(\lean{Containers.Basic}), any natural transformation between container
+extensions is a container morphism.  So the counit and comultiplication of a
+comonad on $\mathbf{Ext}\,C$ are determined by combinatorial data:
+
+\begin{align*}
+  \varepsilon\langle s, v \rangle &= v(e(s)), & &\text{a root choice }e,\\
+  \delta\langle s, v \rangle &=
+    \bigl\langle \mathtt{cShape}(s),\;
+      \lambda p.\langle \mathtt{cSub}(s,p),\; \lambda q.\; v(\mathtt{cVal}(s,p,q)) \rangle
+    \bigr\rangle,
+    & &\text{three components.}
+\end{align*}
+
+The \textbf{linchpin}: the right counit law forces $\mathtt{cShape} = \mathrm{id}$
+(\lean{cShape\_eq}).  Once the outer shape collapses, $(e, \mathtt{cSub}, \mathtt{cVal})$
+are exactly a root, sub-shape, and shift, and the three comonad laws become D1--D5 ---
+the same partition as the forward direction, read in reverse.
+
+Everything is \textbf{Type}-level, Lean~4 core, no Mathlib.
+
+%===================================================================
+\section{Auxiliary lemmas}
+%===================================================================
+
+% --- 1. Ext.norm_aux ----------------------------------------------
+\subsection{Lemma: \lean{Ext.norm\_aux}}
+
+\begin{prop}[Shape-collapse normalisation]
+Let $C$ be a container, $X$ a type, $s, t : C.\mathrm{Shape}$, and $h_c : t = s$.
+Then for any $\mathtt{sub} : C.\mathrm{Pos}(t) \to C.\mathrm{Shape}$ and
+$\mathtt{val} : (p : C.\mathrm{Pos}(t)) \to C.\mathrm{Pos}(\mathtt{sub}(p)) \to C.\mathrm{Pos}(s)$
+and $v : C.\mathrm{Pos}(s) \to X$,
+\[
+  \bigl\langle t,\; \lambda p.\langle \mathtt{sub}(p),\;
+    \lambda q.\; v(\mathtt{val}(p, q))\rangle \bigr\rangle
+  \;=\;
+  \bigl\langle s,\; \lambda p.\langle \mathtt{sub}(h_c^{-1}{}_* p),\;
+    \lambda q.\; v(\mathtt{val}(h_c^{-1}{}_* p, q))\rangle \bigr\rangle
+\]
+in $\mathbf{Ext}\,C\,(\mathbf{Ext}\,C\,X)$.  This absorbs every
+$\mathtt{cShape}$-transport in \lean{comult\_norm}.
+\end{prop}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Ext.norm_aux {C : Container} {X : Type} {s t : C.Shape} (hc : t = s)
+    (sub : C.Pos t -> C.Shape) (val : (p : C.Pos t) -> C.Pos (sub p) -> C.Pos s)
+    (v : C.Pos s -> X) :
+    (<|t, fun p => <|sub p, fun q => v (val p q)|>|> : Ext C (Ext C X))
+      = <|s, fun p => <|sub (hc.symm cast p), fun q => v (val (hc.symm cast p) q)|>|>
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- When cShape s = s (propositionally), we can normalise the outer shape.
+-- In Haskell this is trivial because there are no dependent transports;
+-- the equality would be definitional.
+\end{lstlisting}
+
+
+% --- 2. Ext.map_mk ------------------------------------------------
+\subsection{Lemma: \lean{Ext.map\_mk}}
+
+\begin{prop}[Map on a literal pair]
+For $f : X \to Y$, shape $s$, and labelling $g : C.\mathrm{Pos}(s) \to X$,
+\[
+  \mathbf{Ext}.\mathtt{map}\,f\,\langle s, g \rangle
+  \;=\;
+  \langle s,\; f \circ g \rangle.
+\]
+This fires only once the argument is in pair form, enabling normalisation to
+rewrite the inner comultiplication before unfolding $\mathbf{Ext}.\mathtt{map}$.
+\end{prop}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Ext.map_mk {C : Container} {X Y : Type} (f : X -> Y) (s : C.Shape)
+    (g : C.Pos s -> X) : Ext.map f (<|s, g|> : Ext C X) = <|s, fun i => f (g i)|>
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- fmap f (Ext s g) = Ext s (f . g)
+-- This is just the Functor instance for Ext, applied to a concrete pair.
+\end{lstlisting}
+
+
+% --- 3. Ext.mk_inj ------------------------------------------------
+\subsection{Lemma: \lean{Ext.mk\_inj}}
+
+\begin{prop}[Injectivity of $\mathbf{Ext}$ pairs]
+If $\langle s_1, v_1 \rangle = \langle s_2, v_2 \rangle$ in $\mathbf{Ext}\,C\,X$,
+then there exists a shape equality $h_s : s_1 = s_2$ such that
+$\forall q : C.\mathrm{Pos}(s_1),\; v_1(q) = v_2((h_s)_* q)$.
+\end{prop}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Ext.mk_inj {C : Container} {X : Type} {s1 s2 : C.Shape}
+    {v1 : C.Pos s1 -> X} {v2 : C.Pos s2 -> X}
+    (h : (<|s1, v1|> : Ext C X) = <|s2, v2|>) :
+    exists hs : s1 = s2, forall q : C.Pos s1, v1 q = v2 (hs cast q)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- If two Ext values are equal, their shapes are equal and their
+-- labellings agree (up to coercion on positions).
+-- In Haskell: if Ext s1 v1 == Ext s2 v2 then s1 == s2 and v1 = v2 . coerce.
+\end{lstlisting}
+
+\begin{fidelitynote}
+This is the ``destructor'' dual to \lean{Ext.ext\_eq}: where \lean{ext\_eq}
+\emph{builds} an equality from pointwise data, \lean{mk\_inj} \emph{extracts}
+data from an equality.  It is used throughout to read the directed-container
+laws (D1--D5) out of the comonad-law equalities.
+\end{fidelitynote}
+
+
+%===================================================================
+\section{Container comonad data}
+%===================================================================
+
+% --- 4. ContainerComonad ------------------------------------------
+\subsection{Structure: \lean{ContainerComonad}}
+
+\begin{defn}[Container comonad]
+A \textbf{container comonad} $M$ extends a container with the combinatorial
+data guaranteed by the representation theorem:
+\begin{itemize}
+  \item $e : (s : S) \to P(s)$ --- the counit's \emph{root choice},
+  \item $\mathtt{cShape} : S \to S$ --- the outer shape of the comultiplication,
+  \item $\mathtt{cSub} : (s : S) \to P(\mathtt{cShape}(s)) \to S$ ---
+    the inner shapes (future sub-shapes),
+  \item $\mathtt{cVal} : (s : S) \to (p : P(\mathtt{cShape}(s))) \to
+    P(\mathtt{cSub}(s, p)) \to P(s)$ --- the values (future shift).
+\end{itemize}
+The counit and comultiplication are then:
+\[
+  \varepsilon\langle s, v \rangle = v(e(s)),
+\]
+\[
+  \delta\langle s, v \rangle =
+  \bigl\langle \mathtt{cShape}(s),\;
+    \lambda p.\langle \mathtt{cSub}(s,p),\;
+      \lambda q.\; v(\mathtt{cVal}(s,p,q))\rangle
+  \bigr\rangle.
+\]
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+structure ContainerComonad extends Container where
+  e : (s : Shape) -> Pos s
+  cShape : Shape -> Shape
+  cSub : (s : Shape) -> Pos (cShape s) -> Shape
+  cVal : (s : Shape) -> (p : Pos (cShape s)) -> Pos (cSub s p) -> Pos s
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+data ContainerComonad s p = ContainerComonad
+  { shape   :: s -> s          -- outer shape of comult (forced to id)
+  , cSub    :: s -> p -> s     -- inner shapes
+  , cVal    :: s -> p -> p -> p -- future shift
+  , e       :: s -> p           -- root (counit data)
+  }
+\end{lstlisting}
+
+
+% --- 5. ContainerComonad.counit -----------------------------------
+\subsection{Definition: \lean{ContainerComonad.counit}}
+
+\begin{defn}[Counit]
+\[
+  \varepsilon : \mathbf{Ext}\,M\,X \to X, \qquad
+  \varepsilon\langle s, v \rangle = v(e(s)).
+\]
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def counit : Ext M.toContainer X -> X :=
+  fun t => t.2 (M.e t.1)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+counit :: ContainerComonad s p -> Ext s p x -> x
+counit m (Ext s v) = v (e m s)
+\end{lstlisting}
+
+
+% --- 6. ContainerComonad.comult -----------------------------------
+\subsection{Definition: \lean{ContainerComonad.comult}}
+
+\begin{defn}[Comultiplication]
+\[
+  \delta : \mathbf{Ext}\,M\,X \to \mathbf{Ext}\,M\,(\mathbf{Ext}\,M\,X),
+\]
+\[
+  \delta\langle s, v \rangle =
+  \bigl\langle \mathtt{cShape}(s),\;
+    \lambda p.\langle \mathtt{cSub}(s,p),\;
+      \lambda q.\; v(\mathtt{cVal}(s,p,q))\rangle
+  \bigr\rangle.
+\]
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def comult : Ext M.toContainer X -> Ext M.toContainer (Ext M.toContainer X) :=
+  fun t => <|M.cShape t.1, fun p => <|M.cSub t.1 p, fun q => t.2 (M.cVal t.1 p q)|>|>
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+comult :: ContainerComonad s p -> Ext s p x -> Ext s p (Ext s p x)
+comult m (Ext s v) = Ext (shape m s)
+  (\p -> Ext (cSub m s p) (\q -> v (cVal m s p q)))
+\end{lstlisting}
+
+
+% --- 7. IsComonad -------------------------------------------------
+\subsection{Structure: \lean{IsComonad}}
+
+\begin{defn}[Comonad laws]
+A container comonad $M$ \textbf{is a comonad} if the following three laws hold
+for all types $X$:
+\begin{itemize}
+  \item \textbf{Left counit:} $\varepsilon \circ \delta = \mathrm{id}$,
+  \item \textbf{Right counit:}
+    $\mathbf{Ext}.\mathtt{map}(\varepsilon) \circ \delta = \mathrm{id}$,
+  \item \textbf{Coassociativity:}
+    $\mathbf{Ext}.\mathtt{map}(\delta) \circ \delta = \delta \circ \delta$.
+\end{itemize}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+structure IsComonad (M : ContainerComonad) : Prop where
+  left_counit : forall {X : Type},
+    M.counit o. M.comult = (id : Ext M.toContainer X -> Ext M.toContainer X)
+  right_counit : forall {X : Type},
+    Ext.map M.counit o. M.comult = (id : Ext M.toContainer X -> Ext M.toContainer X)
+  coassoc : forall {X : Type},
+    Ext.map M.comult o. M.comult
+      = (M.comult o. M.comult :
+          Ext M.toContainer X ->
+            Ext M.toContainer (Ext M.toContainer (Ext M.toContainer X)))
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Comonad laws:
+-- left_counit  : extract . comult = id
+-- right_counit : fmap extract . comult = id
+-- coassoc      : fmap comult . comult = comult . comult
+\end{lstlisting}
+
+
+%===================================================================
+\section{Recovering the directed-container operations}
+%===================================================================
+
+% --- 8. cShape_eq -------------------------------------------------
+\subsection{Theorem: \lean{ContainerComonad.cShape\_eq}}
+
+\begin{thm}[The linchpin: $\mathtt{cShape} = \mathrm{id}$]
+If $M$ is a comonad then $\mathtt{cShape}(s) = s$ for every shape $s$.
+
+\emph{Proof sketch.}  Probe the right counit law
+$\mathbf{Ext}.\mathtt{map}(\varepsilon) \circ \delta = \mathrm{id}$
+at the generic element $\langle s, \mathrm{id} \rangle : \mathbf{Ext}\,M\,(P(s))$
+and read off the shape component.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem cShape_eq (h : M.IsComonad) (s : M.Shape) : M.cShape s = s
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- The right counit law forces the outer shape map to be the identity.
+-- Once cShape = id, (e, cSub, cVal) are exactly (root, sub, shift).
+\end{lstlisting}
+
+\begin{fidelitynote}
+This is the key step of the converse construction.  Every dependent cast in the
+rest of the file is a transport along $\mathtt{cShape\_eq}$.  The Lean proof
+uses $\mathtt{congrArg}\,\Sigma.\mathtt{fst}$ to project the shape component
+from the equality \lean{hr}.
+\end{fidelitynote}
+
+
+% --- 9. rRoot -----------------------------------------------------
+\subsection{Definition: \lean{ContainerComonad.rRoot}}
+
+\begin{defn}[Recovered root]
+\[
+  o^\mathrm{rec}(s) \;:=\; e(s) \;\in\; P(s).
+\]
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def rRoot (_h : M.IsComonad) (s : M.Shape) : M.Pos s := M.e s
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+rRoot :: ContainerComonad s p -> IsComonad -> s -> p
+rRoot m _ s = e m s
+\end{lstlisting}
+
+
+% --- 10. rSub -----------------------------------------------------
+\subsection{Definition: \lean{ContainerComonad.rSub}}
+
+\begin{defn}[Recovered sub-shape]
+\[
+  s \mathop{\downarrow^\mathrm{rec}} p
+  \;:=\;
+  \mathtt{cSub}\bigl(s,\; (\mathtt{cShape\_eq}(s))^{-1}_* p\bigr),
+\]
+transporting $p : P(s)$ into the $\mathtt{cShape}(s)$ fibre along
+$\mathtt{cShape\_eq}$.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def rSub (s : M.Shape) (p : M.Pos s) : M.Shape :=
+  M.cSub s ((M.cShape_eq h s).symm cast p)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+rSub :: ContainerComonad s p -> IsComonad -> s -> p -> s
+rSub m h s p = cSub m s (coerce p)  -- coerce along cShape_eq s
+\end{lstlisting}
+
+
+% --- 11. rShift ---------------------------------------------------
+\subsection{Definition: \lean{ContainerComonad.rShift}}
+
+\begin{defn}[Recovered shift]
+\[
+  p \oplus^\mathrm{rec} q
+  \;:=\;
+  \mathtt{cVal}\bigl(s,\; (\mathtt{cShape\_eq}(s))^{-1}_* p,\; q\bigr),
+\]
+transporting $p$ into the $\mathtt{cShape}(s)$ fibre along $\mathtt{cShape\_eq}$.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def rShift (s : M.Shape) (p : M.Pos s) (q : M.Pos (M.rSub h s p)) : M.Pos s :=
+  M.cVal s ((M.cShape_eq h s).symm cast p) q
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+rShift :: ContainerComonad s p -> IsComonad -> s -> p -> p -> p
+rShift m h s p q = cVal m s (coerce p) q  -- coerce p along cShape_eq s
+\end{lstlisting}
+
+
+% --- 12. comult_norm ----------------------------------------------
+\subsection{Theorem: \lean{ContainerComonad.comult\_norm}}
+
+\begin{thm}[Normalised comultiplication]
+For any $s : M.\mathrm{Shape}$ and $v : P(s) \to X$,
+\[
+  \delta\langle s, v \rangle
+  \;=\;
+  \bigl\langle s,\;
+    \lambda p.\langle s \mathop{\downarrow^\mathrm{rec}} p,\;
+      \lambda q.\; v(p \oplus^\mathrm{rec} q)\rangle
+  \bigr\rangle.
+\]
+The outer shape $\mathtt{cShape}(s)$ has been collapsed to $s$ via
+$\mathtt{cShape\_eq}$.  All downstream uses of the comonad laws yield D1--D5
+with only the intrinsic transports, exactly mirroring the forward direction.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem comult_norm (s : M.Shape) (v : M.Pos s -> X) :
+    M.comult (<|s, v|> : Ext M.toContainer X)
+      = <|s, fun p => <|M.rSub h s p, fun q => v (M.rShift h s p q)|>|>
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- After normalisation (cShape = id), comult looks exactly like the
+-- directed-container comultiplication:
+-- comult (Ext s v) = Ext s (\p -> Ext (rSub s p) (\q -> v (rShift s p q)))
+\end{lstlisting}
+
+
+%===================================================================
+\section{Recovering D1--D5}
+%===================================================================
+
+% --- 13. rD1 ------------------------------------------------------
+\subsection{Theorem: \lean{ContainerComonad.rD1}}
+
+\begin{thm}[D1: sub-shape at the root]
+\[
+  s \mathop{\downarrow^\mathrm{rec}} o^\mathrm{rec}(s) \;=\; s.
+\]
+Derived from the left counit law, probing at $\langle s, \mathrm{id}\rangle$.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem rD1 (s : M.Shape) : M.rSub h s (M.rRoot h s) = s
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- D1:  rSub s (rRoot s) = s
+\end{lstlisting}
+
+
+% --- 14. rD2 ------------------------------------------------------
+\subsection{Theorem: \lean{ContainerComonad.rD2}}
+
+\begin{thm}[D2: shift by the root is the identity]
+For $q : P(s \mathop{\downarrow^\mathrm{rec}} o^\mathrm{rec}(s))$,
+\[
+  o^\mathrm{rec}(s) \oplus^\mathrm{rec} q
+  \;=\;
+  (\mathtt{rD1}(s))_* q.
+\]
+The value half of the left counit law.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem rD2 (s : M.Shape) (q : M.Pos (M.rSub h s (M.rRoot h s))) :
+    M.rShift h s (M.rRoot h s) q = (M.rD1 h s) cast q
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- D2:  rShift s (rRoot s) q = coerce q  (coerce along rD1 s)
+\end{lstlisting}
+
+
+% --- 15. rD3 ------------------------------------------------------
+\subsection{Theorem: \lean{ContainerComonad.rD3}}
+
+\begin{thm}[D3: shift by the sub-shape's root is the identity]
+For $p : P(s)$,
+\[
+  p \oplus^\mathrm{rec} o^\mathrm{rec}(s \mathop{\downarrow^\mathrm{rec}} p) \;=\; p.
+\]
+The value half of the right counit law.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem rD3 (s : M.Shape) (p : M.Pos s) :
+    M.rShift h s p (M.rRoot h (M.rSub h s p)) = p
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- D3:  rShift s p (rRoot (rSub s p)) = p
+\end{lstlisting}
+
+
+% --- 16. rD4 ------------------------------------------------------
+\subsection{Theorem: \lean{ContainerComonad.rD4}}
+
+\begin{thm}[D4: sub-shapes nest along the shift]
+For $p : P(s)$ and $q : P(s \mathop{\downarrow^\mathrm{rec}} p)$,
+\[
+  s \mathop{\downarrow^\mathrm{rec}} (p \oplus^\mathrm{rec} q)
+  \;=\;
+  (s \mathop{\downarrow^\mathrm{rec}} p) \mathop{\downarrow^\mathrm{rec}} q.
+\]
+The shape half of coassociativity.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem rD4 (s : M.Shape) (p : M.Pos s) (q : M.Pos (M.rSub h s p)) :
+    M.rSub h s (M.rShift h s p q) = M.rSub h (M.rSub h s p) q
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- D4:  rSub s (rShift s p q) = rSub (rSub s p) q
+\end{lstlisting}
+
+
+% --- 17. rD5 ------------------------------------------------------
+\subsection{Theorem: \lean{ContainerComonad.rD5}}
+
+\begin{thm}[D5: associativity of shift]
+For $p : P(s)$, $q : P(s \mathop{\downarrow^\mathrm{rec}} p)$,
+$q' : P((s \mathop{\downarrow^\mathrm{rec}} p) \mathop{\downarrow^\mathrm{rec}} q)$,
+\[
+  (p \oplus^\mathrm{rec} q) \oplus^\mathrm{rec} (\mathtt{rD4}(s,p,q)^{-1}_* q')
+  \;=\;
+  p \oplus^\mathrm{rec} (q \oplus^\mathrm{rec} q').
+\]
+The value half of coassociativity.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem rD5 (s : M.Shape) (p : M.Pos s) (q : M.Pos (M.rSub h s p))
+    (q' : M.Pos (M.rSub h (M.rSub h s p) q)) :
+    M.rShift h s (M.rShift h s p q) ((M.rD4 h s p q).symm cast q')
+      = M.rShift h s p (M.rShift h (M.rSub h s p) q q')
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- D5 (shifted associativity):
+-- rShift s (rShift s p q) (coerce q') = rShift s p (rShift (rSub s p) q q')
+-- where coerce is along (rD4 s p q).symm
+\end{lstlisting}
+
+
+%===================================================================
+\section{The full equivalence}
+%===================================================================
+
+% --- 18. toDirectedContainer --------------------------------------
+\subsection{Definition: \lean{ContainerComonad.toDirectedContainer}}
+
+\begin{defn}[Recovery construction (M2b)]
+Given a container comonad $M$ and a proof $h : \mathtt{IsComonad}(M)$, the
+\textbf{recovered directed container} is
+\[
+  (M.\mathrm{toContainer},\;
+   \mathtt{rRoot}_h,\;
+   \mathtt{rSub}_h,\;
+   \mathtt{rShift}_h)
+\]
+with laws \lean{rD1}--\lean{rD5}.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def toDirectedContainer (h : M.IsComonad) : DirectedContainer where
+  toContainer := M.toContainer
+  root := M.rRoot h
+  sub  := M.rSub h
+  shift := M.rShift h
+  d1 := M.rD1 h
+  d4 := M.rD4 h
+  d2 := M.rD2 h
+  d3 := M.rD3 h
+  d5 := M.rD5 h
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+toDirectedContainer :: ContainerComonad s p -> IsComonad -> DirectedContainer s p
+toDirectedContainer m h = DirectedContainer
+  { root  = rRoot m h
+  , sub   = rSub  m h
+  , shift = rShift m h
+  -- laws D1--D5 proved from the comonad laws
+  }
+\end{lstlisting}
+
+
+% --- 19. toDirectedContainer_counit -------------------------------
+\subsection{Theorem: \lean{ContainerComonad.toDirectedContainer\_counit}}
+
+\begin{thm}[Counit round-trip]
+The recovered directed container induces the \emph{same} counit as the
+comonad we started from, on the nose:
+\[
+  \varepsilon_{\mathtt{toDirectedContainer}(M,h)}
+  \;=\;
+  \varepsilon_M.
+\]
+This holds definitionally (\lean{rfl}).
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem toDirectedContainer_counit (h : M.IsComonad) {X : Type}
+    (t : Ext M.toContainer X) :
+    (M.toDirectedContainer h).counit (X := X) t = M.counit t
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- The recovered counit equals the original counit:
+-- counit (toDirectedContainer m h) = counit m
+\end{lstlisting}
+
+
+% --- 20. toDirectedContainer_comult -------------------------------
+\subsection{Theorem: \lean{ContainerComonad.toDirectedContainer\_comult}}
+
+\begin{thm}[Comultiplication round-trip]
+The recovered directed container induces the \emph{same} comultiplication as
+the comonad we started from:
+\[
+  \delta_{\mathtt{toDirectedContainer}(M,h)}(t)
+  \;=\;
+  \delta_M(t).
+\]
+This is \lean{comult\_norm} in reverse, and together with
+\lean{toDirectedContainer\_counit} it says: applying the forward construction
+(\lean{Containers.Directed}) to the recovered directed container returns the
+original comonad.  This is one half of the equivalence
+$\mathbf{DirectedContainer} \simeq \text{container comonad}$.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem toDirectedContainer_comult (h : M.IsComonad) {X : Type}
+    (t : Ext M.toContainer X) :
+    (M.toDirectedContainer h).comult (X := X) t = M.comult t
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- The recovered comultiplication equals the original:
+-- comult (toDirectedContainer m h) = comult m
+\end{lstlisting}
+
+
+%===================================================================
+\section{The other direction}
+%===================================================================
+
+% --- 21. toContainerComonad ---------------------------------------
+\subsection{Definition: \lean{DirectedContainer.toContainerComonad}}
+
+\begin{defn}[Packaging a directed container as comonad data]
+Given a directed container $D$, its \textbf{packaged comonad data} is:
+\[
+  M_D = (D.\mathrm{toContainer},\;
+         e := D.\mathrm{root},\;
+         \mathtt{cShape} := \mathrm{id},\;
+         \mathtt{cSub} := D.\mathrm{sub},\;
+         \mathtt{cVal} := D.\mathrm{shift}).
+\]
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def toContainerComonad (D : DirectedContainer) : ContainerComonad where
+  toContainer := D.toContainer
+  e := D.root
+  cShape := id
+  cSub := D.sub
+  cVal := D.shift
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+toContainerComonad :: DirectedContainer s p -> ContainerComonad s p
+toContainerComonad d = ContainerComonad
+  { shape = id, cSub = sub d, cVal = shift d, e = root d }
+\end{lstlisting}
+
+
+% --- 22. toContainerComonad_isComonad -----------------------------
+\subsection{Theorem: \lean{DirectedContainer.toContainerComonad\_isComonad}}
+
+\begin{thm}[Packaged directed container is a comonad]
+For any directed container $D$, the packaged data $M_D$ satisfies the comonad
+laws (these are exactly the forward laws proved in \lean{Containers.Directed}).
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem toContainerComonad_isComonad (D : DirectedContainer) :
+    D.toContainerComonad.IsComonad where
+  left_counit := fun {_} => D.left_counit
+  right_counit := fun {_} => D.right_counit
+  coassoc := fun {_} => D.coassoc
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Directed container laws D1--D5 imply the comonad laws for the packaged data.
+\end{lstlisting}
+
+
+% --- 23. toContainerComonad_toDirectedContainer -------------------
+\subsection{Theorem: \lean{DirectedContainer.toContainerComonad\_toDirectedContainer}}
+
+\begin{thm}[The other half of the equivalence]
+For any directed container $D$,
+\[
+  \mathtt{toDirectedContainer}(M_D, h_D) \;=\; D
+\]
+definitionally (where $h_D$ is the comonad-law proof above).  This holds
+because $\mathtt{cShape} = \mathrm{id}$ in $M_D$, so every
+$\mathtt{cShape\_eq}$-transport is \lean{rfl} by proof irrelevance.
+
+Together with Theorems~\ref{defn:counit-roundtrip} and~\ref{defn:comult-roundtrip},
+this establishes the full equivalence:
+\[
+  \mathbf{DirectedContainer} \;\simeq\; \text{container comonad}.
+\]
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem toContainerComonad_toDirectedContainer (D : DirectedContainer) :
+    D.toContainerComonad.toDirectedContainer
+      D.toContainerComonad_isComonad = D
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- Round-trip: toDirectedContainer (toContainerComonad d) = d
+-- This is the definitional equality half of the equivalence.
+\end{lstlisting}
+
+\begin{fidelitynote}
+The Lean proof is \lean{rfl}: the two sides are \emph{definitionally} equal,
+not just propositionally.  This works because $\mathtt{cShape} = \mathrm{id}$
+definitionally in $M_D$, so the recovered $\mathtt{rSub}$ and $\mathtt{rShift}$
+are definitionally equal to $D.\mathrm{sub}$ and $D.\mathrm{shift}$.  Proof
+irrelevance then collapses the law fields.  This is a satisfying closure of the
+equivalence.
+\end{fidelitynote}
+
+
+%===================================================================
+\section{Translation conventions}
+%===================================================================
+
+\begin{enumerate}
+\item \textbf{Representation theorem.}  The whole file rests on the fact
+  (proved in \lean{Containers.Basic}) that natural transformations between
+  container extensions correspond bijectively to container morphisms.  This
+  lets us describe the comonad structure combinatorially in terms of
+  $(e, \mathtt{cShape}, \mathtt{cSub}, \mathtt{cVal})$ rather than abstractly
+  as endofunctors.
+
+\item \textbf{Generic element probing.}  Each directed-container law is
+  \emph{read off} the corresponding comonad law by instantiating at the
+  \emph{generic element} $\langle s, \mathrm{id}\rangle \in \mathbf{Ext}\,M\,(P(s))$
+  --- a Yoneda-style argument.
+
+\item \textbf{Dependent transports.}  Because $\mathtt{cShape}(s) = s$ is only
+  \emph{propositionally} true (not definitionally) in a general
+  \lean{ContainerComonad}, transports along $\mathtt{cShape\_eq}$ appear
+  throughout.  The auxiliary \lean{Ext.norm\_aux} absorbs all such casts in a
+  single rewrite (\lean{comult\_norm}), after which D1--D5 are obtained with
+  only the intrinsic transports from D1 and D4 --- matching the forward
+  direction exactly.
+
+\item \textbf{Haskell coercion.}  In the Haskell renderings, all transports
+  are glossed as \hask{coerce} with a comment indicating the equality they
+  transport along.  This is because GHC's \hask{Data.Coerce} provides a
+  safe coercion for representationally equal types, but it cannot capture
+  the full dependent-type content.
+
+\item \textbf{Proof bodies omitted.}  Only definitions and theorem
+  \emph{statements} are translated.  Lean checks the proofs; the human
+  verifier checks that the \emph{statements} match the intended mathematics.
+\end{enumerate}
+
+\end{document}

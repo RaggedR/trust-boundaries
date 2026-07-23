@@ -1,0 +1,586 @@
+\documentclass[11pt,a4paper]{article}
+\input{preamble}
+
+% Double-bracket notation for the extension functor
+\usepackage{stmaryrd}
+
+\title{Human Verification: \texttt{Containers.Dirichlet}\\[4pt]
+  \large The Dirichlet Tensor $(\mathbf{Cont}, \otimes, y)$}
+\author{Machine-generated from \texttt{lean/Dirichlet.lean} for review by Neil Ghani}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document presents every definition and theorem \emph{statement} from the
+Lean~4 module \lean{Containers.Dirichlet} in three parallel forms: the original
+Lean, a readable Haskell rendering, and precise mathematical English.  Proofs
+are omitted --- they are machine-checked by Lean.  The purpose is to let a
+human verifier confirm that the formalisation captures the intended
+mathematics.
+
+The file defines the \textbf{Dirichlet tensor} $C \otimes D$ (shapes $S \times T$,
+positions $P\,s \times Q\,t$), proves it is a monoidal structure on $\mathbf{Cont}$
+(all coherences by \lean{rfl}), and discusses when $\llbracket{-}\rrbracket$ is
+(or is not) strong monoidal for $\otimes$.  A uniformity morphism $C \otimes D
+\to C \triangleleft D$ is defined, and shown to be a proper mono (not an iso).
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%===================================================================
+\section{Overview}
+%===================================================================
+
+For containers $C = S \triangleleft P$ and $D = T \triangleleft Q$, the Dirichlet
+tensor is:
+\[
+  C \otimes D = (S \times T) \triangleleft (\lambda\,(s,t).\; P\,s \times Q\,t).
+\]
+Contrast the categorical product:
+\[
+  C \times D = (S \times T) \triangleleft (\lambda\,(s,t).\; P\,s \sqcup Q\,t).
+\]
+The shapes are the same; only the positions differ --- product vs.\ sum.
+
+The key asymmetry is in extensions:
+\begin{align*}
+  \llbracket C \times D \rrbracket X
+    &= \textstyle\Sigma_{(s,t)},\; X^{P\,s \sqcup Q\,t}
+     \cong \llbracket C \rrbracket X \times \llbracket D \rrbracket X
+    &\text{(pointwise, by } y^{A+B} \cong y^A \times y^B), \\
+  \llbracket C \otimes D \rrbracket X
+    &= \textstyle\Sigma_{(s,t)},\; X^{P\,s \times Q\,t}
+     = \textstyle\Sigma_{(s,t)},\; (X^{P\,s})^{Q\,t}
+    &\text{(not pointwise; } y^{A \times B} \text{ does not split)}.
+\end{align*}
+
+%===================================================================
+\section{The tensor and its unit}
+%===================================================================
+
+\subsection{Definition: \lean{Container.dirichlet}}
+
+\begin{defn}[Dirichlet tensor]
+For containers $C$ and $D$, the \textbf{Dirichlet tensor} $C \otimes D$ has:
+\begin{itemize}
+  \item shapes: $S_C \times S_D$,
+  \item positions at $(s,t)$: $P_C(s) \times P_D(t)$.
+\end{itemize}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.dirichlet (C D : Container) : Container where
+  Shape := C.Shape * D.Shape
+  Pos   := fun st => C.Pos st.1 * D.Pos st.2
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+dirichlet :: Container s p -> Container t q -> Container (s, t) (p, q)
+-- Shape = (s, t);  Pos (s, t) = (p, q)
+\end{lstlisting}
+
+
+\subsection{Definition: \lean{Container.y}}
+
+\begin{defn}[Unit for $\otimes$]
+The unit for the Dirichlet tensor is
+$y = \mathbf{1} \triangleleft (\lambda\,\ast.\,\mathbf{1})$
+--- the same container as $I$, the unit for $\triangleleft$.  In the Dirichlet
+setting it is read as the \emph{representable} $y^1$.
+\[
+  y \otimes C \text{ has shapes } \mathbf{1} \times S \cong S
+  \text{ and positions } \mathbf{1} \times P\,s \cong P\,s.
+\]
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+abbrev Container.y : Container := Container.I
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- y = I = the container ((), const ())
+-- Unit for both otimes and triangleleft.
+containerY :: Container () ()
+containerY = Container () (const ())
+\end{lstlisting}
+
+
+%===================================================================
+\section{Bifunctoriality}
+%===================================================================
+
+\subsection{Definition: \lean{Container.dir\textsubscript{2}}}
+
+\begin{defn}[Bifunctorial action of $\otimes$]
+For morphisms $\mu : C \Rightarrow C'$ and $\nu : D \Rightarrow D'$, the action
+$\lean{dir}_2\,\mu\,\nu : C \otimes D \Rightarrow C' \otimes D'$ is
+\emph{componentwise}:
+\begin{itemize}
+  \item on shapes: $(s,t) \mapsto (\mu(s), \nu(t))$,
+  \item on positions (backward): $(s,t),\,(p,q) \mapsto (\mu^\sharp_s(p), \nu^\sharp_t(q))$.
+\end{itemize}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.dir2 {C C' D D' : Container}
+    (mu : ContainerMorphism C C') (nu : ContainerMorphism D D') :
+    ContainerMorphism (C |*| D) (C' |*| D') where
+  onShapes := fun st => (mu.onShapes st.1, nu.onShapes st.2)
+  onPos    := fun st pq => (mu.onPos st.1 pq.1, nu.onPos st.2 pq.2)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+dir2 :: Morph c p c' p' -> Morph d q d' q'
+     -> Morph (c `Dir` d) (p, q) (c' `Dir` d') (p', q')
+dir2 mu nu = Morph
+  { onShapes = \(s, t) -> (onShapes mu s, onShapes nu t)
+  , onPos    = \(s, t) (p, q) -> (onPos mu s p, onPos nu t q) }
+\end{lstlisting}
+
+\begin{fidelitynote}
+Unlike $\triangleleft$, the Dirichlet morphism action has no outer-into-inner
+threading: both coordinates are treated independently.  This makes the functor
+laws hold by \lean{rfl} --- a purely definitional computation.
+\end{fidelitynote}
+
+
+\subsection{Theorem: \lean{Container.dir\textsubscript{2}\_id}}
+
+\begin{thm}[Dirichlet bifunctoriality: identity]
+$\lean{dir}_2\,(\mathrm{id}_C)\,(\mathrm{id}_D) = \mathrm{id}_{C \otimes D}$.
+Holds by \lean{rfl}.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.dir2_id (C D : Container) :
+    Container.dir2 (ContainerMorphism.id C) (ContainerMorphism.id D)
+      = ContainerMorphism.id (C |*| D) := rfl
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{Container.dir\textsubscript{2}\_comp}}
+
+\begin{thm}[Dirichlet bifunctoriality: interchange]
+$\lean{dir}_2\,(\mu \cdot \mu')\,(\nu \cdot \nu')
+= \lean{dir}_2\,\mu\,\nu \;\cdot\; \lean{dir}_2\,\mu'\,\nu'$.
+Holds by \lean{rfl}.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.dir2_comp {C C' C'' D D' D'' : Container}
+    (mu : ContainerMorphism C C') (mu' : ContainerMorphism C' C'')
+    (nu : ContainerMorphism D D') (nu' : ContainerMorphism D' D'') :
+    Container.dir2 (mu.comp mu') (nu.comp nu')
+      = (Container.dir2 mu nu).comp (Container.dir2 mu' nu') := rfl
+\end{lstlisting}
+
+
+%===================================================================
+\section{Structural isomorphisms}
+%===================================================================
+
+\subsection{Definition: \lean{Container.dirAssociator}}
+
+\begin{defn}[Dirichlet associator]
+The isomorphism $(C \otimes D) \otimes E \cong C \otimes (D \otimes E)$:
+\begin{itemize}
+  \item Shapes: $\mathrm{Prod}$-reassociation $((s,t),u) \mapsto (s,(t,u))$.
+  \item Positions (backward): also $\mathrm{Prod}$-reassociation, running backwards:
+    given $(p,(q,r))$, produce $((p,q),r)$ (and vice versa).
+\end{itemize}
+Both round trips hold by \lean{rfl} ($\eta$ for $\mathrm{Prod}$).
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.dirAssociator (C D E : Container) :
+    ContainerIso ((C |*| D) |*| E) (C |*| (D |*| E)) where
+  hom :=
+    { onShapes := fun x => (x.1.1, (x.1.2, x.2))
+      onPos    := fun _ p => ((p.1, p.2.1), p.2.2) }
+  inv :=
+    { onShapes := fun x => ((x.1, x.2.1), x.2.2)
+      onPos    := fun _ p => (p.1.1, (p.1.2, p.2)) }
+  hom_inv := rfl
+  inv_hom := rfl
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+dirAssociator ::
+  ContainerIso (Dir (Dir c d) e) (Dir c (Dir d e))
+-- Shapes: ((s,t),u) <-> (s,(t,u))
+-- Positions (backward): ((p,q),r) <-> (p,(q,r))
+\end{lstlisting}
+
+
+\subsection{Definition: \lean{Container.dirLeftUnitor}}
+
+\begin{defn}[Dirichlet left unitor]
+The isomorphism $y \otimes C \cong C$:
+\begin{itemize}
+  \item Forward on shapes: $(\ast, s) \mapsto s$.
+  \item Forward on positions (backward): $p \mapsto (\ast, p)$.
+  \item Backward on shapes: $s \mapsto (\ast, s)$.
+  \item Backward on positions (backward): $(\ast, p) \mapsto p$.
+\end{itemize}
+Both round trips hold by \lean{rfl}.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.dirLeftUnitor (C : Container) :
+    ContainerIso (Container.y |*| C) C where
+  hom :=
+    { onShapes := fun x => x.2
+      onPos    := fun _ p => ((), p) }
+  inv :=
+    { onShapes := fun s => ((), s)
+      onPos    := fun _ p => p.2 }
+  hom_inv := rfl
+  inv_hom := rfl
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+dirLeftUnitor :: ContainerIso (Dir YContainer c) c
+-- fwd shapes: ((), s) -> s
+-- bwd positions: p -> ((), p)
+\end{lstlisting}
+
+
+\subsection{Definition: \lean{Container.dirRightUnitor}}
+
+\begin{defn}[Dirichlet right unitor]
+The isomorphism $C \otimes y \cong C$:
+\begin{itemize}
+  \item Forward on shapes: $(s, \ast) \mapsto s$.
+  \item Forward on positions (backward): $p \mapsto (p, \ast)$.
+\end{itemize}
+Both round trips hold by \lean{rfl}.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.dirRightUnitor (C : Container) :
+    ContainerIso (C |*| Container.y) C where
+  hom :=
+    { onShapes := fun x => x.1
+      onPos    := fun _ p => (p, ()) }
+  inv :=
+    { onShapes := fun s => (s, ())
+      onPos    := fun _ p => p.1 }
+  hom_inv := rfl
+  inv_hom := rfl
+\end{lstlisting}
+
+
+%===================================================================
+\section{Naturality and coherence}
+%===================================================================
+
+\subsection{Theorem: \lean{Container.dirAssociator\_naturality}}
+
+\begin{thm}[Naturality of Dirichlet associator]
+\[
+  (\lean{dir}_2\,(\lean{dir}_2\,f_1\,f_2)\,f_3) \cdot \alpha^\otimes_{Y_1,Y_2,Y_3}
+  \;=\;
+  \alpha^\otimes_{X_1,X_2,X_3} \cdot \lean{dir}_2\,f_1\,(\lean{dir}_2\,f_2\,f_3).
+\]
+Holds by \lean{rfl}.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.dirAssociator_naturality
+    {X1 Y1 X2 Y2 X3 Y3 : Container}
+    (f1 : ContainerMorphism X1 Y1)
+    (f2 : ContainerMorphism X2 Y2)
+    (f3 : ContainerMorphism X3 Y3) :
+    (Container.dir2 (Container.dir2 f1 f2) f3).comp
+        (Container.dirAssociator Y1 Y2 Y3).hom
+      = (Container.dirAssociator X1 X2 X3).hom.comp
+          (Container.dir2 f1 (Container.dir2 f2 f3)) := rfl
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{Container.dirLeftUnitor\_naturality}}
+
+\begin{thm}[Naturality of Dirichlet left unitor]
+$(\lean{dir}_2\,(\mathrm{id}_y)\,f) \cdot \lambda^\otimes_Y = \lambda^\otimes_X \cdot f$.
+Holds by \lean{rfl}.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.dirLeftUnitor_naturality {X Y : Container}
+    (f : ContainerMorphism X Y) :
+    (Container.dir2 (ContainerMorphism.id Container.y) f).comp
+        (Container.dirLeftUnitor Y).hom
+      = (Container.dirLeftUnitor X).hom.comp f := rfl
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{Container.dirRightUnitor\_naturality}}
+
+\begin{thm}[Naturality of Dirichlet right unitor]
+$(\lean{dir}_2\,f\,(\mathrm{id}_y)) \cdot \rho^\otimes_Y = \rho^\otimes_X \cdot f$.
+Holds by \lean{rfl}.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.dirRightUnitor_naturality {X Y : Container}
+    (f : ContainerMorphism X Y) :
+    (Container.dir2 f (ContainerMorphism.id Container.y)).comp
+        (Container.dirRightUnitor Y).hom
+      = (Container.dirRightUnitor X).hom.comp f := rfl
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{Container.dirPentagon}}
+
+\begin{thm}[Pentagon for $\otimes$]
+The two re-association paths of
+$((C_1 \otimes C_2) \otimes C_3) \otimes C_4 \to
+  C_1 \otimes (C_2 \otimes (C_3 \otimes C_4))$ agree.
+Holds by \lean{rfl}.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.dirPentagon (C1 C2 C3 C4 : Container) :
+    ((Container.dir2 (Container.dirAssociator C1 C2 C3).hom
+          (ContainerMorphism.id C4)).comp
+        (Container.dirAssociator C1 (C2 |*| C3) C4).hom).comp
+        (Container.dir2 (ContainerMorphism.id C1)
+          (Container.dirAssociator C2 C3 C4).hom)
+      = (Container.dirAssociator (C1 |*| C2) C3 C4).hom.comp
+          (Container.dirAssociator C1 C2 (C3 |*| C4)).hom := rfl
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{Container.dirTriangle}}
+
+\begin{thm}[Triangle for $\otimes$]
+$\alpha^\otimes_{C_1,y,C_2} \cdot (\mathrm{id}_{C_1} \otimes \lambda^\otimes_{C_2})
+= \rho^\otimes_{C_1} \otimes \mathrm{id}_{C_2}$.
+Holds by \lean{rfl}.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.dirTriangle (C1 C2 : Container) :
+    (Container.dirAssociator C1 Container.y C2).hom.comp
+        (Container.dir2 (ContainerMorphism.id C1)
+          (Container.dirLeftUnitor C2).hom)
+      = Container.dir2 (Container.dirRightUnitor C1).hom
+          (ContainerMorphism.id C2) := rfl
+\end{lstlisting}
+
+
+\subsection{Definition: \lean{contDirichletMonoidal}}
+
+\begin{defn}[$(\mathbf{Cont}, \otimes, y)$ is a monoidal category]
+A named \lean{def}: the Dirichlet tensor $\otimes$ with morphism action
+$\lean{dir}_2$, unit $y$, and the structural isomorphisms above satisfy all
+monoidal-category axioms.  Every law holds by \lean{rfl}.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+@[reducible] def contDirichletMonoidal : MonoidalCategory Container where
+  tensorObj         := Container.dirichlet
+  tensorHom         := Container.dir2
+  tensorHom_id      := Container.dir2_id
+  tensorHom_comp    := fun f1 g1 f2 g2 => Container.dir2_comp f1 g1 f2 g2
+  tensorUnit        := Container.y
+  associator        := fun X Y Z => (Container.dirAssociator X Y Z).toCatIso
+  leftUnitor        := fun X => (Container.dirLeftUnitor X).toCatIso
+  rightUnitor       := fun X => (Container.dirRightUnitor X).toCatIso
+  associator_naturality  :=
+    fun f1 f2 f3 => Container.dirAssociator_naturality f1 f2 f3
+  leftUnitor_naturality  := fun f => Container.dirLeftUnitor_naturality f
+  rightUnitor_naturality := fun f => Container.dirRightUnitor_naturality f
+  pentagon          := Container.dirPentagon
+  triangle          := Container.dirTriangle
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+contDirichletMonoidal :: MonoidalCategoryDef ContainerMorph
+-- tensor = dirichlet, unit = y, all laws by rfl.
+\end{lstlisting}
+
+
+%===================================================================
+\section{Extension and the Dirichlet tensor}
+%===================================================================
+
+\subsection{Theorem: \lean{Container.dirichletExt\_normalForm}}
+
+\begin{thm}[Normal form for the Dirichlet extension]
+By definition (i.e.\ by \lean{rfl}):
+\[
+  \llbracket C \otimes D \rrbracket X
+  \;=\;
+  \Sigma_{(s,t) : S \times T},\; (P\,s \times Q\,t \to X).
+\]
+This is a \emph{computation / unfolding rule}, not a strong-monoidality statement.
+The right-hand side mentions the \emph{presentation} $S, T, P, Q$, not the
+functors $\llbracket C \rrbracket$ and $\llbracket D \rrbracket$.  The correct
+intrinsic account is that $\llbracket{-}\rrbracket$ is \emph{strong} (not
+strict) monoidal for $\otimes$, the target tensor being the Day convolution of
+$({\bf Set}, \times, \mathbf{1})$ (Niu--Spivak, Prop.~3.79).
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.dirichletExt_normalForm
+    (C D : Container) (X : Type) :
+    Ext (C |*| D) X
+      = ((st : C.Shape * D.Shape) * (C.Pos st.1 * D.Pos st.2 -> X)) := rfl
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- By definition:
+-- Ext (dirichlet c d) x  =  ((s,t), (p,q) -> x)
+-- This is NOT the same as Ext c x `tensor` Ext d x for any pointwise tensor.
+\end{lstlisting}
+
+\begin{fidelitynote}
+Three of the four monoidal structures give genuine (non-identity) comparison
+isomorphisms for $\llbracket{-}\rrbracket$: $\llbracket G \triangleleft F
+\rrbracket X \cong \llbracket G \rrbracket (\llbracket F \rrbracket X)$,
+$\llbracket C + D \rrbracket X \cong \llbracket C \rrbracket X \sqcup
+\llbracket D \rrbracket X$, and $\llbracket C \times D \rrbracket X \cong
+\llbracket C \rrbracket X \times \llbracket D \rrbracket X$.  For $\otimes$
+there is no such pointwise comparison, witnessed by $y^3 \otimes y^3 = y^9$
+while any pointwise tensor would give $y^6$.
+\end{fidelitynote}
+
+
+%===================================================================
+\section{The uniformity morphism \texorpdfstring{$C \otimes D \to C \triangleleft D$}{C tensor D -> C seq D}}
+%===================================================================
+
+\subsection{Definition: \lean{Container.dirToSeq}}
+
+\begin{defn}[Uniformity morphism]
+The canonical map $C \otimes D \Rightarrow C \triangleleft D$ sends the shape
+$(s, t)$ to $(s, \lambda\,{-}.\;t)$ (the constant inner-shape assignment):
+\[
+  (s, t) \;\longmapsto\; (s,\; \lambda p.\; t).
+\]
+On positions: the identity, since the fibres agree definitionally:
+$\Sigma\,p : P\,s,\; Q((\lambda\,{-}.\;t)\,p) = P\,s \times Q\,t$.
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.dirToSeq (C D : Container) :
+    ContainerMorphism (C |*| D) (C seq D) where
+  onShapes := fun st => <|st.1, fun _ => st.2|>
+  onPos    := fun _ pq => (pq.1, pq.2)
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+dirToSeq :: ContainerMorphism (c `Dir` d) (c `Seq` d)
+dirToSeq = Morph
+  { onShapes = \(s, t) -> (s, const t)  -- constant inner assignment
+  , onPos    = \_ (p, q) -> (p, q) }
+\end{lstlisting}
+
+
+\subsection{Helper definitions: \lean{Container.ySq}, \lean{Container.two}, \lean{Container.seqShapeSnd}}
+
+\begin{defn}[Auxiliary containers for the counterexample]
+\begin{itemize}
+  \item $y^2 = \mathbf{1} \triangleleft (\lambda\,\ast.\,\mathrm{Bool})$:
+    one shape, two positions.
+  \item $2 = \mathrm{Bool} \triangleleft (\lambda\,{-}.\,\emptyset)$:
+    two shapes, no positions.
+  \item \lean{seqShapeSnd}: extracts the inner-shape function from a shape of
+    $y^2 \triangleleft 2$, viewed as a plain function $\mathrm{Bool} \to
+    \mathrm{Bool}$.  Defined to enable \lean{congrArg} in the counterexample.
+\end{itemize}
+\end{defn}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+def Container.ySq : Container where
+  Shape := Unit
+  Pos   := fun _ => Bool
+
+def Container.two : Container where
+  Shape := Bool
+  Pos   := fun _ => Empty
+
+def Container.seqShapeSnd
+    (z : (Container.ySq seq Container.two).Shape) : Bool -> Bool := z.2
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+ySq :: Container () Bool   -- one shape, two positions
+ySq = Container { shape = (), pos = const False {- placeholder -} }
+
+two :: Container Bool Void  -- two shapes, no positions
+two = Container { shapes = [True, False], pos = const absurd }
+\end{lstlisting}
+
+
+\subsection{Theorem: \lean{Container.dirToSeq\_not\_surjective}}
+
+\begin{thm}[The uniformity morphism is not an isomorphism]
+The shape map of \lean{dirToSeq} for $C = y^2$, $D = 2$ is
+$\mathrm{Bool} \ni t \mapsto (\ast, \lambda\,{-}.\;t)$, which hits only
+\emph{constant} functions $\mathrm{Bool} \to \mathrm{Bool}$.  The identity
+function $\mathrm{id} : \mathrm{Bool} \to \mathrm{Bool}$ is not in the image.
+Therefore \lean{dirToSeq} is not surjective on shapes, hence not an
+isomorphism.
+
+Concretely, $y^2 \otimes 2$ has 2 shapes while $y^2 \triangleleft 2$ has 4,
+so the extensions differ: $\llbracket y^2 \otimes 2 \rrbracket X$ has 2
+elements and $\llbracket y^2 \triangleleft 2 \rrbracket X$ has 4.
+Thus $\otimes \neq \triangleleft$.
+\end{thm}
+
+\paragraph{Lean.}
+\begin{lstlisting}[style=lean]
+theorem Container.dirToSeq_not_surjective :
+    not (Exists fun st : (Container.ySq |*| Container.two).Shape =>
+        (Container.dirToSeq Container.ySq Container.two).onShapes st
+          = (<|(), fun b => b|> : (Container.ySq seq Container.two).Shape))
+\end{lstlisting}
+
+\paragraph{Haskell.}
+\begin{lstlisting}[style=haskell]
+-- The image of dirToSeq on shapes is { ((), const t) | t :: Bool }.
+-- The shape ((), id) of (ySq `Seq` two) is not in this image,
+-- since id True = True /= False = id False but const t True = const t False.
+-- So dirToSeq is not surjective, hence not an iso.
+\end{lstlisting}
+
+\begin{fidelitynote}
+The proof works by contradiction: assuming a preimage $st$ exists,
+$\lean{congrArg}\,\lean{seqShapeSnd}$ extracts the equation
+$\lambda\,{-}.\;st.2 = \mathrm{id}$ on $\mathrm{Bool}$; applying at
+$\mathrm{true}$ gives $st.2 = \mathrm{true}$ and at $\mathrm{false}$ gives
+$st.2 = \mathrm{false}$, a contradiction.
+\end{fidelitynote}
+
+\end{document}
