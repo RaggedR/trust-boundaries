@@ -1,0 +1,42 @@
+name: Lean Action CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      # Self-contained Lean project in lean/ (no Mathlib). The default target is the
+      # `Trust` trust-level lattice; this is a fast, cache-free build.
+      - uses: leanprover/lean-action@v1
+        with:
+          lake-package-directory: "lean"
+
+      # Certification: no `sorry` reaches the trust-level algebra.
+      - name: Axiom certification (no sorry reaches the trust-level theorems)
+        working-directory: lean
+        run: |
+          lake env lean Certify.lean 2>&1 | tee axioms.txt
+          if grep -q "sorryAx" axioms.txt; then
+            echo "::error::sorryAx reached a headline theorem — certification failed"
+            exit 1
+          fi
+          # A theorem with no axioms prints "does not depend on any axioms";
+          # one with axioms prints "depends on axioms: [...]". Accept either, but
+          # require the name to appear (a missing report = unresolved name).
+          for t in Containers.Trust.le_cmin Containers.Trust.cmax_cases Containers.Trust.le_foldr_max Containers.Trust.foldr_max_cases; do
+            if ! grep -qE "'$t' (depends on axioms|does not depend on any axioms)" axioms.txt; then
+              echo "::error::no axiom report for '$t' — name did not resolve (vacuous certification)"
+              exit 1
+            fi
+          done
+          echo "Certified: the trust-level algebra is proved with no sorry."
