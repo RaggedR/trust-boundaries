@@ -1,5 +1,7 @@
 # Trust Boundaries
 
+[![Lean CI](https://github.com/RaggedR/trust-boundaries/actions/workflows/lean_action_ci.yml/badge.svg)](https://github.com/RaggedR/trust-boundaries/actions/workflows/lean_action_ci.yml)
+
 A framework for epistemically honest AI agents. Every mathematical claim an agent makes is graded on a calibrated trust chain, validated by machine-checkable rules, and composable when agents cite each other across system boundaries.
 
 This repo contains the theory, a sorry-free Lean 4 formalization, a generic validator, and the deployment configurations for four running agent systems.
